@@ -1,5 +1,9 @@
 build/
 out/
 .vscode/
-CMakePresets.json
+ext/
+CMakeUserPresets.json
 builder.sh
+vcpkg_installed/
+vcpkg*
+assets/
