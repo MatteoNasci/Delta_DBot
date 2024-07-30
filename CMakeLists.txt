@@ -25,19 +25,19 @@ find_package(DPP CONFIG REQUIRED)
 
 include_directories(headers ../UnitTests/headers)
 
-set(testsrc source/main.cpp)
+set(botsrc source/main.cpp)
 
-add_executable(Test ${testsrc})
+add_executable(Bot ${botsrc})
 
 file(READ ".secret.txt" sec)
 
 string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" match ${sec})
 if(match)
     set(TOKEN ${CMAKE_MATCH_1})
-    target_compile_definitions(Test PRIVATE MLN_DB_DISCORD_BOT_TOKEN="${TOKEN}")
+    target_compile_definitions(Bot PRIVATE MLN_DB_DISCORD_BOT_TOKEN="${TOKEN}")
     message(STATUS "Discord Bot Token found.")
 else()
     message(WARNING "Discord Bot Token not found in .secret.txt")
 endif()
 
-target_link_libraries(Test PRIVATE dpp::dpp)
+target_link_libraries(Bot PRIVATE dpp::dpp)

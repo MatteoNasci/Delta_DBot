@@ -1,10 +1,9 @@
 build/
 out/
-.vscode/
 ext/
 CMakeUserPresets.json
 builder.sh
 vcpkg_installed/
 vcpkg*
 assets/
-.secret*
+.*
