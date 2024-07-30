@@ -1,8 +1,9 @@
 #include <iostream>
 #include <dpp/dpp.h>
+#include "defines.h"
 
 int main(int argc, char** argv){
-    dpp::cluster bot(Token);
+    dpp::cluster bot(DISCORD_BOT_TOKEN);
  
     bot.on_log(dpp::utility::cout_logger());
 

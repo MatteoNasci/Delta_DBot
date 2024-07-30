@@ -7,3 +7,4 @@ builder.sh
 vcpkg_installed/
 vcpkg*
 assets/
+.secret*

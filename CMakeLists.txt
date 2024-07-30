@@ -16,6 +16,16 @@ set(ver_tweak ${CMAKE_MATCH_1})
 
 message("version: ${ver_major}.${ver_minor}.${ver_patch}.${ver_tweak}")
 
+file(READ ".secret.txt" sec)
+
+string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" _ ${content})
+if(match)
+    set(MLN_DB_DISCORD_BOT_TOKEN ${CMAKE_MATCH_1})
+    message(STATUS "Discord Bot Token found.")
+else()
+    message(FATAL_ERROR "Discord Bot Token not found in .secret.txt")
+endif()
+
 project(DB VERSION ${ver_major}.${ver_minor}.${ver_patch}.${ver_tweak} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -26,7 +36,7 @@ find_package(DPP CONFIG REQUIRED)
 include_directories(headers ../UnitTests/headers)
 
 #set(libsrc source/heap/generic/heap.c source/heap/heap_int.c source/heap/heap_llint.c source/heap/heap_char.c source/heap/heap_uint.c source/heap/heap_double.c source/heap/heap_short.c source/heap/heap_float.c source/heap/heap_size_t.c)
-set(testsrc test/source/main.cpp)
+set(testsrc source/main.cpp)
 
 #add_library(MLN_Data_obj OBJECT ${libsrc})
 #add_library(MLN_Data SHARED $<TARGET_OBJECTS:MLN_Data_obj>)
