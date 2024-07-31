@@ -1,22 +1,24 @@
 #include <iostream>
 #include <dpp/dpp.h>
-#include "defines.h"
+#include "bot.h"
 
-int main(int argc, char** argv){
+const char* deploy_delta(){
+
     dpp::cluster bot(DISCORD_BOT_TOKEN);
  
     bot.on_log(dpp::utility::cout_logger());
 
     /* The event is fired when someone issues your commands */
     bot.on_slashcommand([&bot](const dpp::slashcommand_t& event) {
-        if (event.command.get_command_name() == "ping") {
+        const std::string cmd_name = event.command.get_command_name();
+        if (cmd_name == "ping") {
             event.reply("Pong!");
         }
-        if (event.command.get_command_name() == "pong") {
+        if (cmd_name == "pong") {
             event.reply("Ping!");
         }
         /* Check which command they ran */
-        if (event.command.get_command_name() == "bot_info") {
+        if (cmd_name == "bot_info") {
             /* Create an embed */
             dpp::embed embed = dpp::embed()
                 .set_color(dpp::colors::sti_blue)
@@ -54,7 +56,7 @@ int main(int argc, char** argv){
         }
 
         /* Check which command they ran */
-        if (event.command.get_command_name() == "file") {
+        if (cmd_name == "file") {
             /* Create a message. */
             dpp::message msg(event.command.channel_id, "");
  
@@ -84,4 +86,6 @@ int main(int argc, char** argv){
     });
  
     bot.start(dpp::st_wait);
+
+    return "Success";
 }
