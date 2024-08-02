@@ -34,13 +34,24 @@ add_executable(Test ${testsrc})
 
 file(READ ".secret.txt" sec)
 
-string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" match ${sec})
-if(match)
+string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" matchToken ${sec})
+if(matchToken)
     set(TOKEN ${CMAKE_MATCH_1})
     target_compile_definitions(bot PRIVATE MLN_DB_DISCORD_BOT_TOKEN="${TOKEN}")
     message(STATUS "Discord bot Token found.")
 else()
     message(WARNING "Discord bot Token not found in .secret.txt")
+endif()
+
+file(READ ".dev_id.txt" sec_id)
+
+string(REGEX MATCH "DEV_ID ([0-9]+)" matchDevId ${sec_id})
+if(matchDevId)
+    set(DEV_USER_ID ${CMAKE_MATCH_1})
+    target_compile_definitions(bot PRIVATE MLN_DB_DISCORD_DEV_ID=${DEV_USER_ID})
+    message(STATUS "Discord dev id found.")
+else()
+    message(WARNING "Discord dev id not found in .dev_id.txt")
 endif()
 
 add_dependencies(Test bot)
