@@ -4,9 +4,7 @@
 
 #include <cstdlib>
 
-#ifdef MLN_BOT_LIBRARY_EXPORTS
-#else
-#endif
+
 
 #ifdef _WIN32
     #ifdef MLN_BOT_LIBRARY_EXPORTS
@@ -22,6 +20,12 @@
     #define DISCORD_BOT_TOKEN MLN_DB_DISCORD_BOT_TOKEN
 #else
     #define DISCORD_BOT_TOKEN std::getenv("CLD_DISCORD_BOT_TOKEN")
+#endif
+
+#ifdef MLN_DB_DISCORD_DEV_ID
+    #define DISCORD_DEV_ID MLN_DB_DISCORD_DEV_ID
+#else
+    #define DISCORD_DEV_ID 0 
 #endif
 
 #endif
