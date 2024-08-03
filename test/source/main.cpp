@@ -2,10 +2,19 @@
 
 
 #include "bot.h"
-#include <iostream>
+
+//TODO add to py:
+/*
+import sys
+
+register_cmds = False
+for s in sys.argv:
+    if s == '-r':
+        register_cmds = True
+*/
 
 int main(int argc, char** argv){
-    std::cout << deploy_delta() << std::endl;
+    deploy_delta(false);
 
     return 0;
 }

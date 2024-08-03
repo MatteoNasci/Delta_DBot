@@ -25,12 +25,39 @@ find_package(DPP CONFIG REQUIRED)
 
 include_directories(headers ../UnitTests/headers)
 
-set(botsrc source/bot.cpp)
+set(botsrc source/bot.cpp source/commands/ping.cpp 
+                        source/bot_delta.cpp 
+                        source/commands/pong.cpp 
+                        source/commands/thinking.cpp
+                        source/commands/bot_info.cpp 
+                        source/ctx/high_five.cpp 
+                        source/commands/file.cpp 
+                        source/commands/pm.cpp 
+                        source/commands/msgs_get.cpp 
+                        source/commands/channel_create.cpp
+                        source/commands/msg_error.cpp 
+                        source/commands/image.cpp 
+                        source/commands/blep.cpp 
+                        source/commands/show.cpp 
+                        source/commands/add_role.cpp 
+                        source/commands/button.cpp
+                        source/commands/button2.cpp
+                        source/commands/math.cpp 
+                        source/commands/pring.cpp 
+                        source/commands/select.cpp 
+                        source/commands/select2.cpp 
+                        source/commands/select3.cpp 
+                        source/commands/dialog.cpp 
+                        source/events/cmd_runner.cpp
+                        source/events/cmd_ctx_runner.cpp
+                        source/events/form_submit_runner.cpp
+                        source/events/select_click_runner.cpp)
+
 set(testsrc test/source/main.cpp)
 
 add_library(bot SHARED ${botsrc})
 
-add_executable(Test ${testsrc})
+add_executable(deploy_delta ${testsrc})
 
 file(READ ".secret.txt" sec)
 
@@ -54,9 +81,9 @@ else()
     message(WARNING "Discord dev id not found in .dev_id.txt")
 endif()
 
-add_dependencies(Test bot)
+add_dependencies(deploy_delta bot)
 
-target_link_libraries(Test PRIVATE bot)
+target_link_libraries(deploy_delta PRIVATE bot)
 target_link_libraries(bot PRIVATE dpp::dpp)
 
 target_compile_definitions(bot PRIVATE MLN_BOT_LIBRARY_EXPORTS)
