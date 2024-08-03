@@ -1,10 +1,9 @@
 #include <iostream>
-
-#include "bot_delta.h"
 #include "bot.h"
+#include "bot_delta.h"
 
 void deploy_delta(const bool register_cmds){
-
+    //TODO use coro in library (defined in cmake now)
     bot_delta delta(register_cmds);
     
     /*const std::map<std::string, on_form_submit_t> form_submit_map{

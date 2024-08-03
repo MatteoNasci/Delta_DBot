@@ -87,6 +87,7 @@ target_link_libraries(deploy_delta PRIVATE bot)
 target_link_libraries(bot PRIVATE dpp::dpp)
 
 target_compile_definitions(bot PRIVATE MLN_BOT_LIBRARY_EXPORTS)
+target_compile_definitions(bot PRIVATE DPP_CORO)
 
 set_target_properties(bot PROPERTIES
     VERSION ${ver_major}.${ver_minor}.${ver_patch}.${ver_tweak}

@@ -2,19 +2,16 @@
 
 
 #include "bot.h"
-
-//TODO add to py:
-/*
-import sys
-
-register_cmds = False
-for s in sys.argv:
-    if s == '-r':
-        register_cmds = True
-*/
+#include <cstring>
 
 int main(int argc, char** argv){
-    deploy_delta(false);
+    bool register_bot_cmds = false;
+
+    if(argc > 1){
+        register_bot_cmds = std::strcmp(argv[1], "-r");
+    }
+
+    deploy_delta(register_bot_cmds);
 
     return 0;
 }
