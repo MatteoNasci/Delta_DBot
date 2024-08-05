@@ -30,9 +30,9 @@ dpp::task<void> msgs_get::command(bot_delta_data_t& data, const dpp::slashcomman
 }
 dpp::slashcommand msgs_get::get_command(dpp::cluster& bot){
     return dpp::slashcommand(msgs_get::get_command_name(), "Get messages", bot.me.id)
-                    .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - 100.")
-                        .set_min_value(s_msgs_get_min_val).set_max_value(s_msgs_get_max_val))
-                    .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "If true it will broadcast the retrieved msgs, otherwise only the command user will see them. Default: false.", false));
+        .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "If true it will broadcast the msgs, otherwise only the command user will see them. Default: false.", false))
+        .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - 100.")
+            .set_min_value(s_msgs_get_min_val).set_max_value(s_msgs_get_max_val));
 }
 std::string msgs_get::get_command_name(){
     return "msgs_get";
