@@ -1,7 +1,11 @@
 #include "commands/add_role.h"
+
+#include <dpp/snowflake.h>
+#include <dpp/guild.h>
+
 #include <variant>
 
-void add_role::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> add_role::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Fetch a parameter value from the command options */
     dpp::snowflake user_id = std::get<dpp::snowflake>(event.get_parameter("user"));
@@ -11,6 +15,7 @@ void add_role::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     resolved_member.add_role(role_id);
     data.bot.guild_edit_member(resolved_member);
     event.reply("Added role");
+    co_return;
 }
 dpp::slashcommand add_role::get_command(dpp::cluster& bot)
 {

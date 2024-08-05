@@ -1,13 +1,14 @@
 #include "commands/select.h"
 #include <dpp/unicode_emoji.h>
 
-void select::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
+dpp::task<void> select::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
     /* Select clicks are still interactions, and must be replied to in some form to
     * prevent the "this interaction has failed" message from Discord to the user.
     */
     event.reply("You clicked " + event.custom_id + " and chose: " + event.values[0]);
+    co_return;
 }
-void select::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> select::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::message msg(event.command.channel_id, "This text has a select menu!");
 
@@ -24,6 +25,7 @@ void select::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand select::get_command(dpp::cluster& bot)
 {

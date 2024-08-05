@@ -2,6 +2,8 @@
 #ifndef H_MLN_DB_BOT_DELTA_DATA_H
 #define H_MLN_DB_BOT_DELTA_DATA_H
 
+#include "defines.h"
+
 #include <dpp/cluster.h>
 #include <dpp/snowflake.h>
 
@@ -30,4 +32,4 @@ struct bot_delta_data_t{
 };
 typedef bot_delta_data_t bd_data_t;
 
-#endif
+#endif //H_MLN_DB_BOT_DELTA_DATA_H

@@ -1,6 +1,6 @@
 #include "commands/math.h"
 
-void math::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> math::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Create a message */
     dpp::message msg(event.command.channel_id, "What is 5+5?");
@@ -27,6 +27,7 @@ void math::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand math::get_command(dpp::cluster& bot)
 {

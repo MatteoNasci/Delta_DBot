@@ -1,8 +1,9 @@
 #include "commands/ping.h"
 
-void ping::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> ping::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     event.reply("Pong!");
+    co_return;
 }
 dpp::slashcommand ping::get_command(dpp::cluster& bot)
 {

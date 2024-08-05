@@ -1,0 +1,37 @@
+﻿{
+  "configurations": [
+    {
+      "name": "x64-Release",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DDPP_USE_PCH=off -DDPP_CORO=on",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "DPP_BUILD_TEST",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "DPP_NO_VCPKG",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "VCPKG_SETUP_CMAKE_PROGRAM_PATH",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "DPP_INCLUDE_DIR",
+          "value": "D:/Personal/Projects/DiscordBot/ext/DPP/out/install/x64-MSVC-Release-Coro/include/dpp-10.0",
+          "type": "PATH"
+        }
+      ]
+    }
+  ]
+}

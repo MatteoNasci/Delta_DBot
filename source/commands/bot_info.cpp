@@ -1,7 +1,7 @@
 #include "commands/bot_info.h"
 #include <dpp/colors.h>
 
-void bot_info::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> bot_info::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::embed embed = dpp::embed()
         .set_color(dpp::colors::sti_blue)
@@ -34,6 +34,7 @@ void bot_info::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     dpp::message msg(event.command.channel_id, embed);
     /* Reply to the user with the message, containing our embed. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand bot_info::get_command(dpp::cluster& bot)
 {

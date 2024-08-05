@@ -1,9 +1,10 @@
 #include "commands/select2.h"
 
-void select2::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
+dpp::task<void> select2::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
     event.reply("You clicked " + event.custom_id + " and chose: " + event.values[0]);
+    co_return;
 }
-void select2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> select2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::message msg(event.command.channel_id, "This text has a select menu!");
         
@@ -24,6 +25,7 @@ void select2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand select2::get_command(dpp::cluster& bot)
 {

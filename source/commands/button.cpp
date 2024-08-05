@@ -1,7 +1,7 @@
 #include "commands/button.h"
 #include <dpp/unicode_emoji.h>
 
-void button::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> button::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Create a message */
     dpp::message msg(event.command.channel_id, "this text has a button");
@@ -18,6 +18,7 @@ void button::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand button::get_command(dpp::cluster& bot)
 {

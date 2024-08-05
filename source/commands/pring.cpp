@@ -1,13 +1,14 @@
 #include "commands/pring.h"
 #include <variant>
 
-void pring::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> pring::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     std::string msg;
     if (event.get_parameter("testparameter").index() != 0) {
         msg = std::get<std::string>(event.get_parameter("testparameter"));
     }
     event.reply("Prong! -> " + msg);
+    co_return;
 }
 dpp::slashcommand pring::get_command(dpp::cluster& bot)
 {

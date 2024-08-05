@@ -1,6 +1,6 @@
 #include "commands/pm.h"
 
-void pm::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> pm::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::snowflake user;
  
@@ -15,24 +15,23 @@ void pm::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
         msg = std::get<std::string>(event.get_parameter("msg"));
     }
     /* Send a message to the user set above. */
-    data.bot.direct_message_create(user, dpp::message(msg.empty() ? "Ping!" : msg), [event, user](const dpp::confirmation_callback_t& callback){
-        /* If the callback errors, we want to send a message telling the author that something went wrong. */
-        if (callback.is_error()) {
-            /* Here, we want the error message to be different if the user we're trying to send a message to is the command author. */
-            if (user == event.command.get_issuing_user().id) {
-                event.reply(dpp::message("I couldn't send you a message.").set_flags(dpp::m_ephemeral));
-            } else {
-                event.reply(dpp::message("I couldn't send a message to that user. Please check that is a valid user!").set_flags(dpp::m_ephemeral));
-            }
-            return;
-        }
-        /* We do the same here, so the message is different if it's to the command author or if it's to a specified user. */
+    auto dir_msg_create_res = co_await data.bot.co_direct_message_create(user, dpp::message(msg.empty() ? "Ping!" : msg));
+    /* If the callback errors, we want to send a message telling the author that something went wrong. */
+    if (dir_msg_create_res.is_error()) {
+        /* Here, we want the error message to be different if the user we're trying to send a message to is the command author. */
         if (user == event.command.get_issuing_user().id) {
-            event.reply(dpp::message("I've sent you a private message.").set_flags(dpp::m_ephemeral));
+            event.reply(dpp::message("I couldn't send you a message.").set_flags(dpp::m_ephemeral));
         } else {
-            event.reply(dpp::message("I've sent a message to that user.").set_flags(dpp::m_ephemeral));
+            event.reply(dpp::message("I couldn't send a message to that user. Please check that is a valid user!").set_flags(dpp::m_ephemeral));
         }
-    });
+        co_return;
+    }
+    /* We do the same here, so the message is different if it's to the command author or if it's to a specified user. */
+    if (user == event.command.get_issuing_user().id) {
+        event.reply(dpp::message("I've sent you a private message.").set_flags(dpp::m_ephemeral));
+    } else {
+        event.reply(dpp::message("I've sent a message to that user.").set_flags(dpp::m_ephemeral));
+    }
 }
 dpp::slashcommand pm::get_command(dpp::cluster& bot)
 {

@@ -24,6 +24,7 @@ void bot_delta::init(const bool register_cmds)
         }
 
         if (dpp::run_once<struct register_bot_commands>()) {  
+            data.bot.log(dpp::loglevel::ll_info, "The bot will clean and re-register the commands!");
             data.bot.global_bulk_command_delete();
                 
             
@@ -49,7 +50,10 @@ void bot_delta::init(const bool register_cmds)
                 select::get_command(data.bot),
                 select2::get_command(data.bot),
                 select3::get_command(data.bot),
-                dialog::get_command(data.bot) });
+                dialog::get_command(data.bot),
+                add_emoji::get_command(data.bot),
+                avatar::get_command(data.bot),
+                co_button::get_command(data.bot) });
 
             }
     });
@@ -66,9 +70,9 @@ bot_delta::bot_delta(const bool register_cmds) :
     dpp::snowflake(DISCORD_DEV_ID), 
 #ifdef MLN_DB_DISCORD_DEV_ID
     true
-#else
+#else //MLN_DB_DISCORD_DEV_ID
     false
-#endif
+#endif //MLN_DB_DISCORD_DEV_ID
     ),
     cmds(), 
     ctxs(), 

@@ -1,6 +1,6 @@
 #include "commands/button2.h"
 
-void button2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> button2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::message msg(event.command.channel_id, "This text has a select menu!");
     /* Add an action row, and a select menu within the action row. 
@@ -20,6 +20,7 @@ void button2::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand button2::get_command(dpp::cluster& bot)
 {

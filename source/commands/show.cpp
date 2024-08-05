@@ -1,7 +1,7 @@
 #include "commands/show.h"
 #include <variant>
 
-void show::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> show::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Get the file id from the parameter attachment. */
     dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
@@ -9,6 +9,7 @@ void show::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     dpp::attachment att = event.command.get_resolved_attachment(file_id);
     /* Reply with the file as a URL. */
     event.reply(att.url);
+    co_return;
 }
 dpp::slashcommand show::get_command(dpp::cluster& bot)
 {

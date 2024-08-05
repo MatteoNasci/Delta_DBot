@@ -1,6 +1,6 @@
 #include "commands/dialog.h"
 
-void dialog::form_command(bot_delta_data_t& data, const dpp::form_submit_t& event){
+dpp::task<void> dialog::form_command(bot_delta_data_t& data, const dpp::form_submit_t& event){
     /* For this simple example, we know the first element of the first row ([0][0]) is value type string.
      * In the real world, it may not be safe to make such assumptions!
      */
@@ -11,8 +11,9 @@ void dialog::form_command(bot_delta_data_t& data, const dpp::form_submit_t& even
 
     /* Emit a reply. Form submission is still an interaction and must generate some form of reply! */
     event.reply(m);
+    co_return;
 }
-void dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Instantiate an interaction_modal_response object */
     dpp::interaction_modal_response modal(dialog::get_custom_id(), "Please enter stuff");
@@ -41,6 +42,7 @@ void dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Trigger the dialog box. All dialog boxes are ephemeral */
     event.dialog(modal);
+    co_return;
 }
 dpp::slashcommand dialog::get_command(dpp::cluster& bot)
 {

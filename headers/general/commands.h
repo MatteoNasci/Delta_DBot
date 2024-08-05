@@ -23,5 +23,9 @@
 #include "commands/select2.h"
 #include "commands/select3.h"
 #include "commands/dialog.h"
+#include "commands/add_emoji.h"
+#include "commands/avatar.h"
+#include "commands/co_button.h"
+#include "commands/help.h"
 
-#endif
+#endif //H_MLN_DB_COMMANDS_H

@@ -1,7 +1,7 @@
 #include "commands/blep.h"
 #include <variant>
 
-void blep::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> blep::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Fetch a parameter value from the command parameters */
     std::string animal = std::get<std::string>(event.get_parameter("animal"));
@@ -9,6 +9,7 @@ void blep::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     * call that accepts a dpp::message so you can send embeds.
     */
     event.reply("Blep! You chose " + animal);
+    co_return;
 }
 dpp::slashcommand blep::get_command(dpp::cluster& bot)
 {

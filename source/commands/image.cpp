@@ -1,6 +1,6 @@
 #include "commands/image.h"
 
-void image::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> image::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     /* Get the sub command */
     const dpp::command_interaction cmd_data = event.command.get_command_interaction();
@@ -27,6 +27,7 @@ void image::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
             event.reply("No user specified");
         }
     }
+    co_return;
 }
 dpp::slashcommand image::get_command(dpp::cluster& bot)
 {

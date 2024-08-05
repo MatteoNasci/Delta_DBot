@@ -1,7 +1,6 @@
 #include "events/cmd_runner.h"
 #include "general/commands.h"
 #include <dpp/cluster.h>
-#include "events/base_runner.h"
 
 cmd_runner::cmd_runner() : events(
         {{ping::get_command_name(), &ping::command},
@@ -24,7 +23,10 @@ cmd_runner::cmd_runner() : events(
         {select::get_command_name(), &select::command},
         {select2::get_command_name(), &select2::command},
         {select3::get_command_name(), &select3::command},
-        {dialog::get_command_name(), &dialog::command} }
+        {dialog::get_command_name(), &dialog::command},
+        {add_emoji::get_command_name(), &add_emoji::command},
+        {avatar::get_command_name(), &avatar::command},
+        {co_button::get_command_name(), &co_button::command} }
 )
 {
     
@@ -32,7 +34,11 @@ cmd_runner::cmd_runner() : events(
 
 void cmd_runner::init(bot_delta_data_t& data)
 {
-    data.bot.on_slashcommand([&data, this](const dpp::slashcommand_t& event) {
-        base_runner::run(this->events, event.command.get_command_name(), data, event);
+    data.bot.on_slashcommand([&data, this](const dpp::slashcommand_t& event) -> dpp::task<void> {
+        //base_runner::run(this->events, event.command.get_command_name(), data, event);
+        const auto key = event.command.get_command_name();
+        if(events.contains(key)){
+            co_await events.at(key)(data, event);
+        }
     });
 }

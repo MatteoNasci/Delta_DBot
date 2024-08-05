@@ -1,7 +1,7 @@
 #include "commands/file.h"
 
 
-void file::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> file::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::message msg(event.command.channel_id, "");
  
@@ -15,6 +15,7 @@ void file::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     msg.add_embed(embed);
 
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand file::get_command(dpp::cluster& bot)
 {

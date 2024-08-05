@@ -3,12 +3,9 @@
 #define H_MLN_DB_BOT_DELTA_H
 
 #include "general/events.h"
-#include <dpp/cluster.h>
-#include <dpp/snowflake.h>
-#include <string>
-#include <memory>
 #include "bot_delta_data.h"
 
+#include <string>
 
 class cmd_runner;
 class cmd_ctx_runner;
@@ -51,4 +48,4 @@ class bot_delta{
         void init(const bool register_cmds);
 };
 
-#endif
+#endif //H_MLN_DB_BOT_DELTA_H

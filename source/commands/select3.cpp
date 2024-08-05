@@ -1,11 +1,12 @@
 #include "commands/select3.h"
 #include <dpp/unicode_emoji.h>
 
-void select3::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
+dpp::task<void> select3::select_command(bot_delta_data_t& data, const dpp::select_click_t& event){
     event.reply("You clicked " + event.custom_id + " and chose: " + event.values[0]);
+    co_return;
 }
 
-void select3::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
+dpp::task<void> select3::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
 {
     dpp::message msg(event.command.channel_id, "this text has a button");
     /* Add an action row, and then a button within the action row. */
@@ -21,6 +22,7 @@ void select3::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
     );
     /* Reply to the user with our message. */
     event.reply(msg);
+    co_return;
 }
 dpp::slashcommand select3::get_command(dpp::cluster& bot)
 {
