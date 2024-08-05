@@ -39,7 +39,8 @@ void bot_delta::init(const bool register_cmds)
                 dialog::get_command(data.bot),
                 add_emoji::get_command(data.bot),
                 avatar::get_command(data.bot),
-                co_button::get_command(data.bot) });
+                co_button::get_command(data.bot),
+                help::get_command(data.bot) });
 
             }
     });

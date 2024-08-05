@@ -12,7 +12,7 @@ dpp::task<void> show::command(bot_delta_data_t& data, const dpp::slashcommand_t&
 }
 dpp::slashcommand show::get_command(dpp::cluster& bot){
     return dpp::slashcommand(show::get_command_name(), "Show an uploaded file", bot.me.id)
-                .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image"));
+                .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image", true));
 }
 std::string show::get_command_name(){
     return "show";

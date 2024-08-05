@@ -8,7 +8,8 @@
 dpp::task<void> add_role::command(bot_delta_data_t& data, const dpp::slashcommand_t& event){
     dpp::snowflake user_id = std::get<dpp::snowflake>(event.get_parameter("user"));
     dpp::snowflake role_id = std::get<dpp::snowflake>(event.get_parameter("role"));
-    const bool broadcast_role_change = !(std::get<dpp::snowflake>(event.get_parameter("broadcast")).empty());
+    const dpp::command_value broadcast_param = event.get_parameter("broadcast");
+    const bool broadcast_role_change = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
 
     dpp::guild_member resolved_member = event.command.get_resolved_member(user_id);
     resolved_member.add_role(role_id);

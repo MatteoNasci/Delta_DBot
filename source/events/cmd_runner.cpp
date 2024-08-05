@@ -12,7 +12,8 @@ cmd_runner::cmd_runner() : events(
         {dialog::get_command_name(), &dialog::command},
         {add_emoji::get_command_name(), &add_emoji::command},
         {avatar::get_command_name(), &avatar::command},
-        {co_button::get_command_name(), &co_button::command} }
+        {co_button::get_command_name(), &co_button::command},
+        {help::get_command_name(), &help::command} }
 )
 {
     
