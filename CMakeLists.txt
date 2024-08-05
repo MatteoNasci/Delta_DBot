@@ -60,32 +60,19 @@ set(botsrc  source/bot.cpp
             source/commands/add_emoji.cpp 
             source/commands/avatar.cpp 
             source/commands/co_button.cpp 
-            source/commands/pong.cpp 
-            source/commands/thinking.cpp
             source/commands/bot_info.cpp 
             source/ctx/high_five.cpp 
-            source/commands/file.cpp 
+            source/commands/show.cpp 
             source/commands/pm.cpp 
             source/commands/msgs_get.cpp 
-            source/commands/channel_create.cpp
-            source/commands/msg_error.cpp 
-            source/commands/image.cpp 
-            source/commands/blep.cpp 
-            source/commands/show.cpp 
             source/commands/add_role.cpp 
-            source/commands/button.cpp
-            source/commands/button2.cpp
-            source/commands/math.cpp 
-            source/commands/pring.cpp 
-            source/commands/select.cpp 
-            source/commands/select2.cpp 
-            source/commands/select3.cpp 
             source/commands/dialog.cpp 
             source/events/cmd_runner.cpp
             source/events/cmd_ctx_runner.cpp
             source/events/form_submit_runner.cpp
             source/events/select_click_runner.cpp
-            source/main.cpp)
+            source/main.cpp 
+            source/utility/utility.cpp)
 
 add_executable(deploy_delta ${botsrc})
 

@@ -5,53 +5,62 @@
 #include <dpp/coro.h>
 
 #include <variant>
+#include <map>
 
 dpp::task<void> add_emoji::command(bot_delta_data_t &data, const dpp::slashcommand_t &event){
     dpp::cluster *cluster = event.from->creator;
-    // Retrieve parameter values
+    
     dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
     std::string emoji_name = std::get<std::string>(event.get_parameter("name"));
-    // Get the attachment from the resolved list
+    
     const dpp::attachment &attachment = event.command.get_resolved_attachment(file_id);
+    const std::string attachment_content_type = attachment.content_type;
+    const std::string attachment_url = attachment.url;
 
-    // For simplicity for this example we only support PNG
-    if (attachment.content_type != "image/png") {
-        // While event.co_reply is available, we can just use event.reply, as we will exit the command anyway and don't need to wait on the result
-        event.reply("Error: type " + attachment.content_type + " not supported");
+    static const std::map<std::string, dpp::image_type> allowed_image_types{
+        {"image/png", dpp::image_type::i_png},
+        {"image/gif", dpp::image_type::i_gif},
+        {"image/jpeg", dpp::image_type::i_jpg},
+        {"image/webp", dpp::image_type::i_webp}
+    };
+
+    auto allowed_img_type_it = allowed_image_types.find(attachment_content_type);
+    const bool is_attachment_allowed = allowed_img_type_it != allowed_image_types.end();
+
+    if (!is_attachment_allowed){
+        event.reply(dpp::message("Error: type " + attachment_content_type + " not supported").set_flags(dpp::m_ephemeral));
         co_return;
     }
 
     // Send a "<bot> is thinking..." message, to wait on later so we can edit
     dpp::async thinking = event.co_thinking(false);
     // Download and co_await the result
-    dpp::http_request_completion_t response = co_await cluster->co_request(attachment.url, dpp::m_get);
-    if (response.status != 200) { // Page didn't send the image
-        co_await thinking; // Wait for the thinking response to arrive so we can edit
+    dpp::http_request_completion_t response = co_await cluster->co_request(attachment_url, dpp::m_get);
+    if (response.status != 200){
+        co_await thinking;
         event.edit_response("Error: could not download the attachment");
     }
-    else {
-        // Load the image data in a dpp::emoji
+    else{
         dpp::emoji emoji(emoji_name);
-        emoji.load_image(response.body, dpp::image_type::i_png);
-        // Create the emoji and co_await the response
+        emoji.load_image(response.body, allowed_img_type_it->second);
+
         dpp::confirmation_callback_t confirmation = co_await cluster->co_guild_emoji_create(event.command.guild_id, emoji);
-        co_await thinking; // Wait for the thinking response to arrive so we can edit
-        if (confirmation.is_error())
+        co_await thinking;
+        if (confirmation.is_error()){
             event.edit_response("Error: could not add emoji: " + confirmation.get_error().message);
-        else // Success
-            event.edit_response("Successfully added " + confirmation.get<dpp::emoji>().get_mention()); // Show the new emoji
+        }else {
+            event.edit_response("Successfully added " + confirmation.get<dpp::emoji>().get_mention());
+        }
     }
     co_return;
 }
 
-dpp::slashcommand add_emoji::get_command(dpp::cluster &bot)
-{
+dpp::slashcommand add_emoji::get_command(dpp::cluster &bot){
     return dpp::slashcommand(add_emoji::get_command_name(), "Add an emoji", bot.me.id)
             .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image", true))
             .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true));
 }
 
-std::string add_emoji::get_command_name()
-{
+std::string add_emoji::get_command_name(){
     return "add_emoji";
 }

@@ -5,16 +5,16 @@ dpp::task<void> dialog::form_command(bot_delta_data_t& data, const dpp::form_sub
      * In the real world, it may not be safe to make such assumptions!
      */
     std::string v = std::get<std::string>(event.components[0].components[0].value);
+    std::string v2 = std::get<std::string>(event.components[1].components[0].value);
 
     dpp::message m;
-    m.set_content("You entered: " + v).set_flags(dpp::m_ephemeral);
+    m.set_content("You entered: [" + v + "] and [" + v2 + "]").set_flags(dpp::m_ephemeral);
 
     /* Emit a reply. Form submission is still an interaction and must generate some form of reply! */
     event.reply(m);
     co_return;
 }
-dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event)
-{
+dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event){
     /* Instantiate an interaction_modal_response object */
     dpp::interaction_modal_response modal(dialog::get_custom_id(), "Please enter stuff");
     /* Add a text component */
@@ -44,8 +44,7 @@ dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_
     event.dialog(modal);
     co_return;
 }
-dpp::slashcommand dialog::get_command(dpp::cluster& bot)
-{
+dpp::slashcommand dialog::get_command(dpp::cluster& bot){
     return dpp::slashcommand(dialog::get_command_name(), "Make a modal dialog box", bot.me.id);
 }
 std::string dialog::get_command_name(){
