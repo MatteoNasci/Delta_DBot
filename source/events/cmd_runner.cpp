@@ -5,7 +5,7 @@
 mln::cmd_runner::cmd_runner() : actions(
         {{mln::ping::get_command_name(), &mln::ping::command},
         {mln::bot_info::get_command_name(), &mln::bot_info::command},
-        {mln::show::get_command_name(), &mln::show::command},
+        {mln::db::get_command_name(), &mln::db::command},
         {mln::pm::get_command_name(), &mln::pm::command},
         {mln::msgs_get::get_command_name(), &mln::msgs_get::command},
         {mln::add_role::get_command_name(), &mln::add_role::command},

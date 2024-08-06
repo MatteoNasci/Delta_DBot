@@ -4,7 +4,7 @@
 
 #include "commands/ping.h"
 #include "commands/bot_info.h"
-#include "commands/show.h"
+#include "commands/db.h"
 #include "commands/pm.h"
 #include "commands/msgs_get.h"
 #include "commands/add_role.h"
