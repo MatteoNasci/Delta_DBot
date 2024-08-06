@@ -12,5 +12,6 @@
 #include "general/commands.h"
 #include "general/ctxs.h"
 #include "general/events.h"
+#include "general/databases.h"
 
 #endif //H_MLN_DB_MLN_H

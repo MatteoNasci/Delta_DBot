@@ -113,7 +113,8 @@ set(botsrc  source/commands/ping.cpp
             source/events/button_click_runner.cpp 
             source/events/autocomplete_runner.cpp 
             source/utility/constants.cpp 
-            source/commands/report.cpp)
+            source/commands/report.cpp 
+            source/database/database_handler.cpp)
 
 add_executable(deploy_delta ${botsrc})
 
