@@ -7,7 +7,7 @@
 #include <variant>
 #include <map>
 
-dpp::task<void> add_emoji::command(bot_delta_data_t &data, const dpp::slashcommand_t &event){
+dpp::task<void> mln::add_emoji::command(mln::bot_delta_data_t &data, const dpp::slashcommand_t &event){
     dpp::cluster *cluster = event.from->creator;
     
     dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
@@ -16,6 +16,9 @@ dpp::task<void> add_emoji::command(bot_delta_data_t &data, const dpp::slashcomma
     const dpp::attachment &attachment = event.command.get_resolved_attachment(file_id);
     const std::string attachment_content_type = attachment.content_type;
     const std::string attachment_url = attachment.url;
+
+    const dpp::command_value broadcast_param = event.get_parameter("broadcast");
+    const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
 
     static const std::map<std::string, dpp::image_type> allowed_image_types{
         {"image/png", dpp::image_type::i_png},
@@ -28,12 +31,16 @@ dpp::task<void> add_emoji::command(bot_delta_data_t &data, const dpp::slashcomma
     const bool is_attachment_allowed = allowed_img_type_it != allowed_image_types.end();
 
     if (!is_attachment_allowed){
-        event.reply(dpp::message("Error: type " + attachment_content_type + " not supported").set_flags(dpp::m_ephemeral));
+        dpp::message msg{ "Error: type " + attachment_content_type + " not supported" };
+        if (!broadcast) {
+            msg.set_flags(dpp::m_ephemeral);
+        }
+        event.reply(msg);
         co_return;
     }
 
     // Send a "<bot> is thinking..." message, to wait on later so we can edit
-    dpp::async thinking = event.co_thinking(false);
+    dpp::async thinking = event.co_thinking(!broadcast);
     // Download and co_await the result
     dpp::http_request_completion_t response = co_await cluster->co_request(attachment_url, dpp::m_get);
     if (response.status != 200){
@@ -55,12 +62,13 @@ dpp::task<void> add_emoji::command(bot_delta_data_t &data, const dpp::slashcomma
     co_return;
 }
 
-dpp::slashcommand add_emoji::get_command(dpp::cluster &bot){
-    return dpp::slashcommand(add_emoji::get_command_name(), "Add an emoji", bot.me.id)
+dpp::slashcommand mln::add_emoji::get_command(dpp::cluster &bot){
+    return dpp::slashcommand(mln::add_emoji::get_command_name(), "Add an emoji", bot.me.id)
             .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image", true))
-            .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true));
+            .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true))
+            .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel"));
 }
 
-std::string add_emoji::get_command_name(){
+std::string mln::add_emoji::get_command_name(){
     return "add_emoji";
 }

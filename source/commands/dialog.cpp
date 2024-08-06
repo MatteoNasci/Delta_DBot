@@ -1,6 +1,6 @@
 #include "commands/dialog.h"
 
-dpp::task<void> dialog::form_command(bot_delta_data_t& data, const dpp::form_submit_t& event){
+dpp::task<void> mln::dialog::form_command(mln::bot_delta_data_t& data, const dpp::form_submit_t& event){
     /* For this simple example, we know the first element of the first row ([0][0]) is value type string.
      * In the real world, it may not be safe to make such assumptions!
      */
@@ -14,7 +14,7 @@ dpp::task<void> dialog::form_command(bot_delta_data_t& data, const dpp::form_sub
     event.reply(m);
     co_return;
 }
-dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_t& event){
+dpp::task<void> mln::dialog::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
     /* Instantiate an interaction_modal_response object */
     dpp::interaction_modal_response modal(dialog::get_custom_id(), "Please enter stuff");
     /* Add a text component */
@@ -44,12 +44,12 @@ dpp::task<void> dialog::command(bot_delta_data_t& data, const dpp::slashcommand_
     event.dialog(modal);
     co_return;
 }
-dpp::slashcommand dialog::get_command(dpp::cluster& bot){
-    return dpp::slashcommand(dialog::get_command_name(), "Make a modal dialog box", bot.me.id);
+dpp::slashcommand mln::dialog::get_command(dpp::cluster& bot){
+    return dpp::slashcommand(mln::dialog::get_command_name(), "Make a modal dialog box", bot.me.id);
 }
-std::string dialog::get_command_name(){
+std::string mln::dialog::get_command_name(){
     return "dialog";
 }
-std::string dialog::get_custom_id(){
+std::string mln::dialog::get_custom_id(){
     return "my_modal";
 }

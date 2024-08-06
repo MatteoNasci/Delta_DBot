@@ -2,29 +2,27 @@
 #include "general/commands.h"
 #include <dpp/cluster.h>
 
-cmd_runner::cmd_runner() : events(
-        {{ping::get_command_name(), &ping::command},
-        {bot_info::get_command_name(), &bot_info::command},
-        {show::get_command_name(), &show::command},
-        {pm::get_command_name(), &pm::command},
-        {msgs_get::get_command_name(), &msgs_get::command},
-        {add_role::get_command_name(), &add_role::command},
-        {dialog::get_command_name(), &dialog::command},
-        {add_emoji::get_command_name(), &add_emoji::command},
-        {avatar::get_command_name(), &avatar::command},
-        {co_button::get_command_name(), &co_button::command},
-        {help::get_command_name(), &help::command} }
+mln::cmd_runner::cmd_runner() : actions(
+        {{mln::ping::get_command_name(), &mln::ping::command},
+        {mln::bot_info::get_command_name(), &mln::bot_info::command},
+        {mln::show::get_command_name(), &mln::show::command},
+        {mln::pm::get_command_name(), &mln::pm::command},
+        {mln::msgs_get::get_command_name(), &mln::msgs_get::command},
+        {mln::add_role::get_command_name(), &mln::add_role::command},
+        {mln::dialog::get_command_name(), &mln::dialog::command},
+        {mln::add_emoji::get_command_name(), &mln::add_emoji::command},
+        {mln::avatar::get_command_name(), &mln::avatar::command},
+        {mln::co_button::get_command_name(), &mln::co_button::command},
+        {mln::help::get_command_name(), &mln::help::command} }
 )
 {
     
 }
 
-void cmd_runner::init(bot_delta_data_t& data)
-{
+void mln::cmd_runner::attach_event(mln::bot_delta_data_t& data){
     data.bot.on_slashcommand([&data, this](const dpp::slashcommand_t& event) -> dpp::task<void> {
-        //base_runner::run(this->events, event.command.get_command_name(), data, event);
         const std::string key = event.command.get_command_name();
-        if (auto function_it = events.find(key); function_it != events.end()) {
+        if (auto function_it = actions.find(key); function_it != actions.end()) {
             co_await function_it->second(data, event);
         }
     });

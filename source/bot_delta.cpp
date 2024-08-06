@@ -1,76 +1,56 @@
 #include "mln.h"
 #include "defines.h"
-#include <dpp/intents.h>
 #include "bot_delta.h"
+
 #include <dpp/dpp.h>
+#include <dpp/intents.h>
 
-bot_delta_data_t::bot_delta_data_t(dpp::snowflake in_dev_id, bool in_is_dev_id_valid) : bot(DISCORD_BOT_TOKEN, dpp::i_default_intents | dpp::i_guild_members | dpp::i_message_content), dev_id(in_dev_id), is_dev_id_valid(in_is_dev_id_valid)
-{
+mln::bot_delta_data_t::bot_delta_data_t(dpp::snowflake in_dev_id, bool in_is_dev_id_valid, bool in_register_commands) :
+    bot(DISCORD_BOT_TOKEN, dpp::i_default_intents | dpp::i_guild_members | dpp::i_message_content), 
+    dev_id(in_dev_id), 
+    is_dev_id_valid(in_is_dev_id_valid),
+    registered_new_cmds(in_register_commands){}
 
-}
-
-void bot_delta::init(const bool register_cmds)
-{
+void mln::bot_delta::init(){
     data.bot.on_log(dpp::utility::cout_logger());
     data.bot.log(dpp::loglevel::ll_info, data.is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
 
-    /*Note
-    Once your bot gets big, it's not recommended to create slash commands in the on_ready event even when it's inside dpp::run_once as, 
-    if you re-run your bot multiple times or start multiple clusters, you will quickly get rate-limited! 
-    You could, for example, add a commandline parameter to your bot (argc, argv) so that if you want the bot to register commands it must be launched with a specific command line argument.*/
-    data.bot.on_ready([this, register_cmds](const dpp::ready_t& event) {
-        if(!register_cmds){
-            return;
-        }
-
-        if (dpp::run_once<struct register_bot_commands>()) {  
-            data.bot.log(dpp::loglevel::ll_info, "The bot will clean and re-register the commands!");
-            data.bot.global_bulk_command_delete();
-                
-            
-            data.bot.global_bulk_command_create({ 
-                high_five::get_command(data.bot),
-                ping::get_command(data.bot),
-                bot_info::get_command(data.bot),
-                show::get_command(data.bot),
-                pm::get_command(data.bot),
-                msgs_get::get_command(data.bot), 
-                add_role::get_command(data.bot),
-                dialog::get_command(data.bot),
-                add_emoji::get_command(data.bot),
-                avatar::get_command(data.bot),
-                co_button::get_command(data.bot),
-                help::get_command(data.bot) });
-
-            }
-    });
-
-    cmds.init(data);
-    ctxs.init(data);
-    forms.init(data);
-    selects.init(data);
+    
+    readys.attach_event(data);
+    cmds.attach_event(data);
+    ctxs.attach_event(data);
+    forms.attach_event(data);
+    selects.attach_event(data);
+    react_removes.attach_event(data);
+    msg_creates.attach_event(data);
+    button_clicks.attach_event(data);
+    autocompletes.attach_event(data);
 }
 
 
-bot_delta::bot_delta(const bool register_cmds) : 
+mln::bot_delta::bot_delta(const bool register_cmds) :
     data( 
     dpp::snowflake(DISCORD_DEV_ID), 
 #ifdef MLN_DB_DISCORD_DEV_ID
-    true
+    true,
 #else //MLN_DB_DISCORD_DEV_ID
-    false
+    false,
 #endif //MLN_DB_DISCORD_DEV_ID
-    ),
+    register_cmds),
     cmds(), 
     ctxs(), 
     forms(), 
-    selects()
+    selects(),
+    readys(),
+    react_removes(),
+    msg_creates(),
+    button_clicks(),
+    autocompletes()
 {
-    this->init(register_cmds);
+    this->init();
 }
 
-std::string bot_delta::start()
-{
+std::string mln::bot_delta::start(){
     data.bot.start(dpp::st_wait);
     return "Bot closed!";
 }

@@ -11,11 +11,13 @@
 
 #include <string>
 
-class bot_info{
+namespace mln {
+    class bot_info {
     public:
         static dpp::task<void> command(bot_delta_data_t& data, const dpp::slashcommand_t& event_data);
         static dpp::slashcommand get_command(dpp::cluster& bot);
         static std::string get_command_name();
-};
+    };
+}
 
 #endif //H_MLN_DB_BOT_INFO_H

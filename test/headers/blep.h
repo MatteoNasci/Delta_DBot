@@ -13,6 +13,7 @@
 
 class blep{
     public:
+        static dpp::task<void> autocomplete_command(bot_delta_data_t& data, const dpp::autocomplete_t event, const dpp::command_option& focused_opt);
         static dpp::task<void> command(bot_delta_data_t& data, const dpp::slashcommand_t& event_data);
         static dpp::slashcommand get_command(dpp::cluster& bot);
         static std::string get_command_name();

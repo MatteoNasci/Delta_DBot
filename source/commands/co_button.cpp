@@ -2,7 +2,7 @@
 #include <dpp/message.h>
 #include <dpp/coro/when_any.h>
 
-dpp::task<void> co_button::command(bot_delta_data_t &data, const dpp::slashcommand_t &event){
+dpp::task<void> mln::co_button::command(mln::bot_delta_data_t &data, const dpp::slashcommand_t &event){
     std::string id{event.command.id.str()};
     co_await event.co_reply(dpp::message{"Test"}
             .add_component(dpp::component{}
@@ -29,10 +29,10 @@ dpp::task<void> co_button::command(bot_delta_data_t &data, const dpp::slashcomma
     }
 }
 
-dpp::slashcommand co_button::get_command(dpp::cluster &bot){
-    return dpp::slashcommand(co_button::get_command_name(), "Test awaiting for an event", bot.me.id);
+dpp::slashcommand mln::co_button::get_command(dpp::cluster &bot){
+    return dpp::slashcommand(mln::co_button::get_command_name(), "Test awaiting for an event", bot.me.id);
 }
 
-std::string co_button::get_command_name(){
+std::string mln::co_button::get_command_name(){
     return "co_button";
 }

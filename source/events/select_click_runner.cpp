@@ -1,18 +1,17 @@
 #include "events/select_click_runner.h"
 
-select_click_runner::select_click_runner() : events(
+mln::select_click_runner::select_click_runner() : actions(
     {}
 )
 {
     
 }
 
-void select_click_runner::init(bot_delta_data_t& data)
+void mln::select_click_runner::attach_event(mln::bot_delta_data_t& data)
 {
     data.bot.on_select_click([&data, this](const dpp::select_click_t & event) -> dpp::task<void> {
-        //base_runner::run(this->events, event.custom_id, data, event);
         const std::string key = event.custom_id;
-        if(auto function_it = events.find(key); function_it != events.end()){
+        if(auto function_it = actions.find(key); function_it != actions.end()){
             co_await function_it->second(data, event);
         }
     });

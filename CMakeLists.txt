@@ -53,8 +53,7 @@ set(DPP_DLLS
 
 message(STATUS "Found ${DPP_DLLS}")
 
-set(botsrc  source/bot.cpp 
-            source/commands/ping.cpp 
+set(botsrc  source/commands/ping.cpp 
             source/bot_delta.cpp 
             source/commands/help.cpp 
             source/commands/add_emoji.cpp 
@@ -72,7 +71,14 @@ set(botsrc  source/bot.cpp
             source/events/form_submit_runner.cpp
             source/events/select_click_runner.cpp
             source/main.cpp 
-            source/utility/utility.cpp)
+            source/utility/utility.cpp 
+            source/events/ready_runner.cpp 
+            source/ready/register_commands.cpp
+            source/events/msg_react_remove_runner.cpp 
+            source/events/message_create_runner.cpp 
+            source/events/button_click_runner.cpp 
+            source/events/autocomplete_runner.cpp 
+            source/utility/constants.cpp)
 
 add_executable(deploy_delta ${botsrc})
 

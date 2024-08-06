@@ -4,7 +4,7 @@
 #include <dpp/cluster.h>
 #include <dpp/restresults.h>
 
-dpp::task<std::optional<dpp::guild_member>> utility::resolve_guild_member(const dpp::slashcommand_t& event){
+dpp::task<std::optional<dpp::guild_member>> mln::utility::resolve_guild_member(const dpp::slashcommand_t& event){
     const dpp::command_value& user_param = event.get_parameter("user");
     //If parameter has an user use that, otherwise get sender user
     const dpp::snowflake user_id = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : event.command.usr.id;

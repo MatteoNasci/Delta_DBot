@@ -10,7 +10,7 @@
     #define DISCORD_BOT_TOKEN MLN_DB_DISCORD_BOT_TOKEN
 #else //MLN_DB_DISCORD_BOT_TOKEN
     #include <cstdlib>
-    #define DISCORD_BOT_TOKEN std::getenv("CLD_DISCORD_BOT_TOKEN")
+    #define DISCORD_BOT_TOKEN std::getenv("MLN_DB_DISCORD_BOT_TOKEN")
 #endif //MLN_DB_DISCORD_BOT_TOKEN
 
 #ifdef MLN_DB_DISCORD_DEV_ID

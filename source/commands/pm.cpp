@@ -1,6 +1,6 @@
 #include "commands/pm.h"
 
-dpp::task<void> pm::command(bot_delta_data_t& data, const dpp::slashcommand_t& event){
+dpp::task<void> mln::pm::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
     dpp::snowflake user;
  
     /* If there was no specified user, we set the "user" variable to the command author (issuing user). */
@@ -32,11 +32,11 @@ dpp::task<void> pm::command(bot_delta_data_t& data, const dpp::slashcommand_t& e
         event.reply(dpp::message("I've sent a message to that user.").set_flags(dpp::m_ephemeral));
     }
 }
-dpp::slashcommand pm::get_command(dpp::cluster& bot){
-    return dpp::slashcommand(pm::get_command_name(), "Send a private message.", bot.me.id)
+dpp::slashcommand mln::pm::get_command(dpp::cluster& bot){
+    return dpp::slashcommand(mln::pm::get_command_name(), "Send a private message.", bot.me.id)
                     .add_option(dpp::command_option(dpp::co_mentionable, "user", "The user to message", false))
                     .add_option(dpp::command_option(dpp::co_string, "msg", "The message to send", false));
 }
-std::string pm::get_command_name(){
+std::string mln::pm::get_command_name(){
     return "pm";
 }

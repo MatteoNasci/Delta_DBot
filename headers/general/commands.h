@@ -13,5 +13,6 @@
 #include "commands/avatar.h"
 #include "commands/co_button.h"
 #include "commands/help.h"
+#include "ready/register_commands.h"
 
 #endif //H_MLN_DB_COMMANDS_H

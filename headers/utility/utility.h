@@ -8,9 +8,11 @@
 
 #include <optional>
 
-class utility {
-public:
-	static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::slashcommand_t& event);
-};
+namespace mln {
+	class utility {
+	public:
+		static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::slashcommand_t& event);
+	};
+}
 
 #endif //H_MLN_DB_UTILITY_H

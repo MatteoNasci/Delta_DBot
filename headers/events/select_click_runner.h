@@ -9,13 +9,15 @@
 
 #include <string>
 
-struct bot_delta_data_t;
-class select_click_runner{
+namespace mln {
+    class select_click_runner {
     private:
-        std::map<std::string, std::function<dpp::task<void>(bot_delta_data_t&, const dpp::select_click_t&)>> events;
+        typedef std::function<dpp::task<void>(bot_delta_data_t&, const dpp::select_click_t&)> action;
+        std::map<std::string, action> actions;
     public:
         select_click_runner();
-        void init(bot_delta_data_t& arg);
-};
+        void attach_event(bot_delta_data_t& arg);
+    };
+}
 
 #endif //H_MLN_DB_SELECT_CLICK_RUNNER_H
