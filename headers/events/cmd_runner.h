@@ -8,12 +8,13 @@
 #include <dpp/coro/task.h>
 
 #include <string>
+#include <unordered_map>
 
 namespace mln {
     class cmd_runner {
     private:
         typedef std::function<dpp::task<void>(bot_delta_data_t&, const dpp::slashcommand_t&)> action;
-        std::map<std::string, action> actions;
+        std::unordered_map<std::string, action> actions;
     public:
         cmd_runner();
         void attach_event(bot_delta_data_t& arg);

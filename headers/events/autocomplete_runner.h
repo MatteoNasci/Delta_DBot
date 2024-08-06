@@ -9,12 +9,13 @@
 #include <dpp/coro/task.h>
 
 #include <string>
+#include <unordered_map>
 
 namespace mln {
     class autocomplete_runner {
     private:
         typedef std::function<dpp::task<void>(bot_delta_data_t&, const dpp::autocomplete_t&, const dpp::command_option&)> action;
-        std::map<std::string, action> actions;
+        std::unordered_map<std::string, action> actions;
     public:
         autocomplete_runner();
         void attach_event(bot_delta_data_t& arg);

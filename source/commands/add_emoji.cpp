@@ -5,7 +5,7 @@
 #include <dpp/coro.h>
 
 #include <variant>
-#include <map>
+#include <unordered_map>
 
 dpp::task<void> mln::add_emoji::command(mln::bot_delta_data_t &data, const dpp::slashcommand_t &event){
     dpp::cluster *cluster = event.from->creator;
@@ -20,7 +20,7 @@ dpp::task<void> mln::add_emoji::command(mln::bot_delta_data_t &data, const dpp::
     const dpp::command_value broadcast_param = event.get_parameter("broadcast");
     const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
 
-    static const std::map<std::string, dpp::image_type> allowed_image_types{
+    static const std::unordered_map<std::string, dpp::image_type> allowed_image_types{
         {"image/png", dpp::image_type::i_png},
         {"image/gif", dpp::image_type::i_gif},
         {"image/jpeg", dpp::image_type::i_jpg},
