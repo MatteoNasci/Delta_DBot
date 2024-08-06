@@ -7,6 +7,7 @@ static constexpr int64_t s_msgs_get_min_val{1};
 static constexpr int64_t s_msgs_get_max_val{1000};
 
 dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
+    //TODO problems with sending bot msgs to pm (when they cannot be representend by the original reply). Everything else works (bot msgs to channel, user msgs to pm or channel).
     const int64_t limit = std::get<int64_t>(event.get_parameter("quantity"));
     const dpp::command_value broadcast_param = event.get_parameter("broadcast");
     const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
@@ -66,9 +67,8 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
                 first_reply = !first_reply;
             }
             else {
-                msg_error.set_channel_id(event.command.channel_id);
-                msg_error.set_guild_id(event.command.guild_id);
-                broadcast ? data.bot.message_create(msg_error) : data.bot.direct_message_create(user, msg_error);
+                broadcast ? data.bot.message_create(msg_error.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) : 
+                    data.bot.direct_message_create(user, msg_error);
             }
             co_return;
         }
@@ -87,10 +87,9 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
             }
 
             msg_partial.set_content(contents);
-            msg_partial.set_channel_id(event.command.channel_id);
-            msg_partial.set_guild_id(event.command.guild_id);
             co_await waiting_res;
-            waiting_res = broadcast ? data.bot.co_message_create(msg_partial) : data.bot.co_direct_message_create(user, msg_partial);
+            waiting_res = broadcast ? data.bot.co_message_create(msg_partial.set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id)) : 
+                data.bot.co_direct_message_create(user, msg_partial);
             
 
             contents = "";
@@ -121,9 +120,8 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
         first_reply = !first_reply;
     }
     else {
-        msgs_retrieved.set_channel_id(event.command.channel_id);
-        msgs_retrieved.set_guild_id(event.command.guild_id);
-        broadcast ? data.bot.message_create(msgs_retrieved) : data.bot.direct_message_create(user, msgs_retrieved);
+        broadcast ? data.bot.message_create(msgs_retrieved.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) : 
+            data.bot.direct_message_create(user, msgs_retrieved);
     }
 }
 dpp::slashcommand mln::msgs_get::get_command(dpp::cluster& bot){

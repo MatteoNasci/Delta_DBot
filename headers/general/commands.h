@@ -14,5 +14,6 @@
 #include "commands/co_button.h"
 #include "commands/help.h"
 #include "ready/register_commands.h"
+#include "commands/report.h"
 
 #endif //H_MLN_DB_COMMANDS_H

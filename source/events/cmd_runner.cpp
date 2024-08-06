@@ -13,7 +13,8 @@ mln::cmd_runner::cmd_runner() : actions(
         {mln::add_emoji::get_command_name(), &mln::add_emoji::command},
         {mln::avatar::get_command_name(), &mln::avatar::command},
         {mln::co_button::get_command_name(), &mln::co_button::command},
-        {mln::help::get_command_name(), &mln::help::command} }
+        {mln::help::get_command_name(), &mln::help::command},
+        {mln::report::get_command_name(), &mln::report::command} }
 )
 {
     
