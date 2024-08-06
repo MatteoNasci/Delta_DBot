@@ -58,14 +58,12 @@ set(botsrc  source/commands/ping.cpp
             source/commands/help.cpp 
             source/commands/add_emoji.cpp 
             source/commands/avatar.cpp 
-            source/commands/co_button.cpp 
             source/commands/bot_info.cpp 
             source/ctx/high_five.cpp 
             source/commands/show.cpp 
             source/commands/pm.cpp 
             source/commands/msgs_get.cpp 
             source/commands/add_role.cpp 
-            source/commands/dialog.cpp 
             source/events/cmd_runner.cpp
             source/events/cmd_ctx_runner.cpp
             source/events/form_submit_runner.cpp

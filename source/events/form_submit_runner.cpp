@@ -1,9 +1,9 @@
 #include "events/form_submit_runner.h"
-#include "commands/dialog.h"
+
 #include <variant>
 
-mln::form_submit_runner::form_submit_runner() : actions(
-        {{mln::dialog::get_custom_id(), &mln::dialog::form_command} }
+mln::form_submit_runner::form_submit_runner() : actions({
+    }
 )
 {
     

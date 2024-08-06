@@ -9,10 +9,8 @@ mln::cmd_runner::cmd_runner() : actions(
         {mln::pm::get_command_name(), &mln::pm::command},
         {mln::msgs_get::get_command_name(), &mln::msgs_get::command},
         {mln::add_role::get_command_name(), &mln::add_role::command},
-        {mln::dialog::get_command_name(), &mln::dialog::command},
         {mln::add_emoji::get_command_name(), &mln::add_emoji::command},
         {mln::avatar::get_command_name(), &mln::avatar::command},
-        {mln::co_button::get_command_name(), &mln::co_button::command},
         {mln::help::get_command_name(), &mln::help::command},
         {mln::report::get_command_name(), &mln::report::command} }
 )

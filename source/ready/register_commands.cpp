@@ -18,10 +18,8 @@ dpp::task<void> mln::register_commands::command(mln::bot_delta_data_t& data, con
             mln::pm::get_command(data.bot),
             mln::msgs_get::get_command(data.bot),
             mln::add_role::get_command(data.bot),
-            mln::dialog::get_command(data.bot),
             mln::add_emoji::get_command(data.bot),
             mln::avatar::get_command(data.bot),
-            mln::co_button::get_command(data.bot),
             mln::help::get_command(data.bot),
             mln::report::get_command(data.bot) });
     }

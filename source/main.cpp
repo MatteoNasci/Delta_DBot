@@ -5,6 +5,7 @@
 #include <cstring>
 
 //TODO add system where someone loads a file (like cmd show), associates it with an unique name and the bot saves in in a private channel. Then when requested by another command (given the right file name from the user) show that image
+//TODO add all the checks in all commands for safet, also add checks for permission of both bot and command user
 int main(int argc, char** argv){
     bool register_bot_cmds = false;
 
