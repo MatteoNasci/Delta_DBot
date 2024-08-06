@@ -4,7 +4,7 @@
 #include <variant>
 
 static constexpr int64_t s_msgs_get_min_val{1};
-static constexpr int64_t s_msgs_get_max_val{100};
+static constexpr int64_t s_msgs_get_max_val{1000};
 
 dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
     const int64_t limit = std::get<int64_t>(event.get_parameter("quantity"));
@@ -14,6 +14,8 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
     auto waiting_res = event.co_thinking(!broadcast);
     /* get messages using ID of the channel the command was issued in */
     auto msg_get_res = co_await data.bot.co_messages_get(event.command.channel_id, 0, 0, 0, limit);
+
+    const dpp::snowflake user = std::get<dpp::snowflake>(event.get_parameter("user"));
 
     if (msg_get_res.is_error()) {
         data.bot.log(dpp::loglevel::ll_debug, msg_get_res.get_error().message);
@@ -42,11 +44,11 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
         const dpp::message& current_msg = messages.at(keys[i]);
         const size_t current_length = contents.length();
         const size_t to_add_length = current_msg.content.length();
-
-        //TODO make it so the msgs are related to a single user chosen by param
-        //TODO only the actual reply will be ephemeral if requested, the remaining replyes made with message create will not be. Maybe make it so the additional msgs go to pm if ephemeral is set? Or maybe make the single reply like a thing with pages were you switch pages by reacting (need to handle more callbacks and stuff behind the scenes)
         
         if (to_add_length == 0) {
+            continue;
+        }
+        if (current_msg.author.id != user) {
             continue;
         }
 
@@ -61,28 +63,35 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
             co_await waiting_res;
             if (first_reply) {
                 event.edit_response(msg_error);
+                first_reply = !first_reply;
             }
             else {
                 msg_error.set_channel_id(event.command.channel_id);
-                data.bot.message_create(msg_error);
+                msg_error.set_guild_id(event.command.guild_id);
+                broadcast ? data.bot.message_create(msg_error) : data.bot.direct_message_create(user, msg_error);
             }
             co_return;
         }
 
         if (current_length + to_add_length > mln::constants::get_max_characters_reply_msg()) {
-            dpp::message msg_partial(contents);
+            dpp::message msg_partial;
             if (!broadcast) {
                 msg_partial.set_flags(dpp::m_ephemeral);
             }
 
-            co_await waiting_res;
             if (first_reply) {
+                msg_partial.set_content("Messages from " + dpp::user::get_mention(user) + " retrieved!" + (broadcast ? "" : " Msgs exceed the comment character limits, sent as pm instead!"));
+                co_await waiting_res;
                 waiting_res = event.co_edit_response(msg_partial);
                 first_reply = !first_reply;
-            }else {
-                msg_partial.set_channel_id(event.command.channel_id);
-                waiting_res = data.bot.co_message_create(msg_partial);
             }
+
+            msg_partial.set_content(contents);
+            msg_partial.set_channel_id(event.command.channel_id);
+            msg_partial.set_guild_id(event.command.guild_id);
+            co_await waiting_res;
+            waiting_res = broadcast ? data.bot.co_message_create(msg_partial) : data.bot.co_direct_message_create(user, msg_partial);
+            
 
             contents = "";
         }
@@ -92,31 +101,37 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
         contents += (add_new_line ? "\n" : "") + current_msg.content;
     }
 
-    co_await waiting_res;
-    if (contents.length() == 0) {
-        co_return;
-    }
-
     dpp::message msgs_retrieved;
-    msgs_retrieved.set_content(contents);
-
     if (!broadcast) {
         msgs_retrieved.set_flags(dpp::m_ephemeral);
     }
+    co_await waiting_res;
+    if (contents.length() == 0) {
+        if (first_reply) {
+            event.edit_response(msgs_retrieved.set_content("No replies found from user " + dpp::user::get_mention(user)));
+            first_reply = !first_reply;
+        }
+        co_return;
+    }
+
+    msgs_retrieved.set_content(contents);
 
     if (first_reply) {
         event.edit_response(msgs_retrieved);
+        first_reply = !first_reply;
     }
     else {
         msgs_retrieved.set_channel_id(event.command.channel_id);
-        data.bot.message_create(msgs_retrieved);
+        msgs_retrieved.set_guild_id(event.command.guild_id);
+        broadcast ? data.bot.message_create(msgs_retrieved) : data.bot.direct_message_create(user, msgs_retrieved);
     }
 }
 dpp::slashcommand mln::msgs_get::get_command(dpp::cluster& bot){
     return dpp::slashcommand(mln::msgs_get::get_command_name(), "Get messages", bot.me.id)
-        .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - 100.", true)
+        .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - " + std::to_string(s_msgs_get_max_val) + ".", true)
             .set_min_value(s_msgs_get_min_val).set_max_value(s_msgs_get_max_val))
-        .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "If true it will broadcast the msgs, otherwise only the command user will see them. Default: false.", false));
+        .add_option(dpp::command_option(dpp::co_user, "user", "User to retrieve msgs from.", true))
+        .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "If true it will broadcast the msgs, otherwise only the user will see them. Default: false.", false));
 }
 std::string mln::msgs_get::get_command_name(){
     return "msgs_get";
