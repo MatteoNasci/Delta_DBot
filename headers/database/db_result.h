@@ -254,7 +254,7 @@ namespace mln {
 		/*The SQLITE_IOERR_DATA error code is an extended error code for SQLITE_IOERR used only by checksum VFS shim to indicate that the checksum on a page of the database file is incorrect.*/
 		io_err_data = 8202,
 		/*The SQLITE_IOERR_CORRUPTFS error code is an extended error code for SQLITE_IOERR used only by a VFS to indicate that a seek or read failure was due to the request not falling within the file's boundary rather than an ordinary device failure. This often indicates a corrupt filesystem.*/
-		io_err_corript_fs = 8458,
+		io_err_corrupt_fs = 8458,
 	};
 }
 
