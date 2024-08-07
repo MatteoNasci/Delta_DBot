@@ -71,8 +71,9 @@ else()
   message(FATAL_ERROR "Could not find ${DPP_NAME}")
 endif()
 
+set(DPP_DLLS_NAMES dpp.dll opus.dll zlib1.dll libsodium.dll libssl-1_1-x64.dll libcrypto-1_1-x64.dll)
 find_path(DPP_DLLS_PATH
-  NAMES dpp.dll opus.dll zlib1.dll libsodium.dll libssl-1_1-x64.dll libcrypto-1_1-x64.dll
+  NAMES ${DPP_DLLS_NAMES}
   PATHS "${dpp_dlls_path}/"
 )
 if(DPP_DLLS_PATH)
@@ -81,13 +82,20 @@ else()
   message(FATAL_ERROR "Could not find dlls path for ${DPP_NAME}")
 endif()
 
-set(DPP_DLLS "${DPP_DLLS_PATH}/dpp.dll"
-             "${DPP_DLLS_PATH}/opus.dll"
-             "${DPP_DLLS_PATH}/zlib1.dll"
-             "${DPP_DLLS_PATH}/libsodium.dll"
-             "${DPP_DLLS_PATH}/libssl-1_1-x64.dll"
-             "${DPP_DLLS_PATH}/libcrypto-1_1-x64.dll")
+foreach(DPP_DLL_NAME ${DPP_DLLS_NAMES})
+  find_file(DPP_DLL_NAME_FOUND
+    NAMES ${DPP_DLL_NAME}
+    PATHS "${DPP_DLLS_PATH}"
+  )
+  if(DPP_DLL_NAME_FOUND)
+    set(DPP_DLLS_LIST ${DPP_DLLS_LIST} ${DPP_DLL_NAME_FOUND})
+  else()
+    message(FATAL_ERROR "Could not find ${DPP_DLL_NAME} for ${DPP_NAME}")
+  endif()
+  unset(DPP_DLL_NAME_FOUND CACHE)
+endforeach()
 
+message(STATUS "Found ${DPP_NAME} dlls: ${DPP_DLLS_LIST}")
 
 set(botsrc  source/commands/ping.cpp 
             source/bot_delta.cpp 
@@ -148,7 +156,7 @@ else()
 endif()
 
 # Loop over the DLLs and add a custom command to copy them to the output directory
-set(DLLS_TO_COPY ${DPP_DLLS} ${SQLITE_DLLS})
+set(DLLS_TO_COPY ${DPP_DLLS_LIST} ${SQLITE_DLLS})
 foreach(DLL ${DLLS_TO_COPY})
     add_custom_command(TARGET deploy_delta POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
