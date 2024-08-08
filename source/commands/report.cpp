@@ -4,7 +4,7 @@ static constexpr dpp::command_option_range s_min_msg_length{1};
 
 dpp::task<void> mln::report::command(bot_delta_data_t& data, const dpp::slashcommand_t& event){
 	const std::string text = std::get<std::string>(event.get_parameter("description"));
-	data.bot.log(dpp::ll_warning, text);
+	data.bot.log(dpp::ll_warning, "[REPORT] " + text);
 	event.reply(dpp::message("Report received, Thanks!").set_flags(dpp::m_ephemeral));
 	co_return;
 }
