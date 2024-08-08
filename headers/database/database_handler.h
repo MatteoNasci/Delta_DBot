@@ -48,7 +48,7 @@ namespace mln {
 		//The callback_data_adder will be called for each element in the row, for each row (as long as any column is present in the result), with: first arg is callback_data, second arg is the current column index, third arg is the actual value of the column of the correct type
 		//The callback_definer will be called for each element in the row, for each row (as long as any column is present in the result), with: first arg is column_index, return is a boolean that represents whenever the database should interpret the data as a normal value or as an extended value. If true the values will be normal (int as int, text as text), otherwise the values will be extended (int as int64_t, text as text16)
 		//The callback will be called for each row (as long as any column is present in the result), with: first arg is callback_data, return is a boolean. If the boolean returned is false the execution will be aborted, otherwise the execution will continue as normal.
-		//The callback_data should be something able to "store" the column result from the query. The result/s will be given to callback_data one at a time through callback_data_adder for each row in the result. Once all the data has been added the data will be sent to callback
+		//The callback_data should be something able to "store" the column result from the query. The result/s will be given to callback_data one at a time through callback_data_adder for each column in the resulting row (for each row). Once all the data from the current row result has been added the callback_data will be sent to callback
 		//After the call to callback the callback_data should be ready to accept a new set of column results.
 		db_result exec(
 			const size_t saved_statement_id, 

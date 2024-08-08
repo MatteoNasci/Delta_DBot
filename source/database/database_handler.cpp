@@ -181,7 +181,7 @@ static const std::unordered_map<mln::db_fundamental_datatype, mln::db_fundamenta
 
 static const std::unordered_map<mln::db_destructor_behavior, void(*)(void*)> s_mapped_destructor_behaviors{
 	{mln::db_destructor_behavior::static_b, SQLITE_STATIC},
-	{mln::db_destructor_behavior::static_b, SQLITE_TRANSIENT},
+	{mln::db_destructor_behavior::transient_b, SQLITE_TRANSIENT},
 	{mln::db_destructor_behavior::free_b, [](void* data) { free(data); }},
 	{mln::db_destructor_behavior::delete_b, [](void* data) { delete static_cast<unsigned char*>(data); }},
 };
