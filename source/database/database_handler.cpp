@@ -204,6 +204,7 @@ mln::db_result mln::database_handler::open_connection(const char* filename, cons
 	if (res != mln::db_result::ok) {
 		mln::database_handler::close_connection();
 	}
+	return res;
 }
 mln::db_result mln::database_handler::open_connection(const std::string& filename, const mln::db_flag open_flags) {
 	return mln::database_handler::open_connection(filename.c_str(), open_flags);
@@ -258,7 +259,7 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 		}
 		
 		const int column_count = sqlite3_data_count(stmt);
-		if (res == mln::db_result::row && column_count > 0) {
+		if (column_count > 0) {
 			for (int i = 0; i < column_count; ++i) {
 				mln::db_fundamental_datatype type = static_cast<mln::db_fundamental_datatype>(sqlite3_column_type(stmt, i));
 				//these find calls are safe, column_type can only return one of the 5 fundamental types mapped on the enum, these following maps have all of them mapped out. This is safe
