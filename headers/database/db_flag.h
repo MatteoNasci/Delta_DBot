@@ -26,6 +26,7 @@ namespace mln {
 		open_wal = 0x00080000,  /* VFS only */
 		open_no_follow = 0x01000000,  /* Ok for sqlite3_open_v2() */
 		open_ex_res_code = 0x02000000,  /* Extended result codes */
+		open_rw_create_ex_res_code = 0x00000004 | 0x00000002 | 0x02000000, /*Ok for sqlite3_open_v2(), combination of open_read_write, open_create, open_ex_res_code*/
 	};
 }
 

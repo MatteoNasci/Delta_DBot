@@ -7,6 +7,9 @@
 
 #include <unordered_map>
 
+mln::database_callbacks_t::database_callbacks_t(std::function<bool(void*)>& in_row_callback, std::function<void(void*, int, mln::db_column_data_t&&)>& in_data_adder_callback, std::function<bool(int)>& in_type_definer_callback, void* in_callback_data) : 
+	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), callback_data(in_callback_data) {}
+
 mln::db_column_data_t::db_column_data_t(const char* in_name, const double in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 mln::db_column_data_t::db_column_data_t(const char* in_name, const int in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 mln::db_column_data_t::db_column_data_t(const char* in_name, const int64_t in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
@@ -122,7 +125,7 @@ static const std::unordered_map<mln::db_result, std::string> s_result_to_string_
 	{mln::db_result::io_err_corrupt_fs, std::string("io_err_corrupt_fs")}
 };
 
-typedef std::function<mln::db_column_data_t&&(sqlite3_stmt*, int)> get_column_value;
+typedef std::function<mln::db_column_data_t(sqlite3_stmt*, int)> get_column_value;
 static const std::unordered_map<mln::db_fundamental_datatype, get_column_value> s_mapped_column_funcs{
 	{mln::db_fundamental_datatype::blob_t, [](sqlite3_stmt* stmt, int col) {
 												//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
@@ -230,26 +233,34 @@ mln::db_result mln::database_handler::close_connection(){
 	return res;
 }
 
-mln::db_result mln::database_handler::exec(const std::string& statement, int(callback)(void*, int, char**, char**), void* callback_data, const std::function<void(const char* const)>& err_callback){
-	return mln::database_handler::exec(statement.c_str(), callback, callback_data, err_callback);
+mln::db_result mln::database_handler::exec(const std::string& stmt, const database_callbacks_t& callbacks) {
+	return mln::database_handler::exec(stmt.c_str(), static_cast<int>(stmt.length()) + 1, callbacks);
 }
-mln::db_result mln::database_handler::exec(const char* const statement, int(callback)(void*, int, char**, char**), void* callback_data, const std::function<void(const char* const)>& err_callback) {
-	char* err_msg(nullptr);
-	const mln::db_result res = static_cast<mln::db_result>(sqlite3_exec(db, statement, callback, callback_data, &err_msg));
-
+mln::db_result mln::database_handler::exec(const char* stmt_text, const int length_with_null, const database_callbacks_t& callbacks) {
+	//TODO figure out how pzTail works and if I need it
+	sqlite3_stmt* stmt(nullptr);
+	mln::db_result res = static_cast<mln::db_result>(sqlite3_prepare_v3(db, stmt_text, length_with_null, static_cast<int>(mln::db_prepare_flag::none), &stmt, nullptr));
 	if (res != mln::db_result::ok) {
-		err_callback(err_msg);
-		sqlite3_free(err_msg);
+		sqlite3_finalize(stmt);
+		return res;
 	}
-	return res;
+
+	res = mln::database_handler::exec(stmt, callbacks);
+	if (res != mln::db_result::ok) {
+		sqlite3_finalize(stmt);
+		return res;
+	}
+
+	return static_cast<mln::db_result>(sqlite3_finalize(stmt));
 }
-mln::db_result mln::database_handler::exec(const size_t saved_statement_id, const std::function<bool(void*)>& callback, void* callback_data, const std::function<void(void*, int, mln::db_column_data_t&&)>& callback_data_adder, const std::function<bool(int)>& callback_definer) {
+mln::db_result mln::database_handler::exec(const size_t saved_statement_id, const database_callbacks_t& callbacks) {
 	if (saved_statement_id >= saved_statements.size()) {
 		return mln::db_result::error;
 	}
 
-	sqlite3_stmt* stmt = saved_statements[saved_statement_id];
-
+	return mln::database_handler::exec(saved_statements[saved_statement_id], callbacks);
+}
+mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) {
 	mln::db_result res = mln::db_result::ok;
 	while (res != mln::db_result::done) {
 		res = static_cast<mln::db_result>(sqlite3_step(stmt));
@@ -257,19 +268,19 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 			//If an error occurs during _step the db will automatically run _reset on the stmt
 			return res;
 		}
-		
+
 		const int column_count = sqlite3_data_count(stmt);
 		if (column_count > 0) {
 			for (int i = 0; i < column_count; ++i) {
 				mln::db_fundamental_datatype type = static_cast<mln::db_fundamental_datatype>(sqlite3_column_type(stmt, i));
 				//these find calls are safe, column_type can only return one of the 5 fundamental types mapped on the enum, these following maps have all of them mapped out. This is safe
-				type = callback_definer(i) ? (s_mapped_wide_to_norm_types.find(type)->second) : (s_mapped_norm_to_wide_types.find(type)->second);
+				type = callbacks.type_definer_callback(i) ? (s_mapped_wide_to_norm_types.find(type)->second) : (s_mapped_norm_to_wide_types.find(type)->second);
 				//We know that the column_type func can only return one of the 5 (7) available types, and the map contains all of them (and they are all valid funcs). This is safe.
 				const get_column_value& column_func = s_mapped_column_funcs.find(type)->second;
-				callback_data_adder(callback_data, i, column_func(stmt, i));
+				callbacks.data_adder_callback(callbacks.callback_data, i, std::move(column_func(stmt, i)));
 			}
 
-			if (!callback(callback_data)) {
+			if (!callbacks.row_callback(callbacks.callback_data)) {
 				sqlite3_reset(stmt);
 				res = mln::db_result::abort;
 				break;
