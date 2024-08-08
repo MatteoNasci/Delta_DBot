@@ -2,6 +2,7 @@
 #include "database/db_prepare_flag.h"
 #include "database/db_fundamental_datatype.h"
 #include "database/db_config_option.h"
+#include "database/db_status_param.h"
 
 #include "sqlite3.h"
 
@@ -186,6 +187,7 @@ static const std::unordered_map<mln::db_destructor_behavior, void(*)(void*)> s_m
 	{mln::db_destructor_behavior::transient_b, SQLITE_TRANSIENT},
 	{mln::db_destructor_behavior::free_b, [](void* data) { free(data); }},
 	{mln::db_destructor_behavior::delete_b, [](void* data) { delete static_cast<unsigned char*>(data); }},
+	{mln::db_destructor_behavior::sqlite_free_b, [](void* data) { sqlite3_free(data); }},
 };
 
 mln::database_handler::~database_handler() {
@@ -372,7 +374,72 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 }
 
 std::string mln::database_handler::get_db_debug_info() {
-	return std::string();
+	int64_t soft_heap_limit = sqlite3_soft_heap_limit64(-1);
+	int64_t hard_heap_limit = sqlite3_hard_heap_limit64(-1);
+
+	int64_t used_memory = sqlite3_memory_used();
+	int64_t max_used_memory = sqlite3_memory_highwater(0);
+
+	std::string debug_text("Soft heap limit: " + std::to_string(soft_heap_limit) + ", hard heap limit: " + std::to_string(hard_heap_limit) +
+							"\nUsed memory: " + std::to_string(used_memory) + ", max used memory: " + std::to_string(max_used_memory));
+
+	int64_t current = 0;
+	int64_t highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::memory_used), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nUsed memory: " + std::to_string(current) + ", max used memory: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about memory use could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::malloc_count), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nSqlite malloc count: " + std::to_string(current) + ", max sqlite malloc count: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about malloc count could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::malloc_size), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nSqlite malloc size: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about malloc_size could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::page_cache_used), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nPage cache used: " + std::to_string(current) + ", max page cache used: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about page cache used could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::page_cache_size), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nPage cache size: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about page cache size could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::page_cache_overflow), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nPage cache overflow: " + std::to_string(current) + ", max page cache overflow: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about page cache overflow could not be loaded!";
+	}
+
+	current = 0;
+	highwater = 0;
+	if (static_cast<mln::db_result>(sqlite3_status64(static_cast<int>(mln::db_status_param::parser_stack), &current, &highwater, 0)) == mln::db_result::ok) {
+		debug_text += "\nDeepest parser stack: " + std::to_string(highwater);
+	}else {
+		debug_text += "\nData about parser stack could not be loaded!";
+	}
+
+	return debug_text;
 }
 
 bool mln::database_handler::get_name_from_result(const mln::db_result result, std::string& out_string){

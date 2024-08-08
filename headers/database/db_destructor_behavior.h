@@ -8,6 +8,7 @@ namespace mln {
 		transient_b = 1, /*The SQLITE_TRANSIENT value means that the content will likely change in the near future and that SQLite should make its own private copy of the content before returning.*/
 		free_b = 2, /*A destructor (free()) to dispose of the BLOB or string after SQLite has finished with it will be used. It is called to dispose of the BLOB or string even if the call to the bind API fails, except the destructor is not called if the third parameter (value ptr) is a NULL pointer or the fourth parameter (bytes) is negative.*/
 		delete_b = 3, /*A destructor (delete) to dispose of the BLOB or string after SQLite has finished with it will be used. The pointer will be casted to unsigned char* to avoid undefined behavior from delete. It is called to dispose of the BLOB or string even if the call to the bind API fails, except the destructor is not called if the third parameter (value ptr) is a NULL pointer or the fourth parameter (bytes) is negative.*/
+		sqlite_free_b = 4, /*A destructor (sqlite3_free()) to dispose of the BLOB or string after SQLite has finished with it will be used. The pointer will be casted to unsigned char* to avoid undefined behavior from delete. It is called to dispose of the BLOB or string even if the call to the bind API fails, except the destructor is not called if the third parameter (value ptr) is a NULL pointer or the fourth parameter (bytes) is negative.*/
 	};
 }
 

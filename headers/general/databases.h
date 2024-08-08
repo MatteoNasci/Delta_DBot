@@ -14,5 +14,8 @@
 #include "database/db_connection_config_option.h"
 #include "database/db_prepare_flag.h"
 #include "database/db_destructor_behavior.h"
+#include "database/db_status_param.h"
+#include "database/database_callbacks.h"
+#include "database/db_column_data.h"
 
 #endif //H_MLN_DB_DATABASES_H
