@@ -1,5 +1,4 @@
 #include "commands/db.h"
-#include "sqlite3.h"
 
 #include <variant>
 #include <unordered_map>
@@ -18,7 +17,7 @@ enum class db_op : char {
 dpp::task<void> mln::db::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
     const bool broadcast = std::get<bool>(event.get_parameter("broadcast"));
     const dpp::command_interaction cmd_data = event.command.get_command_interaction();
-    
+
     static const std::unordered_map<std::string, db_op> allowed_sub_commands{
         {"insert", db_op::db_insert},
         {"select", db_op::db_select},
@@ -29,7 +28,7 @@ dpp::task<void> mln::db::command(mln::bot_delta_data_t& data, const dpp::slashco
         {"force_db_save", db_op::db_force_db_save},
         {"", db_op::db_none},
     };
-
+    //TODO this file will manage the db related to each guild, while a separate, light-weight db will be stored in delta_bot and holds minimal critical information (like which channel is used for this db for each guild). The former db will be stored in ram, the latter in actual storage
     auto waiting_res = event.co_thinking(!broadcast);
     bool thinking = true;
     for (const auto& sub_cmd : cmd_data.options) {
