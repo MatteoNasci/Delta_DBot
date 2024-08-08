@@ -6,6 +6,7 @@
 #include "database/db_column_data.h"
 #include "database/db_text_encoding.h"
 #include "database/db_destructor_behavior.h"
+#include "database/db_flag.h"
 
 #include <string>
 #include <vector>
@@ -38,10 +39,12 @@ namespace mln {
 		 */
 		database_handler& operator=(const database_handler&&) = delete;
 
-		db_result open_connection(const std::string& filename);
+		db_result open_connection(const std::string& filename, const db_flag open_flags);
+		db_result open_connection(const char* filename, const db_flag open_flags);
 		bool is_connected();
 		db_result close_connection();
 
+		//These 2 execs are not really meant to be optimized, only to be used for one time use statements
 		db_result exec(const std::string& statement, int(callback)(void*, int, char**, char**), void* callback_data, const std::function<void(const char* const)>& err_callback);
 		db_result exec(const char* const statement, int(callback)(void*, int, char**, char**), void* callback_data, const std::function<void(const char* const)>& err_callback);
 

@@ -1,5 +1,4 @@
 #include "database/database_handler.h"
-#include "database/db_flag.h"
 #include "database/db_prepare_flag.h"
 #include "database/db_fundamental_datatype.h"
 #include "database/db_config_option.h"
@@ -186,7 +185,6 @@ static const std::unordered_map<mln::db_destructor_behavior, void(*)(void*)> s_m
 	{mln::db_destructor_behavior::delete_b, [](void* data) { delete static_cast<unsigned char*>(data); }},
 };
 
-
 mln::database_handler::~database_handler() {
 	if (is_connected()) {
 		close_connection();
@@ -197,11 +195,18 @@ mln::database_handler::database_handler() : db(nullptr), saved_statements() {
 
 }
 
-mln::db_result mln::database_handler::open_connection(const std::string& filename){
+mln::db_result mln::database_handler::open_connection(const char* filename, const mln::db_flag open_flags){
 	if (is_connected()) {
 		return mln::db_result::error;
 	}
-	return mln::db_result::error;//static_cast<mln::db_result>(sqlite3_open_v2(filename.c_str(), , &db));
+
+	const mln::db_result res = static_cast<mln::db_result>(sqlite3_open_v2(filename, &db, static_cast<int>(open_flags), nullptr));
+	if (res != mln::db_result::ok) {
+		mln::database_handler::close_connection();
+	}
+}
+mln::db_result mln::database_handler::open_connection(const std::string& filename, const mln::db_flag open_flags) {
+	return mln::database_handler::open_connection(filename.c_str(), open_flags);
 }
 
 bool mln::database_handler::is_connected(){
@@ -210,7 +215,10 @@ bool mln::database_handler::is_connected(){
 
 mln::db_result mln::database_handler::close_connection(){
 	for (const auto& stmt : saved_statements) {
-		sqlite3_finalize(stmt);
+		const mln::db_result res = static_cast<mln::db_result>(sqlite3_finalize(stmt));
+		if (res != mln::db_result::ok) {
+			return res;
+		}
 	}
 	saved_statements.clear();
 
