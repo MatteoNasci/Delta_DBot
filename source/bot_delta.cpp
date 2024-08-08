@@ -1,6 +1,6 @@
-#include "mln.h"
-#include "defines.h"
 #include "bot_delta.h"
+#include "defines.h"
+#include "database/database_handler.h"
 
 #include <dpp/dpp.h>
 #include <dpp/intents.h>
@@ -27,6 +27,30 @@ void mln::bot_delta::init(){
     autocompletes.attach_event(data);
 }
 
+void mln::bot_delta::initialize_environment(){
+    const mln::db_result res = mln::database_handler::initialize_db_environment();
+    if (res != mln::db_result::ok) {
+        std::string err_msg("Error name not found");
+        mln::database_handler::get_name_from_result(res, err_msg);
+        std::cerr << "An error occurred while initializing database environment: " << err_msg << std::endl;
+        throw std::exception("An error occurred while initializing database configs");
+    }
+}
+
+void mln::bot_delta::shutdown_environment(){
+    const mln::db_result res = mln::database_handler::shutdown_db_environment();
+    if (res != mln::db_result::ok) {
+        std::string err_msg("Error name not found");
+        mln::database_handler::get_name_from_result(res, err_msg);
+        std::cerr << "An error occurred during database environment shutdown: " << err_msg << std::endl;
+        throw std::exception("An error occurred during database environment shutdown");
+    }
+}
+
+
+mln::bot_delta::~bot_delta(){
+    
+}
 
 mln::bot_delta::bot_delta(const bool register_cmds) :
     data( 

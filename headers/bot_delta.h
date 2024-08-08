@@ -12,6 +12,7 @@ namespace mln {
 	public:
 		bot_delta_data_t data;
 	public:
+		~bot_delta();
 		bot_delta(const bool register_cmds);
 		bot_delta() = delete;
 		/**
@@ -47,6 +48,9 @@ namespace mln {
 		autocomplete_runner autocompletes;
 	private:
 		void init();
+	public:
+		static void initialize_environment();
+		static void shutdown_environment();
 	};
 }
 
