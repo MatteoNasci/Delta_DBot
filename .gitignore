@@ -7,4 +7,4 @@ vcpkg_installed/
 vcpkg*
 assets/
 .*
-.db
+*.db
