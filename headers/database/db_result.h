@@ -112,7 +112,7 @@ namespace mln {
 		/*The SQLITE_IOERR_READ error code is an extended error code for SQLITE_IOERR indicating an I/O error in the VFS layer while trying to read from a file on disk. This error might result from a hardware malfunction or because a filesystem came unmounted while the file was open.*/
 		io_err_read = 266,
 		/*The SQLITE_CORRUPT_VTAB error code is an extended error code for SQLITE_CORRUPT used by virtual tables. A virtual table might return SQLITE_CORRUPT_VTAB to indicate that content in the virtual table is corrupt.*/
-		corrupt_v_tab = 267,
+		corrupt_vtab = 267,
 		/*The SQLITE_CANTOPEN_NOTEMPDIR error code is no longer used.*/
 		cant_open_no_temp_dir = 270,
 		/*The SQLITE_CONSTRAINT_CHECK error code is an extended error code for SQLITE_CONSTRAINT indicating that a CHECK constraint failed.*/
@@ -135,7 +135,7 @@ namespace mln {
 		busy_snapshot = 517,
 		/*The SQLITE_LOCKED_VTAB result code is not used by the SQLite core, but it is available for use by extensions. Virtual table implementations can return this result code to indicate that they cannot complete the current operation because of locks held by other threads or processes.
 		The R-Tree extension returns this result code when an attempt is made to update the R-Tree while another prepared statement is actively reading the R-Tree. The update cannot proceed because any change to an R-Tree might involve reshuffling and rebalancing of nodes, which would disrupt read cursors, causing some rows to be repeated and other rows to be omitted.*/
-		locked_v_tab = 518,
+		locked_vtab = 518,
 		/*The SQLITE_READONLY_CANTLOCK error code is an extended error code for SQLITE_READONLY. The SQLITE_READONLY_CANTLOCK error code indicates that SQLite is unable to obtain a read lock on a WAL mode database because the shared-memory file associated with that database is read-only.*/
 		read_only_cant_lock = 520,
 		/*The SQLITE_IOERR_SHORT_READ error code is an extended error code for SQLITE_IOERR indicating that a read attempt in the VFS layer was unable to obtain as many bytes as was requested. This might be due to a truncated file.*/
@@ -200,7 +200,7 @@ namespace mln {
 		/*The SQLITE_IOERR_RDLOCK error code is an extended error code for SQLITE_IOERR indicating an I/O error within xLock method on the sqlite3_io_methods object while trying to obtain a read lock.*/
 		io_err_rd_lock = 2314,
 		/*The SQLITE_CONSTRAINT_VTAB error code is not currently used by the SQLite core. However, this error code is available for use by application-defined virtual tables.*/
-		constraint_v_tab = 2323,
+		constraint_vtab = 2323,
 		/*The SQLITE_IOERR_DELETE error code is an extended error code for SQLITE_IOERR indicating an I/O error within xDelete method on the sqlite3_vfs object.*/
 		io_err_delete = 2570,
 		/*The SQLITE_CONSTRAINT_ROWID error code is an extended error code for SQLITE_CONSTRAINT indicating that a rowid is not unique.*/

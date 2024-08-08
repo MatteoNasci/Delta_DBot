@@ -12,5 +12,7 @@
 #include "database/db_xaccess_flag.h"
 #include "database/db_config_option.h"
 #include "database/db_connection_config_option.h"
+#include "database/db_prepare_flag.h"
+#include "database/db_destructor_behavior.h"
 
 #endif //H_MLN_DB_DATABASES_H

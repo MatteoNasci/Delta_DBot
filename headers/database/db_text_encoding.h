@@ -3,7 +3,7 @@
 #define H_MLN_DB_DB_TEXT_ENCODING_H
 
 namespace mln {	
-	enum class db_text_encoding {
+	enum class db_text_encoding : unsigned char {
 		utf8 = 1,    /* IMP: R-37514-35566 */
 		utf16le = 2,    /* IMP: R-03371-37637 */
 		utf16be = 3,    /* IMP: R-51971-34154 */

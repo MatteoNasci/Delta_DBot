@@ -33,8 +33,8 @@ namespace mln {
 		alter_table =         26,   /* Database Name   Table Name      */
 		re_index =            27,   /* Index Name      NULL            */
 		analyze =             28,   /* Table Name      NULL            */
-		create_v_table =      29,   /* Table Name      Module Name     */
-		drop_v_table =        30,   /* Table Name      Module Name     */
+		create_vtable =       29,   /* Table Name      Module Name     */
+		drop_vtable =         30,   /* Table Name      Module Name     */
 		function =            31,   /* NULL            Function Name   */
 		savepoint =           32,   /* Operation       Savepoint Name  */
 		copy =                 0,   /* No longer used */
