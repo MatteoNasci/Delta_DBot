@@ -11,9 +11,10 @@ namespace mln {
 		std::function<bool(void*)> row_callback;
 		std::function<void(void*, int, db_column_data_t&&)> data_adder_callback;
 		std::function<bool(int)> type_definer_callback;
+		std::function<void(void*, size_t)> statement_index_callback;
 		void* callback_data;
 
-		database_callbacks_t(std::function<bool(void*)>& row_callback, std::function<void(void*, int, db_column_data_t&&)>& data_adder_callback, std::function<bool(int)>& type_definer_callback, void* callback_data);
+		database_callbacks_t(std::function<bool(void*)>& row_callback, std::function<void(void*, int, db_column_data_t&&)>& data_adder_callback, std::function<bool(int)>& type_definer_callback, std::function<void(void*, size_t)>& statement_index_callback, void* callback_data);
 	};
 }
 
