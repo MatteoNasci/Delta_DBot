@@ -1,5 +1,7 @@
 #include "bot_delta.h"
 
+#include "database/database_handler.h"
+
 #include <cstring>
 
 //TODO add system where someone loads a file (like cmd show), associates it with an unique name and the bot saves in in a private channel. Then when requested by another command (given the right file name from the user) show that image
@@ -16,9 +18,17 @@ int main(int argc, char** argv){
     {
         mln::bot_delta delta(register_bot_cmds);
 
-        const std::string result_text = delta.start();
+        delta.data.bot.log(dpp::loglevel::ll_info, delta.start());
 
-        delta.data.bot.log(dpp::loglevel::ll_info, result_text);
+        delta.data.bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
+
+        delta.data.bot.log(dpp::loglevel::ll_info, "Press any key to stop the bot...");
+
+        int c = getchar();
+
+        delta.data.bot.log(dpp::loglevel::ll_info, "Closing the bot...");
+
+        delta.data.bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
     }
     mln::bot_delta::shutdown_environment();
 

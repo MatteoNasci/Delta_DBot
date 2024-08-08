@@ -83,6 +83,6 @@ mln::bot_delta::bot_delta(const bool register_cmds) :
 }
 
 std::string mln::bot_delta::start(){
-    data.bot.start(dpp::st_wait);
-    return "Bot closed!";
+    data.bot.start(dpp::st_return);
+    return "Bot deployed!";
 }
