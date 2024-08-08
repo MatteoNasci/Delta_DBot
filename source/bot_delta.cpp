@@ -15,6 +15,13 @@ void mln::bot_delta::init(){
     data.bot.on_log(dpp::utility::cout_logger());
     data.bot.log(dpp::loglevel::ll_info, data.is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
 
+    const mln::db_result res = db.open_connection("data.db");
+    if (res != mln::db_result::ok) {
+        std::string err_msg("Error name not found");
+        mln::database_handler::get_name_from_result(res, err_msg);
+        data.bot.log(dpp::loglevel::ll_critical, "An error occurred while connecting to database: " + err_msg);
+        throw std::exception("An error occurred while connecting to database");
+    }
     
     readys.attach_event(data);
     cmds.attach_event(data);
@@ -61,6 +68,7 @@ mln::bot_delta::bot_delta(const bool register_cmds) :
     false,
 #endif //MLN_DB_DISCORD_DEV_ID
     register_cmds),
+    db(),
     cmds(), 
     ctxs(), 
     forms(), 

@@ -4,6 +4,7 @@
 
 #include "bot_delta_data.h"
 #include "general/events.h"
+#include "database/database_handler.h"
 
 #include <string>
 
@@ -11,6 +12,7 @@ namespace mln {
 	class bot_delta {
 	public:
 		bot_delta_data_t data;
+		database_handler db;
 	public:
 		~bot_delta();
 		bot_delta(const bool register_cmds);
