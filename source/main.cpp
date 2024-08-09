@@ -44,6 +44,10 @@ void run_app(const bool register_bot_cmds) {
         delta.data.bot.log(dpp::loglevel::ll_info, "Closing the bot...");
 
         delta.data.bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
+
+        while (!delta.close()) {
+            //TODO change this while loop to something more decent
+        }
     }
     mln::bot_delta::shutdown_environment();
 }

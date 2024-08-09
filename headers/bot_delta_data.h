@@ -6,12 +6,14 @@
 #include <dpp/snowflake.h>
 
 namespace mln {
+	class bot_delta;
 	struct bot_delta_data_t {
+		bot_delta* delta;
 		dpp::cluster bot;
 		const dpp::snowflake dev_id;
 		const bool is_dev_id_valid;
 		const bool registered_new_cmds;
-		bot_delta_data_t(dpp::snowflake in_dev_id, bool in_is_dev_id_valid, bool in_registered_new_cmds);
+		bot_delta_data_t(bot_delta* delta, dpp::snowflake in_dev_id, bool in_is_dev_id_valid, bool in_registered_new_cmds);
 		bot_delta_data_t() = delete;
 		/**
 		 * @brief bot_delta_data_t is non-copyable

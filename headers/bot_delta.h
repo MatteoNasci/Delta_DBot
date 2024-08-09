@@ -36,8 +36,22 @@ namespace mln {
 		 * @brief bot_delta is non-moveable
 		 */
 		bot_delta& operator=(const bot_delta&&) = delete;
+
 		std::string start();
+		bool close();
+
+		db_result insert_new_guild_id(const dpp::snowflake& guild_id);
+		db_result update_guild_db_channel_id(const dpp::snowflake& guild_id, const dpp::snowflake& channel_id);
+		db_result select_guild_db_channel_id(const dpp::snowflake& guild_id, bool& out_valid_channel, dpp::snowflake& out_channel_id);
+
+		db_result print_main_db();
 	private:
+		size_t saved_insert_guild_query;
+		size_t saved_update_guild_channel_query;
+		int saved_ugc_guild_index;
+		int saved_ugc_channel_index;
+		size_t saved_select_guild_channel_query;
+		size_t saved_select_all_query;
 
 		cmd_runner cmds;
 		cmd_ctx_runner ctxs;
@@ -50,6 +64,9 @@ namespace mln {
 		autocomplete_runner autocompletes;
 	private:
 		void init();
+		database_callbacks_t get_select_callbacks(std::pair<bool, dpp::snowflake>& out_res);
+		database_callbacks_t get_select_all_callbacks();
+		void setup_db();
 	public:
 		static void initialize_environment();
 		static void shutdown_environment();
