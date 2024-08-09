@@ -70,6 +70,8 @@ namespace mln {
 		//Use only when you know you don't need the statement anymore
 		db_result delete_statement(const size_t saved_statement_id);
 
+		void delete_all_statement();
+
 		bool is_saved_stmt_id_valid(const size_t saved_statement_id);
 
 		//The bind param_index are indexed from 1!
@@ -80,7 +82,10 @@ namespace mln {
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index);
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const char* text, const uint64_t bytes, const db_destructor_behavior mem_management, const db_text_encoding encoding);
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void* blob, const uint64_t bytes, const db_destructor_behavior mem_management);
-		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const uint64_t bytes);
+		//The void* is ignored here
+		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void*, const uint64_t bytes);
+
+		db_result get_bind_parameter_index(const size_t saved_statement_id, const size_t stmt_index, const char* param_name, int& out_index);
 
 		/*Value and pointer binds will not be supported at the moment*/
 	private:

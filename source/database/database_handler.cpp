@@ -220,12 +220,7 @@ bool mln::database_handler::is_connected(){
 }
 
 mln::db_result mln::database_handler::close_connection(){
-	for (const auto& pair : saved_statements) {
-		for (const auto& stmt : pair.second) {
-			sqlite3_finalize(stmt);
-		}
-	}
-	saved_statements.clear();
+	mln::database_handler::delete_all_statement();
 
 	const mln::db_result res = static_cast<mln::db_result>(sqlite3_close(db));
 	if (res == mln::db_result::ok) {
@@ -408,6 +403,19 @@ mln::db_result mln::database_handler::delete_statement(const size_t saved_statem
 
 	return mln::db_result::ok;
 }
+void mln::database_handler::delete_all_statement() {
+	for (const auto& pair : saved_statements) {
+		for (const auto& stmt : pair.second) {
+			sqlite3_finalize(stmt);
+		}
+	}
+	saved_statements.clear();
+
+	while (!removed_keys.empty()) {
+		removed_keys.pop();
+	}
+}
+
 bool mln::database_handler::is_saved_stmt_id_valid(const size_t saved_statement_id) {
 	return saved_statements.contains(saved_statement_id);
 }
@@ -436,6 +444,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_int(it->second[stmt_index], param_index, value));
 }
+
 mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int64_t value) {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -496,7 +505,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_blob64(it->second[stmt_index], param_index, blob, bytes, s_mapped_destructor_behaviors.find(mem_management)->second));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const uint64_t bytes) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void*, const uint64_t bytes) {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -507,6 +516,19 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 	}
 
 	return static_cast<mln::db_result>(sqlite3_bind_zeroblob64(it->second[stmt_index], param_index, bytes));
+}
+mln::db_result mln::database_handler::get_bind_parameter_index(const size_t saved_statement_id, const size_t stmt_index, const char* param_name, int& out_index) {
+	const auto& it = saved_statements.find(saved_statement_id);
+	if (it == saved_statements.end()) {
+		return mln::db_result::range;
+	}
+
+	if (stmt_index >= it->second.size()) {
+		return mln::db_result::range;
+	}
+
+	out_index = sqlite3_bind_parameter_index(it->second[stmt_index], param_name);
+	return out_index == 0 ? mln::db_result::error : mln::db_result::ok;
 }
 
 std::string mln::database_handler::get_db_debug_info() {
@@ -607,7 +629,7 @@ mln::db_result mln::database_handler::initialize_db_environment(){
 		return res;
 	}
 
-	res = static_cast<mln::db_result>(sqlite3_config(static_cast<int>(mln::db_config_option::config_small_malloc), 1));
+	res = static_cast<mln::db_result>(sqlite3_config(static_cast<int>(mln::db_config_option::config_small_malloc), 0));
 	if (res != mln::db_result::ok) {
 		return res;
 	}
