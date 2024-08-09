@@ -72,6 +72,8 @@ namespace mln {
 
 		bool is_saved_stmt_id_valid(const size_t saved_statement_id);
 
+		//The bind param_index are indexed from 1!
+		//https://www.sqlite.org/capi3ref.html#sqlite3_bind_blob
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int value);
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int64_t value);
 		db_result bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const double value);

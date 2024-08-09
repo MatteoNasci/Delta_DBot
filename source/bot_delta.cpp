@@ -5,6 +5,8 @@
 #include <dpp/dpp.h>
 #include <dpp/intents.h>
 
+static const std::string s_create_main_table("CREATE TABLE IF NOT EXISTS main.guild_profile( GUILD INTEGER PRIMARY KEY, DB_CHANNEL INTEGER);");
+
 mln::bot_delta_data_t::bot_delta_data_t(dpp::snowflake in_dev_id, bool in_is_dev_id_valid, bool in_register_commands) :
     bot(DISCORD_BOT_TOKEN, dpp::i_default_intents | dpp::i_guild_members | dpp::i_message_content), 
     dev_id(in_dev_id), 
@@ -15,14 +17,22 @@ void mln::bot_delta::init(){
     data.bot.on_log(dpp::utility::cout_logger());
     data.bot.log(dpp::loglevel::ll_info, data.is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
 
-    const mln::db_result res = db.open_connection("data.db");
+    mln::db_result res = db.open_connection("data.db");
     if (res != mln::db_result::ok) {
         std::string err_msg("Error name not found");
         mln::database_handler::get_name_from_result(res, err_msg);
-        data.bot.log(dpp::loglevel::ll_critical, "An error occurred while connecting to database: " + err_msg);
-        throw std::exception("An error occurred while connecting to database");
+        err_msg = "An error occurred while connecting to database: " + err_msg;
+        throw std::exception(err_msg.c_str());
     }
     
+    res = db.exec(s_create_main_table, mln::database_callbacks_t());
+    if (res != mln::db_result::ok) {
+        std::string err_msg("Error name not found");
+        mln::database_handler::get_name_from_result(res, err_msg);
+        err_msg = "An error occurred while creating the guild_profile table: " + err_msg;
+        throw std::exception(err_msg.c_str());
+    }
+
     readys.attach_event(data);
     cmds.attach_event(data);
     ctxs.attach_event(data);

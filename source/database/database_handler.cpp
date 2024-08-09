@@ -9,6 +9,8 @@
 mln::database_callbacks_t::database_callbacks_t(std::function<bool(void*)>& in_row_callback, std::function<void(void*, int, mln::db_column_data_t&&)>& in_data_adder_callback, std::function<bool(int)>& in_type_definer_callback, std::function<void(void*, size_t)>& in_statement_index_callback, void* in_callback_data) :
 	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), callback_data(in_callback_data) {}
 
+mln::database_callbacks_t::database_callbacks_t() : row_callback(), data_adder_callback(), type_definer_callback(), statement_index_callback(), callback_data(nullptr) {}
+
 mln::db_column_data_t::db_column_data_t(const char* in_name, const double in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 mln::db_column_data_t::db_column_data_t(const char* in_name, const int in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 mln::db_column_data_t::db_column_data_t(const char* in_name, const int64_t in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
@@ -233,7 +235,7 @@ mln::db_result mln::database_handler::close_connection(){
 }
 
 mln::db_result mln::database_handler::exec(const std::string& stmt, const database_callbacks_t& callbacks) {
-	return mln::database_handler::exec(stmt.c_str(), static_cast<int>(stmt.length()) + 1, callbacks);
+	return mln::database_handler::exec(stmt.c_str(), static_cast<int>(stmt.length()), callbacks);
 }
 mln::db_result mln::database_handler::exec(const char* stmt_text, int length_with_null, const database_callbacks_t& callbacks) {
 	std::queue<sqlite3_stmt*> stmt_queue = {};
@@ -248,9 +250,10 @@ mln::db_result mln::database_handler::exec(const char* stmt_text, int length_wit
 	//It's safer to keep the -(tail - start) rather than unpacking to avoid problems with the int length_with_null overflowing
 	//The length adapts to tail changing with _prepare, and at the end of the whole process length will be == 1 so we cycle for > 1
 	//length_with_null = length_with_null - (tail - start);
-	while (length_with_null > 1) {
+	while (*tail != '\0') {
 		sqlite3_stmt* stmt(nullptr);
 		const char* start(tail);
+
 		res = static_cast<mln::db_result>(sqlite3_prepare_v3(db, start, length_with_null, static_cast<int>(mln::db_prepare_flag::none), &stmt, &tail));
 
 		if (res != mln::db_result::ok) {
@@ -263,12 +266,12 @@ mln::db_result mln::database_handler::exec(const char* stmt_text, int length_wit
 		}
 
 		stmt_queue.push(stmt);
-		length_with_null = length_with_null - (tail - start);
+		length_with_null = length_with_null - static_cast<int>(tail - start);
 	}
 
 	//execution/finalize phase
 	size_t stmt_index = 0;
-	const bool use_stmt_index_callback = stmt_queue.size() > 1;
+	const bool use_stmt_index_callback = stmt_queue.size() > 1 && callbacks.statement_index_callback;
 	while (!stmt_queue.empty() && res == mln::db_result::ok) {
 		if (use_stmt_index_callback) {
 			callbacks.statement_index_callback(callbacks.callback_data, stmt_index++);
@@ -295,7 +298,7 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 	}
 
 	const size_t stmt_count = it->second.size();
-	const bool use_stmt_index_callback = stmt_count > 1;
+	const bool use_stmt_index_callback = stmt_count > 1 && callbacks.statement_index_callback;
 	for (size_t i = 0; i < stmt_count; ++i) {
 		if (use_stmt_index_callback) {
 			callbacks.statement_index_callback(callbacks.callback_data, i);
@@ -310,6 +313,8 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 	return mln::db_result::ok;
 }
 mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) {
+	const bool can_use_callbacks = callbacks.data_adder_callback && callbacks.row_callback && callbacks.type_definer_callback;
+
 	mln::db_result res = mln::db_result::ok;
 	while (res != mln::db_result::done) {
 		res = static_cast<mln::db_result>(sqlite3_step(stmt));
@@ -319,7 +324,7 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 		}
 
 		const int column_count = sqlite3_data_count(stmt);
-		if (column_count > 0) {
+		if (can_use_callbacks && column_count > 0) {
 			for (int i = 0; i < column_count; ++i) {
 				mln::db_fundamental_datatype type = static_cast<mln::db_fundamental_datatype>(sqlite3_column_type(stmt, i));
 				//these find calls are safe, column_type can only return one of the 5 fundamental types mapped on the enum, these following maps have all of them mapped out. This is safe
@@ -347,7 +352,7 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 }
 
 mln::db_result mln::database_handler::save_statement(const std::string& statement, size_t& out_saved_statement_id) {
-	return mln::database_handler::save_statement(statement.c_str(), static_cast<int>(statement.length()) + 1, out_saved_statement_id);
+	return mln::database_handler::save_statement(statement.c_str(), static_cast<int>(statement.length()), out_saved_statement_id);
 }
 mln::db_result mln::database_handler::save_statement(const char* statement, int length_with_null, size_t& out_saved_statement_id) {
 	std::vector<sqlite3_stmt*>* list(nullptr);
@@ -360,7 +365,7 @@ mln::db_result mln::database_handler::save_statement(const char* statement, int 
 	//It's safer to keep the -(tail - start) rather than unpacking to avoid problems with the int length_with_null overflowing
 	//The length adapts to tail changing with _prepare, and at the end of the whole process length will be == 1 so we cycle for > 1
 	//length_with_null = length_with_null - (tail - start);
-	while (length_with_null > 1) {
+	while (*tail != '\0') {
 		sqlite3_stmt* stmt(nullptr);
 		const char* start(tail);
 		res = static_cast<mln::db_result>(sqlite3_prepare_v3(db, start, length_with_null, static_cast<int>(mln::db_prepare_flag::prepare_persistent), &stmt, &tail));
@@ -382,7 +387,7 @@ mln::db_result mln::database_handler::save_statement(const char* statement, int 
 		}
 		list->push_back(stmt);
 
-		length_with_null = length_with_null - (tail - start);
+		length_with_null = length_with_null - static_cast<int>(tail - start);
 	}
 	
 	return res;
@@ -508,11 +513,7 @@ std::string mln::database_handler::get_db_debug_info() {
 	int64_t soft_heap_limit = sqlite3_soft_heap_limit64(-1);
 	int64_t hard_heap_limit = sqlite3_hard_heap_limit64(-1);
 
-	int64_t used_memory = sqlite3_memory_used();
-	int64_t max_used_memory = sqlite3_memory_highwater(0);
-
-	std::string debug_text("Soft heap limit: " + std::to_string(soft_heap_limit) + ", hard heap limit: " + std::to_string(hard_heap_limit) +
-							"\nUsed memory: " + std::to_string(used_memory) + ", max used memory: " + std::to_string(max_used_memory));
+	std::string debug_text("Soft heap limit: " + std::to_string(soft_heap_limit) + ", hard heap limit: " + std::to_string(hard_heap_limit));
 
 	int64_t current = 0;
 	int64_t highwater = 0;
