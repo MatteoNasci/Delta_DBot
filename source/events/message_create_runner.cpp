@@ -1,4 +1,5 @@
 #include "events/message_create_runner.h"
+#include "bot_delta.h"
 
 mln::message_create_runner::message_create_runner() : actions({
 
@@ -6,10 +7,10 @@ mln::message_create_runner::message_create_runner() : actions({
 {
 }
 
-void mln::message_create_runner::attach_event(bot_delta_data_t& data){
-    data.bot.on_message_create([&data, this](const dpp::message_create_t& event) -> dpp::task<void> {
+void mln::message_create_runner::attach_event(){
+    mln::bot_delta::delta().bot.on_message_create([this](const dpp::message_create_t& event) -> dpp::task<void> {
         for (const auto& func : this->actions) {
-            co_await func(data, event);
+            co_await func(event);
         }
     });
 }

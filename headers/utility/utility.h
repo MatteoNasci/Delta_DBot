@@ -11,7 +11,7 @@
 namespace mln {
 	class utility {
 	public:
-		static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::slashcommand_t& event);
+		static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::interaction_create_t& event);
 	};
 }
 

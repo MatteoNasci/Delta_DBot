@@ -1,6 +1,6 @@
 #include "events/cmd_runner.h"
 #include "general/commands.h"
-#include <dpp/cluster.h>
+#include "bot_delta.h"
 
 mln::cmd_runner::cmd_runner() : actions(
         {{mln::ping::get_command_name(), &mln::ping::command},
@@ -18,11 +18,11 @@ mln::cmd_runner::cmd_runner() : actions(
     
 }
 
-void mln::cmd_runner::attach_event(mln::bot_delta_data_t& data){
-    data.bot.on_slashcommand([&data, this](const dpp::slashcommand_t& event) -> dpp::task<void> {
+void mln::cmd_runner::attach_event(){
+    mln::bot_delta::delta().bot.on_slashcommand([this](const dpp::slashcommand_t& event) -> dpp::task<void> {
         const std::string key = event.command.get_command_name();
         if (auto function_it = actions.find(key); function_it != actions.end()) {
-            co_await function_it->second(data, event);
+            co_await function_it->second(event);
         }
     });
 }

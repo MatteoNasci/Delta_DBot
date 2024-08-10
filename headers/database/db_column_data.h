@@ -20,13 +20,13 @@ namespace mln {
 		const int bytes;
 
 		db_column_data_t() = delete;
-		db_column_data_t(const char* name, const double data, const int bytes = sizeof(const double));
-		db_column_data_t(const char* name, const int data, const int bytes = sizeof(const int));
-		db_column_data_t(const char* name, const int64_t data, const int bytes = sizeof(const int64_t));
-		db_column_data_t(const char* name, const void* data, const int bytes = sizeof(const void*));
-		db_column_data_t(const char* name, const unsigned char* data, const int bytes = sizeof(const unsigned char*));
+		db_column_data_t(const char* name, double data, int bytes = sizeof(double));
+		db_column_data_t(const char* name, int data, int bytes = sizeof(int));
+		db_column_data_t(const char* name, int64_t data, int bytes = sizeof(int64_t));
+		db_column_data_t(const char* name, const void* data, int bytes = sizeof(const void*));
+		db_column_data_t(const char* name, const unsigned char* data, int bytes = sizeof(const unsigned char*));
 		//This data should always be set to nullptr!
-		db_column_data_t(const char* name, const short* data = nullptr, const int bytes = sizeof(const short*));
+		db_column_data_t(const char* name, const short* data = nullptr, int bytes = sizeof(const short*));
 	};
 }
 

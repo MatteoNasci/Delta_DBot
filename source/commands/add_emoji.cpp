@@ -1,13 +1,7 @@
 #include "commands/add_emoji.h"
+#include "bot_delta.h"
 
-#include <dpp/snowflake.h>
-#include <dpp/message.h>
-#include <dpp/coro.h>
-
-#include <variant>
-#include <unordered_map>
-
-dpp::task<void> mln::add_emoji::command(mln::bot_delta_data_t &data, const dpp::slashcommand_t &event){
+dpp::task<void> mln::add_emoji::command(const dpp::slashcommand_t &event){
     dpp::cluster *cluster = event.from->creator;
     
     dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
@@ -62,8 +56,8 @@ dpp::task<void> mln::add_emoji::command(mln::bot_delta_data_t &data, const dpp::
     co_return;
 }
 
-dpp::slashcommand mln::add_emoji::get_command(dpp::cluster &bot){
-    return dpp::slashcommand(mln::add_emoji::get_command_name(), "Add an emoji", bot.me.id)
+dpp::slashcommand mln::add_emoji::get_command(){
+    return dpp::slashcommand(mln::add_emoji::get_command_name(), "Add an emoji", mln::bot_delta::delta().bot.me.id)
             .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image", true))
             .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true))
             .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel"));

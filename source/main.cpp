@@ -1,7 +1,5 @@
 #include "bot_delta.h"
 
-#include "database/database_handler.h"
-
 #include <cstring>
 
 void run_app(const bool register_bot_cmds);
@@ -31,21 +29,19 @@ int main(int argc, char** argv){
 void run_app(const bool register_bot_cmds) {
     mln::bot_delta::initialize_environment();
     {
-        mln::bot_delta delta(register_bot_cmds);
+        mln::bot_delta::delta().start(register_bot_cmds);
 
-        delta.data.bot.log(dpp::loglevel::ll_info, delta.start());
+        mln::bot_delta::delta().bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
 
-        delta.data.bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
-
-        delta.data.bot.log(dpp::loglevel::ll_info, "Press any key to stop the bot...");
+        mln::bot_delta::delta().bot.log(dpp::loglevel::ll_info, "Press any key to stop the bot...");
 
         int c = getchar();
 
-        delta.data.bot.log(dpp::loglevel::ll_info, "Closing the bot...");
+        mln::bot_delta::delta().bot.log(dpp::loglevel::ll_info, "Closing the bot...");
 
-        delta.data.bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
+        mln::bot_delta::delta().bot.log(dpp::loglevel::ll_info, mln::database_handler::get_db_debug_info());
 
-        while (!delta.close()) {
+        while (!mln::bot_delta::delta().close()) {
             //TODO change this while loop to something more decent
         }
     }

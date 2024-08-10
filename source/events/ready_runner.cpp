@@ -1,5 +1,5 @@
 #include "events/ready_runner.h"
-
+#include "bot_delta.h"
 #include "ready/register_commands.h"
 
 mln::ready_runner::ready_runner() : actions(
@@ -9,11 +9,11 @@ mln::ready_runner::ready_runner() : actions(
 
 }
 
-void mln::ready_runner::attach_event(mln::bot_delta_data_t& data){
-    data.bot.on_ready([&data, this](const dpp::ready_t& event) -> dpp::task<void> {
+void mln::ready_runner::attach_event(){
+    mln::bot_delta::delta().bot.on_ready([this](const dpp::ready_t& event) -> dpp::task<void> {
         for (const auto& pair : this->actions) {
-            if (pair.first(data)) {
-                co_await pair.second(data, event);
+            if (pair.first()) {
+                co_await pair.second(event);
             }
         }
     });

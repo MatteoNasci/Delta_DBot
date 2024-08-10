@@ -6,7 +6,6 @@
 #include "version.h"
 #include "export.h"
 #include "bot_delta.h"
-#include "bot_delta_data.h"
 
 #include "general/utilities.h"
 #include "general/commands.h"

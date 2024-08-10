@@ -1,16 +1,10 @@
 #include "commands/avatar.h"
+#include "bot_delta.h"
 #include "utility/utility.h"
-
-#include <dpp/coro/async.h>
-#include <dpp/snowflake.h>
-#include <dpp/restresults.h>
-#include <dpp/guild.h>
-
-#include <variant>
 
 static constexpr uint16_t s_avatar_pixel_size{ 512 };
 
-dpp::task<void> mln::avatar::command(mln::bot_delta_data_t &data, const dpp::slashcommand_t &event){
+dpp::task<void> mln::avatar::command(const dpp::slashcommand_t &event){
     const dpp::command_value broadcast_param = event.get_parameter("broadcast");
     const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
 
@@ -54,8 +48,8 @@ dpp::task<void> mln::avatar::command(mln::bot_delta_data_t &data, const dpp::sla
     event.edit_original_response(msg);
 }
 
-dpp::slashcommand mln::avatar::get_command(dpp::cluster &bot){
-    return dpp::slashcommand(mln::avatar::get_command_name(), "Get your or another user's avatar image", bot.me.id)
+dpp::slashcommand mln::avatar::get_command(){
+    return dpp::slashcommand(mln::avatar::get_command_name(), "Get your or another user's avatar image", mln::bot_delta::delta().bot.me.id)
                 .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from"))
                 .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel"));
 }

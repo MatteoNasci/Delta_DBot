@@ -11,12 +11,12 @@ mln::database_callbacks_t::database_callbacks_t(std::function<bool(void*)>& in_r
 
 mln::database_callbacks_t::database_callbacks_t() : row_callback(), data_adder_callback(), type_definer_callback(), statement_index_callback(), callback_data(nullptr) {}
 
-mln::db_column_data_t::db_column_data_t(const char* in_name, const double in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const int in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const int64_t in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const void* in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const unsigned char* in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const short* in_data, const int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, double in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, int in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, int64_t in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const void* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const unsigned char* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const short* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 
 static const std::unordered_map<mln::db_result, std::string> s_result_to_string_map{
 	{mln::db_result::ok, std::string("ok")},
@@ -215,7 +215,7 @@ mln::db_result mln::database_handler::open_connection(const std::string& filenam
 	return mln::database_handler::open_connection(filename.c_str(), open_flags);
 }
 
-bool mln::database_handler::is_connected(){
+bool mln::database_handler::is_connected() const{
 	return db != nullptr;
 }
 
@@ -229,10 +229,10 @@ mln::db_result mln::database_handler::close_connection(){
 	return res;
 }
 
-mln::db_result mln::database_handler::exec(const std::string& stmt, const database_callbacks_t& callbacks) {
+mln::db_result mln::database_handler::exec(const std::string& stmt, const database_callbacks_t& callbacks) const {
 	return mln::database_handler::exec(stmt.c_str(), static_cast<int>(stmt.length()), callbacks);
 }
-mln::db_result mln::database_handler::exec(const char* stmt_text, int length_with_null, const database_callbacks_t& callbacks) {
+mln::db_result mln::database_handler::exec(const char* stmt_text, int length_with_null, const database_callbacks_t& callbacks) const {
 	std::queue<sqlite3_stmt*> stmt_queue = {};
 	const char* tail(stmt_text);
 	mln::db_result res(mln::db_result::ok);
@@ -286,7 +286,7 @@ mln::db_result mln::database_handler::exec(const char* stmt_text, int length_wit
 	
 	return res;
 }
-mln::db_result mln::database_handler::exec(const size_t saved_statement_id, const database_callbacks_t& callbacks) {
+mln::db_result mln::database_handler::exec(const size_t saved_statement_id, const database_callbacks_t& callbacks) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -307,7 +307,7 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 
 	return mln::db_result::ok;
 }
-mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) {
+mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) const {
 	const bool can_use_callbacks = callbacks.data_adder_callback && callbacks.row_callback && callbacks.type_definer_callback;
 
 	mln::db_result res = mln::db_result::ok;
@@ -416,7 +416,7 @@ void mln::database_handler::delete_all_statement() {
 	}
 }
 
-bool mln::database_handler::is_saved_stmt_id_valid(const size_t saved_statement_id) {
+bool mln::database_handler::is_saved_stmt_id_valid(const size_t saved_statement_id) const {
 	return saved_statements.contains(saved_statement_id);
 }
 size_t mln::database_handler::get_available_key() {
@@ -432,7 +432,7 @@ size_t mln::database_handler::get_available_key() {
 	return res;
 }
 
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int value){
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int value) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -445,7 +445,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 	return static_cast<mln::db_result>(sqlite3_bind_int(it->second[stmt_index], param_index, value));
 }
 
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int64_t value) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int64_t value) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -457,7 +457,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_int64(it->second[stmt_index], param_index, value));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const double value) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const double value) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -469,7 +469,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_double(it->second[stmt_index], param_index, value));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -481,7 +481,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_null(it->second[stmt_index], param_index));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const char* text, const uint64_t bytes, const db_destructor_behavior mem_management, const db_text_encoding encoding){
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const char* text, const uint64_t bytes, const db_destructor_behavior mem_management, const db_text_encoding encoding) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -493,7 +493,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_text64(it->second[stmt_index], param_index, text, bytes, s_mapped_destructor_behaviors.find(mem_management)->second, static_cast<unsigned char>(encoding)));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void* blob, const uint64_t bytes, const db_destructor_behavior mem_management) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void* blob, const uint64_t bytes, const db_destructor_behavior mem_management) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -505,7 +505,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_blob64(it->second[stmt_index], param_index, blob, bytes, s_mapped_destructor_behaviors.find(mem_management)->second));
 }
-mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void*, const uint64_t bytes) {
+mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void*, const uint64_t bytes) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;
@@ -517,7 +517,7 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 
 	return static_cast<mln::db_result>(sqlite3_bind_zeroblob64(it->second[stmt_index], param_index, bytes));
 }
-mln::db_result mln::database_handler::get_bind_parameter_index(const size_t saved_statement_id, const size_t stmt_index, const char* param_name, int& out_index) {
+mln::db_result mln::database_handler::get_bind_parameter_index(const size_t saved_statement_id, const size_t stmt_index, const char* param_name, int& out_index) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
 		return mln::db_result::range;

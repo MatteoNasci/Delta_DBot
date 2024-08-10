@@ -1,12 +1,11 @@
 #include "commands/msgs_get.h"
+#include "bot_delta.h"
 #include "utility/constants.h"
-
-#include <variant>
 
 static constexpr int64_t s_msgs_get_min_val{1};
 static constexpr int64_t s_msgs_get_max_val{1000};
 
-dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::slashcommand_t& event){
+dpp::task<void> mln::msgs_get::command(const dpp::slashcommand_t& event){
     //TODO problems with sending bot msgs to pm (when they cannot be representend by the original reply). Everything else works (bot msgs to channel, user msgs to pm or channel).
     const int64_t limit = std::get<int64_t>(event.get_parameter("quantity"));
     const dpp::command_value broadcast_param = event.get_parameter("broadcast");
@@ -14,12 +13,12 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
     
     auto waiting_res = event.co_thinking(!broadcast);
     /* get messages using ID of the channel the command was issued in */
-    auto msg_get_res = co_await data.bot.co_messages_get(event.command.channel_id, 0, 0, 0, limit);
+    auto msg_get_res = co_await mln::bot_delta::delta().bot.co_messages_get(event.command.channel_id, 0, 0, 0, limit);
 
     const dpp::snowflake user = std::get<dpp::snowflake>(event.get_parameter("user"));
 
     if (msg_get_res.is_error()) {
-        data.bot.log(dpp::loglevel::ll_debug, msg_get_res.get_error().message);
+        mln::bot_delta::delta().bot.log(dpp::loglevel::ll_debug, msg_get_res.get_error().message);
         dpp::message msg_failed("Failed to retrieve messages: " + msg_get_res.get_error().message);
         if (!broadcast) {
              msg_failed.set_flags(dpp::m_ephemeral);
@@ -67,8 +66,8 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
                 first_reply = !first_reply;
             }
             else {
-                broadcast ? data.bot.message_create(msg_error.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) : 
-                    data.bot.direct_message_create(user, msg_error);
+                broadcast ? mln::bot_delta::delta().bot.message_create(msg_error.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) :
+                    mln::bot_delta::delta().bot.direct_message_create(user, msg_error);
             }
             co_return;
         }
@@ -88,8 +87,8 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
 
             msg_partial.set_content(contents);
             co_await waiting_res;
-            waiting_res = broadcast ? data.bot.co_message_create(msg_partial.set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id)) : 
-                data.bot.co_direct_message_create(user, msg_partial);
+            waiting_res = broadcast ? mln::bot_delta::delta().bot.co_message_create(msg_partial.set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id)) :
+                mln::bot_delta::delta().bot.co_direct_message_create(user, msg_partial);
             
 
             contents = "";
@@ -120,12 +119,12 @@ dpp::task<void> mln::msgs_get::command(mln::bot_delta_data_t& data, const dpp::s
         first_reply = !first_reply;
     }
     else {
-        broadcast ? data.bot.message_create(msgs_retrieved.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) : 
-            data.bot.direct_message_create(user, msgs_retrieved);
+        broadcast ? mln::bot_delta::delta().bot.message_create(msgs_retrieved.set_guild_id(event.command.guild_id).set_channel_id(event.command.channel_id)) :
+            mln::bot_delta::delta().bot.direct_message_create(user, msgs_retrieved);
     }
 }
-dpp::slashcommand mln::msgs_get::get_command(dpp::cluster& bot){
-    return dpp::slashcommand(mln::msgs_get::get_command_name(), "Get messages", bot.me.id)
+dpp::slashcommand mln::msgs_get::get_command(){
+    return dpp::slashcommand(mln::msgs_get::get_command_name(), "Get messages", mln::bot_delta::delta().bot.me.id)
         .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - " + std::to_string(s_msgs_get_max_val) + ".", true)
             .set_min_value(s_msgs_get_min_val).set_max_value(s_msgs_get_max_val))
         .add_option(dpp::command_option(dpp::co_user, "user", "User to retrieve msgs from.", true))
