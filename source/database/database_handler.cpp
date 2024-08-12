@@ -606,7 +606,13 @@ bool mln::database_handler::get_name_from_result(const mln::db_result result, st
 
 	return success;
 }
-
+std::string mln::database_handler::get_name_from_result(db_result result) {
+	std::string s;
+	if (!mln::database_handler::get_name_from_result(result, s)) {
+		s = "Unknown db error";
+	}
+	return s;
+}
 mln::db_result mln::database_handler::initialize_db_environment(){
 	mln::db_result res = static_cast<mln::db_result>(sqlite3_config(static_cast<int>(mln::db_config_option::config_mem_status), 1));
 	if (res != mln::db_result::ok) {

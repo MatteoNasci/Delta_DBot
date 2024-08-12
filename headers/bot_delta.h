@@ -19,6 +19,7 @@ namespace mln {
 
 		database_handler db;
 	public:
+		bot_delta();
 		~bot_delta();
 		/**
 		 * @brief bot_delta is non-copyable
@@ -28,7 +29,7 @@ namespace mln {
 		/**
 		 * @brief bot_delta is non-moveable
 		 */
-		bot_delta(const bot_delta&&) = delete;
+		bot_delta(bot_delta&&) = delete;
 
 		/**
 		 * @brief bot_delta is non-copyable
@@ -38,37 +39,29 @@ namespace mln {
 		/**
 		 * @brief bot_delta is non-moveable
 		 */
-		bot_delta& operator=(const bot_delta&&) = delete;
+		bot_delta& operator=(bot_delta&&) = delete;
 
 		std::string start(bool register_cmds);
 		bool close();
 
 		db_result print_main_db() const;
+
+		const cmd_runner& get_cmd_runner() const;
+		const cmd_ctx_runner& get_cmd_ctx_runner() const;
 	private:
 		size_t saved_select_all_query;
 
 		cmd_runner cmds;
 		cmd_ctx_runner ctxs;
-		form_submit_runner forms;
-		select_click_runner selects;
 		ready_runner readys;
-		msg_react_remove_runner react_removes;
-		message_create_runner msg_creates;
-		button_click_runner button_clicks;
-		autocomplete_runner autocompletes;
+		guild_create_runner guild_creates;
 	private:
 		void init();
 		void setup_db();
 
-		bot_delta();
 	public:
 		static void initialize_environment();
 		static void shutdown_environment();
-
-		static bot_delta& delta() {
-			static bot_delta delta;
-			return delta;
-		}
 	};
 }
 

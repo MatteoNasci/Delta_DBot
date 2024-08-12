@@ -97,32 +97,32 @@ endforeach()
 
 message(STATUS "Found ${DPP_NAME} dlls: ${DPP_DLLS_LIST}")
 
-set(botsrc  source/commands/ping.cpp 
+set(botsrc  source/commands/slash/ping.cpp
             source/bot_delta.cpp 
-            source/commands/help.cpp 
-            source/commands/add_emoji.cpp 
-            source/commands/avatar.cpp 
-            source/commands/bot_info.cpp 
-            source/ctx/high_five.cpp 
-            source/commands/db.cpp 
-            source/commands/pm.cpp 
-            source/commands/msgs_get.cpp 
-            source/commands/add_role.cpp 
+            source/commands/slash/help.cpp
+            source/commands/slash/add_emoji.cpp
+            source/commands/slash/avatar.cpp
+            source/commands/slash/bot_info.cpp
+            source/commands/ctx/high_five.cpp 
+            source/commands/slash/db.cpp
+            source/commands/slash/pm.cpp
+            source/commands/slash/msgs_get.cpp
+            source/commands/slash/add_role.cpp
             source/events/cmd_runner.cpp
             source/events/cmd_ctx_runner.cpp
-            source/events/form_submit_runner.cpp
-            source/events/select_click_runner.cpp
             source/main.cpp 
             source/utility/utility.cpp 
             source/events/ready_runner.cpp 
-            source/ready/register_commands.cpp
-            source/events/msg_react_remove_runner.cpp 
-            source/events/message_create_runner.cpp 
-            source/events/button_click_runner.cpp 
-            source/events/autocomplete_runner.cpp 
+            source/commands/ready/register_commands.cpp
             source/utility/constants.cpp 
-            source/commands/report.cpp 
-            source/database/database_handler.cpp)
+            source/commands/slash/report.cpp
+            source/database/database_handler.cpp 
+            source/events/guild_create_runner.cpp 
+            source/commands/guild/create/insert_guild_db.cpp 
+            source/commands/slash/base_slashcommand.cpp
+            source/commands/ctx/base_ctx_command.cpp 
+            source/commands/ready/base_ready.cpp 
+            source/commands/guild/create/base_guild_create.cpp)
 
 add_executable(deploy_delta ${botsrc})
 

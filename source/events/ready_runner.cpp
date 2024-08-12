@@ -1,20 +1,19 @@
 #include "events/ready_runner.h"
+#include "commands/ready/register_commands.h"
 #include "bot_delta.h"
-#include "ready/register_commands.h"
 
-mln::ready_runner::ready_runner() : actions(
-    { { std::make_pair<ready_condition, ready_action>(&mln::register_commands::execute_command, &mln::register_commands::command) } }
-)
-{
+#include <dpp/dispatcher.h>
 
-}
+void mln::ready_runner::attach_event(bot_delta* const delta){
+    actions.emplace_back(std::make_unique<mln::register_commands>(delta));
 
-void mln::ready_runner::attach_event(){
-    mln::bot_delta::delta().bot.on_ready([this](const dpp::ready_t& event) -> dpp::task<void> {
-        for (const auto& pair : this->actions) {
-            if (pair.first()) {
-                co_await pair.second(event);
+    delta->bot.on_ready([this](const dpp::ready_t& event) ->dpp::job {
+        std::shared_ptr<dpp::ready_t> ptr(std::make_shared<dpp::ready_t>(event));
+        for (const auto& action : this->actions) {
+            if (action->execute_command()) {
+                action->command(ptr);
             }
         }
+        co_return;
     });
 }

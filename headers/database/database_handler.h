@@ -32,7 +32,7 @@ namespace mln {
 		/**
 		 * @brief database_handler is non-moveable
 		 */
-		database_handler(const database_handler&&) = delete;
+		database_handler(database_handler&&) = delete;
 		/**
 		 * @brief database_handler is non-copyable
 		 */
@@ -40,7 +40,7 @@ namespace mln {
 		/**
 		 * @brief database_handler is non-moveable
 		 */
-		database_handler& operator=(const database_handler&&) = delete;
+		database_handler& operator=(database_handler&&) = delete;
 
 		db_result open_connection(const std::string& filename, db_flag open_flags = db_flag::open_rw_create_ex_res_code);
 		db_result open_connection(const char* filename, db_flag open_flags = db_flag::open_rw_create_ex_res_code);
@@ -101,6 +101,7 @@ namespace mln {
 	public:
 		static std::string get_db_debug_info();
 		static bool get_name_from_result(db_result result, std::string& out_name);
+		static std::string get_name_from_result(db_result result);
 
 		//Threadsafe, must be called before any other db action.
 		static db_result initialize_db_environment();

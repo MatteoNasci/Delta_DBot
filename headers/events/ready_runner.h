@@ -2,22 +2,15 @@
 #ifndef H_MLN_DB_READY_RUNNER_H
 #define H_MLN_DB_READY_RUNNER_H
 
-#include <dpp/dispatcher.h>
-#include <dpp/coro/task.h>
+#include "events/base_event.h"
+#include "commands/ready/base_ready.h"
 
-#include <string>
 #include <vector>
-#include <functional>
 
 namespace mln {
-    class ready_runner {
-    private:
-        typedef std::function<bool()> ready_condition;
-        typedef std::function<dpp::task<void>(const dpp::ready_t&)> ready_action;
-        std::vector<std::pair<ready_condition, ready_action>> actions;
+    class ready_runner final : public base_event<std::vector<std::unique_ptr<base_ready>>> {
     public:
-        ready_runner();
-        void attach_event();
+        void attach_event(bot_delta* const delta) override;
     };
 }
 

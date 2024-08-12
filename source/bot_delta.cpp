@@ -1,40 +1,43 @@
 #include "bot_delta.h"
 #include "defines.h"
+#include "utility/constants.h"
 
+static const std::string s_execute_pragmas("PRAGMA foreign_keys = ON;");
 static const std::string s_create_main_table("CREATE TABLE IF NOT EXISTS guild_profile( guild_id INTEGER PRIMARY KEY NOT NULL);");
 //primary key should be both the foreign key and file_name, to allow different guilds to use same name
-static const std::string s_create_file_table("CREATE TABLE IF NOT EXISTS file( guild_id INTEGER NOT NULL, file_name TEXT NOT NULL, file_id INTEGER NOT NULL, FOREIGN KEY(guild_id) REFERENCES guild_profile(guild_id), PRIMARY KEY(guild_id, file_name));");
+static const std::string s_create_file_table("CREATE TABLE IF NOT EXISTS file( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), file_name TEXT NOT NULL CHECK (LENGTH(file_name) >= " 
+    + std::to_string(static_cast<int64_t>(mln::constants::get_min_characters_text_id())) + " AND LENGTH(file_name) <= " 
+    + std::to_string(static_cast<int64_t>(mln::constants::get_max_characters_text_id())) + "), file_id INTEGER NOT NULL, PRIMARY KEY(guild_id, file_name));");
+
 static const std::string s_select_all("SELECT * FROM guild_profile; SELECT * FROM file;");
 void mln::bot_delta::setup_db() {
     mln::db_result res = db.open_connection("dbs/main.db");
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred while connecting to database: " + err_msg;
+        std::string err_msg = "An error occurred while connecting to database: " + mln::database_handler::get_name_from_result(res);
+        throw std::exception(err_msg.c_str());
+    }
+
+    res = db.exec(s_execute_pragmas, mln::database_callbacks_t());
+    if (res != mln::db_result::ok) {
+        std::string err_msg = "An error occurred while executing pragmas: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
 
     res = db.exec(s_create_main_table, mln::database_callbacks_t());
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred while creating the guild_profile table: " + err_msg;
+        std::string err_msg = "An error occurred while creating the guild_profile table: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
 
     res = db.exec(s_create_file_table, mln::database_callbacks_t());
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred while creating the file table: " + err_msg;
+        std::string err_msg = "An error occurred while creating the file table: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
 
     res = db.save_statement(s_select_all, saved_select_all_query);
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred while saving the select all stmt: " + err_msg;
+        std::string err_msg = "An error occurred while saving the select all stmt: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
 
@@ -43,27 +46,20 @@ void mln::bot_delta::setup_db() {
 
 void mln::bot_delta::init(){
     bot.on_log(dpp::utility::cout_logger());
-    bot.log(dpp::loglevel::ll_info, is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
+    bot.log(dpp::loglevel::ll_debug, is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
 
     mln::bot_delta::setup_db();
 
-    readys.attach_event();
-    cmds.attach_event();
-    ctxs.attach_event();
-    forms.attach_event();
-    selects.attach_event();
-    react_removes.attach_event();
-    msg_creates.attach_event();
-    button_clicks.attach_event();
-    autocompletes.attach_event();
+    readys.attach_event(this);
+    cmds.attach_event(this);
+    ctxs.attach_event(this);
+    guild_creates.attach_event(this);
 }
 
 void mln::bot_delta::initialize_environment() {
     const mln::db_result res = mln::database_handler::initialize_db_environment();
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred while initializing database environment: " + err_msg;
+        std::string err_msg = "An error occurred while initializing database environment: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
 }
@@ -71,11 +67,15 @@ void mln::bot_delta::initialize_environment() {
 void mln::bot_delta::shutdown_environment() {
     const mln::db_result res = mln::database_handler::shutdown_db_environment();
     if (res != mln::db_result::ok) {
-        std::string err_msg("Error name not found");
-        mln::database_handler::get_name_from_result(res, err_msg);
-        err_msg = "An error occurred during database environment shutdown: " + err_msg;
+        std::string err_msg = "An error occurred during database environment shutdown: " + mln::database_handler::get_name_from_result(res);
         throw std::exception(err_msg.c_str());
     }
+}
+const mln::cmd_runner& mln::bot_delta::get_cmd_runner() const {
+    return cmds;
+}
+const mln::cmd_ctx_runner& mln::bot_delta::get_cmd_ctx_runner() const {
+    return ctxs;
 }
 
 
@@ -97,13 +97,8 @@ mln::bot_delta::bot_delta() :
     saved_select_all_query(),
     cmds(), 
     ctxs(), 
-    forms(), 
-    selects(),
     readys(),
-    react_removes(),
-    msg_creates(),
-    button_clicks(),
-    autocompletes()
+    guild_creates()
 {
     
 }

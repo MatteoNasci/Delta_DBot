@@ -2,16 +2,19 @@
 #ifndef H_MLN_DB_COMMANDS_H
 #define H_MLN_DB_COMMANDS_H
 
-#include "commands/ping.h"
-#include "commands/bot_info.h"
-#include "commands/db.h"
-#include "commands/pm.h"
-#include "commands/msgs_get.h"
-#include "commands/add_role.h"
-#include "commands/add_emoji.h"
-#include "commands/avatar.h"
-#include "commands/help.h"
-#include "ready/register_commands.h"
-#include "commands/report.h"
+#include "commands/slash/ping.h"
+#include "commands/slash/bot_info.h"
+#include "commands/slash/db.h"
+#include "commands/slash/pm.h"
+#include "commands/slash/msgs_get.h"
+#include "commands/slash/add_role.h"
+#include "commands/slash/add_emoji.h"
+#include "commands/slash/avatar.h"
+#include "commands/slash/help.h"
+#include "commands/ready/register_commands.h"
+#include "commands/slash/report.h"
+#include "commands/ready/register_commands.h"
+#include "commands/ctx/high_five.h"
+#include "commands/guild/create/insert_guild_db.h"
 
 #endif //H_MLN_DB_COMMANDS_H
