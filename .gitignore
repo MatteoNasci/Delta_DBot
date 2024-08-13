@@ -8,3 +8,4 @@ vcpkg*
 assets/
 .*
 *.db
+test/
