@@ -8,7 +8,7 @@ static const std::string s_create_report_table("CREATE TABLE IF NOT EXISTS repor
 //primary key should be both the foreign key and file_name, to allow different guilds to use same name
 static const std::string s_create_file_table("CREATE TABLE IF NOT EXISTS file( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), file_name TEXT NOT NULL CHECK (LENGTH(file_name) >= " 
     + std::to_string(static_cast<int64_t>(mln::bot_delta::min_text_id_size())) + " AND LENGTH(file_name) <= "
-    + std::to_string(static_cast<int64_t>(mln::bot_delta::max_text_id_size())) + "), file_url TEXT NOT NULL, user_id INTEGER NOT NULL, creation_time TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(guild_id, file_name));");
+    + std::to_string(static_cast<int64_t>(mln::bot_delta::max_text_id_size())) + "), file_url TEXT NOT NULL, file_desc TEXT DEFAULT (NULL), user_id INTEGER NOT NULL, creation_time TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(guild_id, file_name));");
 
 static const std::string s_select_all("SELECT * FROM guild_profile; SELECT * FROM file; SELECT * FROM report");
 
@@ -134,7 +134,7 @@ bool mln::bot_delta::close() {
 
 bool td_callback(void* d, int c) { 
     size_t* stmt_index = static_cast<size_t*>(d);
-    return (*stmt_index == 1 && (c == 1 || c == 2 || c == 4)) || (*stmt_index == 2 && (c == 3 || c == 4));
+    return (*stmt_index == 1 && (c == 1 || c == 2 || c == 3 || c == 5)) || (*stmt_index == 2 && (c == 3 || c == 4)); //TODO use state machine where I switch function instead of this shit, same for below
 }
 void da_callback(void* d, int col, mln::db_column_data_t&& c_data) {
     size_t* stmt_index = static_cast<size_t*>(d);
@@ -148,8 +148,10 @@ void da_callback(void* d, int col, mln::db_column_data_t&& c_data) {
         }else if (col == 2){
             std::cout << " || " << c_data.name << " : " << std::get<const unsigned char*>(c_data.data);
         }else if (col == 3) {
-            std::cout << " || " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data));
+            std::cout << " || " << c_data.name << " : " << (std::holds_alternative<const short*>(c_data.data) ? "NULL" : reinterpret_cast<const char*>(std::get<const unsigned char*>(c_data.data)));
         }else if (col == 4) {
+            std::cout << " || " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data));
+        }else if (col == 5) {
             std::cout << " || " << c_data.name << " : " << std::get<const unsigned char*>(c_data.data) << " }" << std::endl;
         }
     }else {
