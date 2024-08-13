@@ -62,6 +62,9 @@ namespace mln {
 	public:
 		static void initialize_environment();
 		static void shutdown_environment();
+
+		static size_t max_text_id_size();
+		static size_t min_text_id_size();
 	};
 }
 

@@ -13,7 +13,7 @@
 #include <vector>
 #include <queue>
 
-//TODO sqlite is not really adeguate for a discord bot (if the bot is big there will be a lot of concurrency problems). When needed change to something else
+//TODO sqlite is not really adeguate for a discord bot (if the bot is big there will be a lot of concurrency problems). When needed change to something else (maybe mysql?)
 struct sqlite3;
 struct sqlite3_stmt;
 namespace mln {
@@ -87,6 +87,8 @@ namespace mln {
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const void*, uint64_t bytes) const;
 
 		db_result get_bind_parameter_index(size_t saved_statement_id, size_t stmt_index, const char* param_name, int& out_index) const;
+
+		std::string get_last_err_msg() const;
 
 		/*Value and pointer binds will not be supported at the moment*/
 	private:

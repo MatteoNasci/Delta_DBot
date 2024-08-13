@@ -1,4 +1,5 @@
 #include "utility/constants.h"
+#include "bot_delta.h"
 
 size_t mln::constants::get_min_characters_reply_msg() {
 	return 1;
@@ -11,11 +12,11 @@ size_t mln::constants::get_max_characters_command_option_description() {
 }
 
 size_t mln::constants::get_min_characters_text_id(){
-	return 1;
+	return mln::bot_delta::min_text_id_size();
 }
 
 size_t mln::constants::get_max_characters_text_id(){
-	return 100;
+	return mln::bot_delta::max_text_id_size();
 }
 
 size_t mln::constants::get_min_characters_emoji(){

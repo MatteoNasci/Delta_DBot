@@ -9,7 +9,6 @@ namespace mln {
     class insert_guild_db final : public base_guild_create {
     private:
         size_t saved_insert_guild_query;
-        bot_delta* delta;
         bool valid_saved_insert;
     public:
         insert_guild_db(bot_delta* const delta);

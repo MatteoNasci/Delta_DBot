@@ -21,5 +21,5 @@ void mln::autocomplete_runner::attach_event(){
                 }
             }
         }
-    });//TODO it might be better to save the event locally (for all event runners) and then pass the local event to the actions, so I am sure that the event data doesn't get destroyed while the actions are co_awaiting
+    });
 }

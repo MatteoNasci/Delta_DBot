@@ -6,9 +6,9 @@
 
 #include <functional>
 
-typedef std::function<bool(void*)> row_callback_t;
+typedef std::function<void(void*)> row_callback_t;
 typedef std::function<void(void*, int, mln::db_column_data_t&&)> data_adder_callback_t;
-typedef std::function<bool(int)> type_definer_callback_t;
+typedef std::function<bool(void*, int)> type_definer_callback_t;
 typedef std::function<void(void*, size_t)> statement_index_callback_t;
 namespace mln {
 	struct database_callbacks_t {

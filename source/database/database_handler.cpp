@@ -6,7 +6,7 @@
 
 #include "sqlite3.h"
 
-mln::database_callbacks_t::database_callbacks_t(std::function<bool(void*)>& in_row_callback, std::function<void(void*, int, mln::db_column_data_t&&)>& in_data_adder_callback, std::function<bool(int)>& in_type_definer_callback, std::function<void(void*, size_t)>& in_statement_index_callback, void* in_callback_data) :
+mln::database_callbacks_t::database_callbacks_t(std::function<void(void*)>& in_row_callback, std::function<void(void*, int, mln::db_column_data_t&&)>& in_data_adder_callback, std::function<bool(void*, int)>& in_type_definer_callback, std::function<void(void*, size_t)>& in_statement_index_callback, void* in_callback_data) :
 	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), callback_data(in_callback_data) {}
 
 mln::database_callbacks_t::database_callbacks_t() : row_callback(), data_adder_callback(), type_definer_callback(), statement_index_callback(), callback_data(nullptr) {}
@@ -308,7 +308,8 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 	return mln::db_result::ok;
 }
 mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) const {
-	const bool can_use_callbacks = callbacks.data_adder_callback && callbacks.row_callback && callbacks.type_definer_callback;
+	const bool can_use_callbacks = (callbacks.data_adder_callback && callbacks.type_definer_callback);
+	const bool can_use_row_call = (callbacks.row_callback && true);
 
 	mln::db_result res = mln::db_result::ok;
 	while (res != mln::db_result::done) {
@@ -323,16 +324,14 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 			for (int i = 0; i < column_count; ++i) {
 				mln::db_fundamental_datatype type = static_cast<mln::db_fundamental_datatype>(sqlite3_column_type(stmt, i));
 				//these find calls are safe, column_type can only return one of the 5 fundamental types mapped on the enum, these following maps have all of them mapped out. This is safe
-				type = callbacks.type_definer_callback(i) ? (s_mapped_wide_to_norm_types.find(type)->second) : (s_mapped_norm_to_wide_types.find(type)->second);
+				type = callbacks.type_definer_callback(callbacks.callback_data, i) ? (s_mapped_wide_to_norm_types.find(type)->second) : (s_mapped_norm_to_wide_types.find(type)->second);
 				//We know that the column_type func can only return one of the 5 (7) available types, and the map contains all of them (and they are all valid funcs). This is safe.
 				const get_column_value& column_func = s_mapped_column_funcs.find(type)->second;
 				callbacks.data_adder_callback(callbacks.callback_data, i, std::move(column_func(stmt, i)));
 			}
 
-			if (!callbacks.row_callback(callbacks.callback_data)) {
-				sqlite3_reset(stmt);
-				res = mln::db_result::abort;
-				break;
+			if (can_use_row_call) {
+				callbacks.row_callback(callbacks.callback_data);
 			}
 		}
 	}
@@ -531,6 +530,11 @@ mln::db_result mln::database_handler::get_bind_parameter_index(const size_t save
 	return out_index == 0 ? mln::db_result::error : mln::db_result::ok;
 }
 
+std::string mln::database_handler::get_last_err_msg() const{
+	const char* err = sqlite3_errmsg(db);
+	return std::string(err == nullptr ? "Error not found." : err);
+}
+
 std::string mln::database_handler::get_db_debug_info() {
 	int64_t soft_heap_limit = sqlite3_soft_heap_limit64(-1);
 	int64_t hard_heap_limit = sqlite3_hard_heap_limit64(-1);
@@ -609,7 +613,7 @@ bool mln::database_handler::get_name_from_result(const mln::db_result result, st
 std::string mln::database_handler::get_name_from_result(db_result result) {
 	std::string s;
 	if (!mln::database_handler::get_name_from_result(result, s)) {
-		s = "Unknown db error";
+		s = "unknown db error";
 	}
 	return s;
 }
