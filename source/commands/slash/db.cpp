@@ -1,6 +1,7 @@
 #include "commands/slash/db.h"
 #include "bot_delta.h"
 #include "utility/constants.h"
+#include "utility/utility.h"
 
 mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id)
@@ -346,14 +347,13 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to show_records!");
                 msg.set_content("Failed to show_records, internal error!");
+                co_await waiting;
+                event.edit_response(msg);
             }
             else {
-                msg.set_content(s);
-                //TODO add elements to the reply, if text exceeds msg limit act depending on broadcast
+                co_await waiting;
+                co_await mln::utility::send_msg_recursively(delta()->bot, event, s, event.command.usr.id, true, broadcast);
             }
-
-            co_await waiting;
-            event.edit_response(msg);
         }},
         {"update", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
             const dpp::command_value broadcast_param = event.get_parameter("broadcast");
