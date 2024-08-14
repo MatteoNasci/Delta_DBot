@@ -6,17 +6,17 @@
 
 #include "sqlite3.h"
 
-mln::database_callbacks_t::database_callbacks_t(std::function<void(void*)>& in_row_callback, std::function<void(void*, int, mln::db_column_data_t&&)>& in_data_adder_callback, std::function<bool(void*, int)>& in_type_definer_callback, std::function<void(void*, size_t)>& in_statement_index_callback, void* in_callback_data) :
-	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), callback_data(in_callback_data) {}
+mln::db_column_data_t read_data_text16(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_int64(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_null(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_text(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_blob(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_double(sqlite3_stmt* stmt, int col);
+mln::db_column_data_t read_data_int(sqlite3_stmt* stmt, int col);
 
-mln::database_callbacks_t::database_callbacks_t() : row_callback(), data_adder_callback(), type_definer_callback(), statement_index_callback(), callback_data(nullptr) {}
-
-mln::db_column_data_t::db_column_data_t(const char* in_name, double in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, int in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, int64_t in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const void* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const unsigned char* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
-mln::db_column_data_t::db_column_data_t(const char* in_name, const short* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+void behavior_delete(void* data);
+void behavior_free(void* data);
+void behavior_sqlite_free(void* data);
 
 static const std::unordered_map<mln::db_result, std::string> s_result_to_string_map{
 	{mln::db_result::ok, std::string("ok")},
@@ -126,41 +126,15 @@ static const std::unordered_map<mln::db_result, std::string> s_result_to_string_
 	{mln::db_result::io_err_corrupt_fs, std::string("io_err_corrupt_fs")}
 };
 
-typedef std::function<mln::db_column_data_t(sqlite3_stmt*, int)> get_column_value;
-static const std::unordered_map<mln::db_fundamental_datatype, get_column_value> s_mapped_column_funcs{
-	{mln::db_fundamental_datatype::blob_t, [](sqlite3_stmt* stmt, int col) {
-												//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
-												const void* data = sqlite3_column_blob(stmt, col);
-												const int bytes = sqlite3_column_bytes(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
-											} },
-	{mln::db_fundamental_datatype::float_t, [](sqlite3_stmt* stmt, int col) {
-												const double data = sqlite3_column_double(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
-											} },
-	{mln::db_fundamental_datatype::integer_t, [](sqlite3_stmt* stmt, int col) {
-												const int data = sqlite3_column_int(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
-											} },
-	{mln::db_fundamental_datatype::text_t, [](sqlite3_stmt* stmt, int col) {
-												//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
-												const unsigned char* data = sqlite3_column_text(stmt, col);
-												const int bytes = sqlite3_column_bytes(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
-											} },
-	{mln::db_fundamental_datatype::null_t, [](sqlite3_stmt* stmt, int col) {
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col));
-											} },
-	{mln::db_fundamental_datatype::custom_int64_t, [](sqlite3_stmt* stmt, int col) {
-												const int64_t data = sqlite3_column_int64(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
-											} },
-	{mln::db_fundamental_datatype::custom_text16_t, [](sqlite3_stmt* stmt, int col) {
-												//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
-												const void* data = sqlite3_column_text16(stmt, col);
-												const int bytes = sqlite3_column_bytes16(stmt, col);
-												return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
-											} }
+typedef std::function<mln::db_column_data_t(sqlite3_stmt*, int)> get_column_value_f;
+static const std::unordered_map<mln::db_fundamental_datatype, get_column_value_f> s_mapped_column_funcs{
+	{mln::db_fundamental_datatype::blob_t, read_data_blob },
+	{mln::db_fundamental_datatype::float_t, read_data_double },
+	{mln::db_fundamental_datatype::integer_t, read_data_int },
+	{mln::db_fundamental_datatype::text_t, read_data_text },
+	{mln::db_fundamental_datatype::null_t, read_data_null },
+	{mln::db_fundamental_datatype::custom_int64_t, read_data_int64 },
+	{mln::db_fundamental_datatype::custom_text16_t, read_data_text16 }
 };
 
 static const std::unordered_map<mln::db_fundamental_datatype, mln::db_fundamental_datatype> s_mapped_norm_to_wide_types{
@@ -172,23 +146,27 @@ static const std::unordered_map<mln::db_fundamental_datatype, mln::db_fundamenta
 	{mln::db_fundamental_datatype::custom_int64_t, mln::db_fundamental_datatype::custom_int64_t},
 	{mln::db_fundamental_datatype::custom_text16_t, mln::db_fundamental_datatype::custom_text16_t},
 };
-static const std::unordered_map<mln::db_fundamental_datatype, mln::db_fundamental_datatype> s_mapped_wide_to_norm_types{
-	{mln::db_fundamental_datatype::integer_t, mln::db_fundamental_datatype::integer_t},
-	{mln::db_fundamental_datatype::text_t, mln::db_fundamental_datatype::text_t},
-	{mln::db_fundamental_datatype::blob_t, mln::db_fundamental_datatype::blob_t},
-	{mln::db_fundamental_datatype::float_t, mln::db_fundamental_datatype::float_t},
-	{mln::db_fundamental_datatype::null_t, mln::db_fundamental_datatype::null_t},
-	{mln::db_fundamental_datatype::custom_int64_t, mln::db_fundamental_datatype::integer_t},
-	{mln::db_fundamental_datatype::custom_text16_t, mln::db_fundamental_datatype::text_t},
-};
 
 static const std::unordered_map<mln::db_destructor_behavior, void(*)(void*)> s_mapped_destructor_behaviors{
 	{mln::db_destructor_behavior::static_b, SQLITE_STATIC},
 	{mln::db_destructor_behavior::transient_b, SQLITE_TRANSIENT},
-	{mln::db_destructor_behavior::free_b, [](void* data) { free(data); }},
-	{mln::db_destructor_behavior::delete_b, [](void* data) { delete static_cast<unsigned char*>(data); }},
-	{mln::db_destructor_behavior::sqlite_free_b, [](void* data) { sqlite3_free(data); }},
+	{mln::db_destructor_behavior::free_b, behavior_free},
+	{mln::db_destructor_behavior::delete_b, behavior_delete },
+	{mln::db_destructor_behavior::sqlite_free_b, behavior_sqlite_free },
 };
+
+
+mln::database_callbacks_t::database_callbacks_t(const row_callback_f& in_row_callback, const data_adder_callback_f& in_data_adder_callback, const type_definer_callback_f& in_type_definer_callback, const statement_index_callback_f& in_statement_index_callback, void* const in_callback_data) :
+	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), callback_data(in_callback_data) {}
+
+mln::database_callbacks_t::database_callbacks_t() : database_callbacks_t(nullptr, nullptr, nullptr, nullptr, nullptr){}
+
+mln::db_column_data_t::db_column_data_t(const char* in_name, double in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, int in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, int64_t in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const void* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const unsigned char* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
+mln::db_column_data_t::db_column_data_t(const char* in_name, const short* in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 
 mln::database_handler::~database_handler() {
 	if (is_connected()) {
@@ -324,9 +302,11 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 			for (int i = 0; i < column_count; ++i) {
 				mln::db_fundamental_datatype type = static_cast<mln::db_fundamental_datatype>(sqlite3_column_type(stmt, i));
 				//these find calls are safe, column_type can only return one of the 5 fundamental types mapped on the enum, these following maps have all of them mapped out. This is safe
-				type = callbacks.type_definer_callback(callbacks.callback_data, i) ? (s_mapped_wide_to_norm_types.find(type)->second) : (s_mapped_norm_to_wide_types.find(type)->second);
+				if (!callbacks.type_definer_callback(callbacks.callback_data, i)){
+					type = s_mapped_norm_to_wide_types.find(type)->second;
+				}
 				//We know that the column_type func can only return one of the 5 (7) available types, and the map contains all of them (and they are all valid funcs). This is safe.
-				const get_column_value& column_func = s_mapped_column_funcs.find(type)->second;
+				const get_column_value_f& column_func = s_mapped_column_funcs.find(type)->second;
 				callbacks.data_adder_callback(callbacks.callback_data, i, std::move(column_func(stmt, i)));
 			}
 
@@ -532,7 +512,7 @@ mln::db_result mln::database_handler::get_bind_parameter_index(const size_t save
 
 std::string mln::database_handler::get_last_err_msg() const{
 	const char* err = sqlite3_errmsg(db);
-	return std::string(err == nullptr ? "Error not found." : err);
+	return std::string(err == nullptr ? "Error not found" : err);
 }
 
 std::string mln::database_handler::get_db_debug_info() {
@@ -658,4 +638,48 @@ mln::db_result mln::database_handler::shutdown_db_environment() {
 
 bool mln::database_handler::is_step_valid(const mln::db_result result) {
 	return result == mln::db_result::row || result == mln::db_result::done || result == mln::db_result::ok;
+}
+
+mln::db_column_data_t read_data_int(sqlite3_stmt* stmt, int col) {
+	const int data = sqlite3_column_int(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
+}
+mln::db_column_data_t read_data_double(sqlite3_stmt* stmt, int col) {
+	const double data = sqlite3_column_double(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
+}
+mln::db_column_data_t read_data_blob(sqlite3_stmt* stmt, int col) {
+	//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
+	const void* data = sqlite3_column_blob(stmt, col);
+	const int bytes = sqlite3_column_bytes(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
+}
+mln::db_column_data_t read_data_text(sqlite3_stmt* stmt, int col) {
+	//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
+	const unsigned char* data = sqlite3_column_text(stmt, col);
+	const int bytes = sqlite3_column_bytes(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
+}
+mln::db_column_data_t read_data_null(sqlite3_stmt* stmt, int col) {
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col));
+}
+mln::db_column_data_t read_data_int64(sqlite3_stmt* stmt, int col) {
+	const int64_t data = sqlite3_column_int64(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data);
+}
+mln::db_column_data_t read_data_text16(sqlite3_stmt* stmt, int col) {
+	//_blob and _bytes func need to be done in this order to make sure their values are correct, if _bytes happens before the value will not be correct
+	const void* data = sqlite3_column_text16(stmt, col);
+	const int bytes = sqlite3_column_bytes16(stmt, col);
+	return mln::db_column_data_t(sqlite3_column_name(stmt, col), data, bytes);
+}
+
+void behavior_free(void* data) {
+	free(data);
+}
+void behavior_sqlite_free(void* data) {
+	sqlite3_free(data);
+}
+void behavior_delete(void* data) {
+	delete static_cast<unsigned char*>(data);
 }

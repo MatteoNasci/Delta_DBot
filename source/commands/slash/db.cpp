@@ -6,7 +6,7 @@
 #include <dpp/queues.h>
 
 mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id)
+    std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id) //TODO add verbose boolean option to select commands, when false only show minimal info/only file, when true show all I can show
         .add_option(dpp::command_option(dpp::co_sub_command_group, "op", "Perform an operation on the db", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "insert", "Inserts a new record in the db. It will fail if the given name is not unique!", false)
                 .add_option(dpp::command_option(dpp::co_attachment, "file", "File to insert.", true))
@@ -39,16 +39,24 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
                 .add_option(dpp::command_option(dpp::co_string, "description", "Small description of the stored file. Default: NULL", false)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
                     .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))))
+            .add_option(dpp::command_option(dpp::co_sub_command, "update_description", "Updates an existing record description in the db. It will fail if the given name is not present!", false)
+                .add_option(dpp::command_option(dpp::co_string, "name", "Unique name to associate with the file.", true)
+                    .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
+                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
+                .add_option(dpp::command_option(dpp::co_string, "description", "Small description of the stored file. Default: NULL", false)
+                    .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
+                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))))
             .add_option(dpp::command_option(dpp::co_sub_command, "remove", "Removes an existing record in the db. It will fail if the given name is not present!", false)
                 .add_option(dpp::command_option(dpp::co_string, "name", "Unique name to associate with the file.", true)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
                     .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
                 .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel. Default: false", false)))))) , 
-    saved_insert_stmt(), saved_insert_replace_stmt(), saved_select_stmt(), saved_show_records_stmt(), saved_update_stmt(), saved_remove_stmt(),
+    saved_insert_stmt(), saved_insert_replace_stmt(), saved_select_stmt(), saved_show_records_stmt(), saved_update_stmt(), saved_update_desc_stmt(), saved_remove_stmt(),
     saved_insert_guild(), saved_insert_user(), saved_insert_file_name(), saved_insert_file_url(), saved_insert_desc(),
     saved_insert_replace_guild(), saved_insert_replace_user(), saved_insert_replace_file_name(), saved_insert_replace_file_url(), saved_insert_replace_desc(),
     saved_select_guild(), saved_select_file_name(),
     saved_update_guild(), saved_update_user(), saved_update_file_name(), saved_update_file_url(), saved_update_desc(),
+    saved_update_desc_guild(), saved_update_desc_user(), saved_update_desc_file_name(), saved_update_desc_desc(),
     saved_remove_guild(), saved_remove_user(), saved_remove_file_name(), valid_stmt(true) {
     
     auto res1 = delta->db.save_statement("INSERT OR ABORT INTO file (guild_id, file_name, file_url, file_desc, user_id) VALUES(:GGG, :NNN, :FFF, :DDD, :UUU);", saved_insert_stmt);
@@ -121,6 +129,22 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
         }
     }
 
+    res1 = delta->db.save_statement("UPDATE OR ABORT file SET file_desc = :DDD WHERE guild_id = :GGG AND file_name = :NNN AND user_id = :UUU;", saved_update_desc_stmt);
+    if (res1 != mln::db_result::ok) {
+        delta->bot.log(dpp::loglevel::ll_error, "Failed to save update_desc stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
+        valid_stmt = false;
+    }
+    else {
+        auto res11 = delta->db.get_bind_parameter_index(saved_update_desc_stmt, 0, ":GGG", saved_update_desc_guild);
+        auto res12 = delta->db.get_bind_parameter_index(saved_update_desc_stmt, 0, ":NNN", saved_update_desc_file_name);
+        auto res13 = delta->db.get_bind_parameter_index(saved_update_desc_stmt, 0, ":UUU", saved_update_desc_user);
+        auto res14 = delta->db.get_bind_parameter_index(saved_update_desc_stmt, 0, ":DDD", saved_update_desc_desc);
+        if (res11 != mln::db_result::ok || res12 != mln::db_result::ok || res13 != mln::db_result::ok || res14 != mln::db_result::ok) {
+            delta->bot.log(dpp::loglevel::ll_error, "Failed to save update_desc stmt param indexes!");
+            valid_stmt = false;
+        }
+    }
+
     res1 = delta->db.save_statement("DELETE FROM file WHERE guild_id = :GGG AND file_name = :NNN AND user_id = :UUU;", saved_remove_stmt);
     if (res1 != mln::db_result::ok) {
         delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
@@ -137,8 +161,8 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
     }
 }
 dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command in its own .cpp file, too much shit here already (callbacks inside a .cpp interpreter as well)
-    typedef std::function<dpp::task<void>(dpp::command_data_option&, const dpp::slashcommand_t&)> op_callback_t;
-    static const std::unordered_map<std::string, op_callback_t> allowed_op_sub_commands{
+    typedef std::function<dpp::task<void>(dpp::command_data_option&, const dpp::slashcommand_t&)> op_callback_f;
+    static const std::unordered_map<std::string, op_callback_f> allowed_op_sub_commands{
         {"insert", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
             auto waiting = event.co_thinking(false);
 
@@ -436,6 +460,52 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
 
             event.edit_original_response(temp_msg);
         }},
+        {"update_description", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
+            auto waiting = event.co_thinking(true);//this one requires !broadcast since the condition wants true for ephemeral
+
+            std::string desc;
+            const dpp::command_value desc_param = event.get_parameter("description");
+            const bool valid_desc = std::holds_alternative<std::string>(desc_param);
+            if (valid_desc) {
+                desc = std::get<std::string>(desc_param);
+            }
+
+            int64_t guild_id = event.command.guild_id;
+            int64_t user_id = event.command.usr.id;
+
+            dpp::message temp_msg;
+            std::string name = std::get<std::string>(event.get_parameter("name"));
+
+            //TODO I might need to "store" the original url to a dedicated channel to make the url work
+            auto res1 = delta()->db.bind_parameter(saved_update_desc_stmt, 0, saved_update_desc_guild, guild_id);
+            auto res2 = delta()->db.bind_parameter(saved_update_desc_stmt, 0, saved_update_desc_user, user_id);
+            auto res3 = delta()->db.bind_parameter(saved_update_desc_stmt, 0, saved_update_desc_file_name, name.c_str(), name.length(), mln::db_destructor_behavior::transient_b, mln::db_text_encoding::utf8);
+            mln::db_result res4;
+            if (valid_desc) {
+                res4 = delta()->db.bind_parameter(saved_update_desc_stmt, 0, saved_update_desc_desc, desc.c_str(), desc.length(), mln::db_destructor_behavior::transient_b, mln::db_text_encoding::utf8);
+            }else {
+                res4 = delta()->db.bind_parameter(saved_update_desc_stmt, 0, saved_update_desc_desc);
+            }
+
+            if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok || res4 != mln::db_result::ok) {
+                delta()->bot.log(dpp::loglevel::ll_error, "Failed to bind update_desc params!" + name + " " + desc);
+                temp_msg.set_content("Failed to update_desc element, internal error!");
+                co_await waiting;
+                event.edit_original_response(temp_msg);
+                co_return;
+            }
+
+            auto res = delta()->db.exec(saved_update_desc_stmt, mln::database_callbacks_t());
+            if (res != mln::db_result::ok) {
+                delta()->bot.log(dpp::loglevel::ll_error, "Failed to update_desc element!");
+                temp_msg.set_content("Failed to update_desc element, internal error!");
+            }else {
+                temp_msg.set_content("Element updated to the db!");
+            }
+
+            co_await waiting;
+            event.edit_original_response(temp_msg);
+        }},
         {"remove", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
             const dpp::command_value broadcast_param = event.get_parameter("broadcast");
             const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
@@ -475,11 +545,12 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             event.edit_response(msg);
         },
     }};
-
-    static const std::unordered_map<std::string, op_callback_t> allowed_other_sub_commands{
+    //TODO updates/modifications don't report an error when trying to modify records with the wrong user. I need to add functions in the db_callbacks to check if any elements are found
+    //TODO insert_replace right now changes a present record even if the author is someone else, that should not be allowed
+    static const std::unordered_map<std::string, op_callback_f> allowed_other_sub_commands{
         //TODO use another sub cmd group for all the commands that do not use the actual database (like set channel for attachment urls and such). op sub cmd group is for actual db stuff
     };
-    static const std::unordered_map<std::string, const std::unordered_map<std::string, op_callback_t>*> allowed_primary_sub_commands{
+    static const std::unordered_map<std::string, const std::unordered_map<std::string, op_callback_f>*> allowed_primary_sub_commands{
         {"op", &allowed_op_sub_commands},
     };
 
