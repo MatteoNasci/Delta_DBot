@@ -1,6 +1,6 @@
 #include "commands/ready/base_ready.h"
 
-mln::base_ready::base_ready(bot_delta* const delta) : base_action(delta){}
+mln::base_ready::base_ready(mln::bot_delta* const delta) : base_action(delta){}
 
 mln::base_ready::base_ready(base_ready&& rhs) : base_action(std::move(rhs)) {}
 

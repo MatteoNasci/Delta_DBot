@@ -1,7 +1,7 @@
 #include "commands/slash/ping.h"
 #include "bot_delta.h"
 
-mln::ping::ping(bot_delta* const delta) : base_slashcommand(delta,
+mln::ping::ping(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("ping", "Ping pong!", delta->bot.me.id))) {}
 
 dpp::job mln::ping::command(dpp::slashcommand_t event){

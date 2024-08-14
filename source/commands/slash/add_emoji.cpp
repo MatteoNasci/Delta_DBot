@@ -2,7 +2,7 @@
 #include "bot_delta.h"
 #include "utility/constants.h"
 
-mln::add_emoji::add_emoji(bot_delta* const delta) : base_slashcommand(delta,
+mln::add_emoji::add_emoji(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("add_emoji", "Add an emoji", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_attachment, "file", "Select an image", true))
         .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true)

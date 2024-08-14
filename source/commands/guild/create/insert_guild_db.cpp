@@ -1,7 +1,7 @@
 #include "commands/guild/create/insert_guild_db.h"
 #include "bot_delta.h"
 
-mln::insert_guild_db::insert_guild_db(bot_delta* const in_delta) : base_guild_create(in_delta), saved_insert_guild_query(), valid_saved_insert(true) {
+mln::insert_guild_db::insert_guild_db(mln::bot_delta* const in_delta) : base_guild_create(in_delta), saved_insert_guild_query(), valid_saved_insert(true) {
     auto res = delta()->db.save_statement("INSERT OR IGNORE INTO guild_profile(guild_id) VALUES(?);", saved_insert_guild_query);
     if (res != mln::db_result::ok) {
         delta()->bot.log(dpp::loglevel::ll_error, "Failed to save insert guild query statement! " + mln::database_handler::get_name_from_result(res));

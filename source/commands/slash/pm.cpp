@@ -2,7 +2,7 @@
 #include "bot_delta.h"
 #include "utility/constants.h"
 
-mln::pm::pm(bot_delta* const delta) : base_slashcommand(delta,
+mln::pm::pm(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("pm", "Send a private message.", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_mentionable, "user", "The user to message", false))
         .add_option(dpp::command_option(dpp::co_string, "msg", "The message to send", false)

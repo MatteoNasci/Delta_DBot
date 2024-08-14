@@ -3,7 +3,7 @@
 #include "utility/constants.h"
 
 static const std::string s_execute_pragmas("PRAGMA foreign_keys = ON;PRAGMA optimize=0x10002;"); //TODO also make "PRAGMA optimize;" run either once per day or when the db has changed a lot
-static const std::string s_create_main_table("CREATE TABLE IF NOT EXISTS guild_profile( guild_id INTEGER PRIMARY KEY NOT NULL);"); //TODO use WAL sqlite
+static const std::string s_create_main_table("CREATE TABLE IF NOT EXISTS guild_profile( guild_id INTEGER PRIMARY KEY NOT NULL, dedicated_channel_id INTEGER DEFAULT(NULL));"); //TODO use WAL sqlite
 static const std::string s_create_report_table("CREATE TABLE IF NOT EXISTS report( id INTEGER PRIMARY KEY, guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL, report_text TEXT NOT NULL, creation_time TEXT NOT NULL DEFAULT (datetime('now')));");
 //primary key should be both the foreign key and file_name, to allow different guilds to use same name
 static const std::string s_create_file_table("CREATE TABLE IF NOT EXISTS file( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), file_name TEXT NOT NULL CHECK (LENGTH(file_name) >= " 
@@ -131,15 +131,17 @@ std::string mln::bot_delta::start(bool register_cmds) {
 bool mln::bot_delta::close() {
     return db.close_connection() == mln::db_result::ok;
 }
-
+//TODO separate report table into it's own db file
+//TODO use a separate db file for a text only db (is it possible with the foreign key? maybe i need to attach to main db as well)
 bool td_callback(void* d, int c) { 
     size_t* stmt_index = static_cast<size_t*>(d);
-    return (*stmt_index == 1 && (c == 1 || c == 2 || c == 3 || c == 5)) || (*stmt_index == 2 && (c == 3 || c == 4)); //TODO use state machine where I switch function instead of this shit, same for below
+    return (*stmt_index == 1 && (c == 1 || c == 2 || c == 3 || c == 5)) || (*stmt_index == 2 && (c == 3 || c == 4)); //TODO use state machine where I switch function instead of this shit, same for below (in class interpreter since i'm interpreting the data)
 }
 void da_callback(void* d, int col, mln::db_column_data_t&& c_data) {
     size_t* stmt_index = static_cast<size_t*>(d);
     if (*stmt_index == 0) {
-        std::cout << "{ " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data)) << " }" << std::endl;
+        col == 0 ? std::cout << "{ " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data)) : 
+             std::cout << " || " << c_data.name << " : " << (std::holds_alternative<const short*>(c_data.data) ? "NULL" : std::to_string(static_cast<uint64_t>(std::get<int64_t>(c_data.data)))) << " }" << std::endl;
     }else if(*stmt_index == 1) {
         if (col == 0) {
             std::cout << "{ " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data));

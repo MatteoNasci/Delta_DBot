@@ -5,7 +5,7 @@
 #include <dpp/dispatcher.h>
 #include <dpp/coro/job.h>
 
-void mln::cmd_runner::attach_event(bot_delta* const delta){
+void mln::cmd_runner::attach_event(mln::bot_delta* const delta){
     std::unique_ptr<mln::base_slashcommand> ptr(std::make_unique<mln::ping>(mln::ping(delta)));
     actions.emplace(ptr->get_command().name, std::move(ptr));
 

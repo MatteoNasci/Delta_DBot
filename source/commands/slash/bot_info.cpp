@@ -3,7 +3,7 @@
 
 #include <dpp/colors.h>
 
-mln::bot_info::bot_info(bot_delta* const delta) : base_slashcommand(delta,
+mln::bot_info::bot_info(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("bot_info", "Send an embed with the bot info!", delta->bot.me.id))) {}
 
 dpp::job mln::bot_info::command(dpp::slashcommand_t event){

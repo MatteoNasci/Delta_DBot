@@ -1,7 +1,7 @@
 #include "commands/slash/add_role.h"
 #include "bot_delta.h"
 
-mln::add_role::add_role(bot_delta* const delta) : base_slashcommand(delta,
+mln::add_role::add_role(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("add_role", "Give user a role", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to give role to", true))
         .add_option(dpp::command_option(dpp::co_role, "role", "Role to give", true))

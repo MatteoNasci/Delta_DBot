@@ -4,7 +4,7 @@
 
 #include <dpp/dispatcher.h>
 
-void mln::ready_runner::attach_event(bot_delta* const delta){
+void mln::ready_runner::attach_event(mln::bot_delta* const delta){
     actions.emplace_back(std::make_unique<mln::register_commands>(delta));
 
     delta->bot.on_ready([this](const dpp::ready_t& event) ->dpp::job {

@@ -4,7 +4,7 @@
 
 static constexpr uint16_t s_avatar_pixel_size{ 512 };
 
-mln::avatar::avatar(bot_delta* const delta) : base_slashcommand(delta,
+mln::avatar::avatar(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("avatar", "Get your or another user's avatar image", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from", true))
         .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel", false)))) {}

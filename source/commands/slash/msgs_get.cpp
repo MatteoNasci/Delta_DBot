@@ -2,7 +2,7 @@
 #include "bot_delta.h"
 #include "utility/constants.h"
 
-mln::msgs_get::msgs_get(bot_delta* const delta) : base_slashcommand(delta,
+mln::msgs_get::msgs_get(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("get_messages", "Get messages", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_integer, "quantity", "Quantity of messages to get. Max - " + std::to_string(static_cast<int64_t>(mln::constants::get_max_retrievable_msgs())) + ".", true)
             .set_min_value(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_retrievable_msgs())))

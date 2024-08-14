@@ -6,7 +6,7 @@
 #include <dpp/once.h>
 #include <vector>
 
-mln::register_commands::register_commands(bot_delta* const delta) : base_ready(delta) {}
+mln::register_commands::register_commands(mln::bot_delta* const delta) : base_ready(delta) {}
 
 dpp::job mln::register_commands::command(std::shared_ptr<dpp::ready_t> event){
     if (dpp::run_once<struct register_bot_commands>()) {

@@ -3,7 +3,9 @@
 #include "utility/constants.h"
 #include "utility/utility.h"
 
-mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
+#include <dpp/queues.h>
+
+mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id)
         .add_option(dpp::command_option(dpp::co_sub_command_group, "op", "Perform an operation on the db", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "insert", "Inserts a new record in the db. It will fail if the given name is not unique!", false)
@@ -13,8 +15,7 @@ mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
                     .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
                 .add_option(dpp::command_option(dpp::co_string, "description", "Small description of the stored file. Default: NULL", false)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
-                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
-                .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel. Default: false", false)))
+                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))))
             .add_option(dpp::command_option(dpp::co_sub_command, "insert_replace", "Inserts or replaces a record in the db.", false)
                 .add_option(dpp::command_option(dpp::co_attachment, "file", "File to insert.", true))
                 .add_option(dpp::command_option(dpp::co_string, "name", "Unique name to associate with the file.", true)
@@ -22,8 +23,7 @@ mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
                     .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
                 .add_option(dpp::command_option(dpp::co_string, "description", "Small description of the stored file. Default: NULL", false)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
-                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
-                .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel. Default: false", false)))
+                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))))
             .add_option(dpp::command_option(dpp::co_sub_command, "select", "Selects a record from the db. It will fail if the given name is not present!", false)
                 .add_option(dpp::command_option(dpp::co_string, "name", "Unique name to associate with the file.", true)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
@@ -38,8 +38,7 @@ mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
                     .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
                 .add_option(dpp::command_option(dpp::co_string, "description", "Small description of the stored file. Default: NULL", false)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
-                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id()))))
-                .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel. Default: false", false)))
+                    .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))))
             .add_option(dpp::command_option(dpp::co_sub_command, "remove", "Removes an existing record in the db. It will fail if the given name is not present!", false)
                 .add_option(dpp::command_option(dpp::co_string, "name", "Unique name to associate with the file.", true)
                     .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_text_id())))
@@ -137,14 +136,11 @@ mln::db::db(bot_delta* const delta) : base_slashcommand(delta,
         }
     }
 }
-
-dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command in its own .cpp file, too much shit here already
+dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command in its own .cpp file, too much shit here already (callbacks inside a .cpp interpreter as well)
     typedef std::function<dpp::task<void>(dpp::command_data_option&, const dpp::slashcommand_t&)> op_callback_t;
     static const std::unordered_map<std::string, op_callback_t> allowed_op_sub_commands{
-        {"insert", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> { 
-            const dpp::command_value broadcast_param = event.get_parameter("broadcast");
-            const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
-            auto waiting = event.co_thinking(!broadcast);//this one requires !broadcast since the condition wants true for ephemeral
+        {"insert", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
+            auto waiting = event.co_thinking(false);
 
             std::string desc;
             const dpp::command_value desc_param = event.get_parameter("description");
@@ -157,12 +153,31 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             int64_t user_id = event.command.usr.id;
 
             const dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
-            const dpp::attachment att = event.command.get_resolved_attachment(file_id);
+            const dpp::attachment att = event.command.get_resolved_attachment(file_id); 
 
-            std::string url = att.url;
-            std::string name = std::get<std::string>(event.get_parameter("name"));
+            auto r = co_await delta()->bot.co_request(att.url, dpp::http_method::m_get, "", att.content_type);
+
+            dpp::message message = dpp::message("File uploaded:").add_file(att.filename, r.body, att.content_type).set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id);
+            co_await waiting;
+            co_await event.co_edit_response(message);
+            auto co_mess = co_await event.co_get_original_response();
+
+            if (co_mess.is_error()) {
+                delta()->bot.log(dpp::loglevel::ll_debug, "Err insert: " + co_mess.get_error().human_readable);
+                event.co_edit_response("Failed to insert element to database! Error: " + co_mess.get_error().human_readable);
+                co_return;
+            }
+            dpp::message temp_msg = co_mess.get<dpp::message>();
             
-            //TODO I might need to "store" the original url to a dedicated channel to make the url work
+            delta()->bot.log(dpp::loglevel::ll_debug, std::to_string(temp_msg.attachments.size()));
+            delta()->bot.log(dpp::loglevel::ll_debug, temp_msg.attachments[0].url);
+            std::string url = temp_msg.attachments[0].url;
+            std::string name = std::get<std::string>(event.get_parameter("name"));
+            //TODO dpp::job should not be used i think, task<void> to use. Study of coro works
+            /*delta()->bot.message_delete(temp_msg.id, temp_msg.channel_id);*/
+            //TODO deleting the message removes the url. I need an apposite channel to store images (save to guild_profile). If not set just print image in current channel and leave it there
+            
+            //TODO I need to "store" the original url to a dedicated channel to make the url work for a long time
             auto res1 = delta()->db.bind_parameter(saved_insert_stmt, 0, saved_insert_guild, guild_id);
             auto res2 = delta()->db.bind_parameter(saved_insert_stmt, 0, saved_insert_user, user_id);
             auto res3 = delta()->db.bind_parameter(saved_insert_stmt, 0, saved_insert_file_url, url.c_str(), url.length(), mln::db_destructor_behavior::transient_b, mln::db_text_encoding::utf8);
@@ -174,34 +189,26 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             else {
                 res5 = delta()->db.bind_parameter(saved_insert_stmt, 0, saved_insert_desc);
             }
-            dpp::message msg{};
-            if (!broadcast) {
-                msg.set_flags(dpp::m_ephemeral);
-            }
 
             if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok || res4 != mln::db_result::ok || res5 != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to bind insert params!" + name + " " + desc);
-                msg.set_content("Failed to insert element, internal error!");
-                co_await waiting;
-                event.edit_response(msg);
+                temp_msg.set_content("Failed to insert element, internal error!");
+                event.edit_original_response(temp_msg);
                 co_return;
             }
 
             auto res = delta()->db.exec(saved_insert_stmt, mln::database_callbacks_t());
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to insert element!");
-                msg.set_content("Failed to insert element, internal error!");
+                temp_msg.set_content("Failed to insert element, internal error!");
             }else {
-                msg.set_content("Element inserted to the db!");
+                temp_msg.set_content("Element inserted to the db!");
             }
 
-            co_await waiting;
-            event.edit_response(msg);
+            event.edit_original_response(temp_msg);
         }},
         {"insert_replace", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
-            const dpp::command_value broadcast_param = event.get_parameter("broadcast");
-            const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
-            auto waiting = event.co_thinking(!broadcast);//this one requires !broadcast since the condition wants true for ephemeral
+            auto waiting = event.co_thinking(false);//this one requires !broadcast since the condition wants true for ephemeral
 
             std::string desc;
             const dpp::command_value desc_param = event.get_parameter("description");
@@ -216,7 +223,23 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             const dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
             const dpp::attachment att = event.command.get_resolved_attachment(file_id);
 
-            std::string url = att.url;
+            auto r = co_await delta()->bot.co_request(att.url, dpp::http_method::m_get, "", att.content_type);
+
+            dpp::message message = dpp::message("File uploaded:").add_file(att.filename, r.body, att.content_type).set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id);
+            co_await waiting;
+            co_await event.co_edit_response(message);
+            auto co_mess = co_await event.co_get_original_response();
+
+            if (co_mess.is_error()) {
+                delta()->bot.log(dpp::loglevel::ll_debug, "Err insert or replace: " + co_mess.get_error().human_readable);
+                event.co_edit_response("Failed to insert or replace element to database! Error: " + co_mess.get_error().human_readable);
+                co_return;
+            }
+            dpp::message temp_msg = co_mess.get<dpp::message>();
+
+            delta()->bot.log(dpp::loglevel::ll_debug, std::to_string(temp_msg.attachments.size()));
+            delta()->bot.log(dpp::loglevel::ll_debug, temp_msg.attachments[0].url);
+            std::string url = temp_msg.attachments[0].url;
             std::string name = std::get<std::string>(event.get_parameter("name"));
 
             //TODO I might need to "store" the original url to a dedicated channel to make the url work
@@ -231,29 +254,23 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             else {
                 res5 = delta()->db.bind_parameter(saved_insert_replace_stmt, 0, saved_insert_replace_desc);
             }
-            dpp::message msg{};
-            if (!broadcast) {
-                msg.set_flags(dpp::m_ephemeral);
-            }
 
             if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok || res4 != mln::db_result::ok || res5 != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to bind insert_replace params!" + name + " " + desc);
-                msg.set_content("Failed to insert_replace element, internal error!");
-                co_await waiting;
-                event.edit_response(msg);
+                temp_msg.set_content("Failed to insert_replace element, internal error!");
+                event.edit_original_response(temp_msg);
                 co_return;
             }
 
             auto res = delta()->db.exec(saved_insert_replace_stmt, mln::database_callbacks_t());
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to insert_replace element!");
-                msg.set_content("Failed to insert_replace element, internal error!");
+                temp_msg.set_content("Failed to insert_replace element, internal error!");
             }else {
-                msg.set_content("Element inserted_replaced to the db!");
+                temp_msg.set_content("Element inserted_replaced to the db!");
             }
 
-            co_await waiting;
-            event.edit_response(msg);
+            event.edit_original_response(temp_msg);
         }},
         {"select", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
             const dpp::command_value broadcast_param = event.get_parameter("broadcast");
@@ -294,7 +311,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             callbacks.statement_index_callback = nullptr;
             callbacks.type_definer_callback = [](void*, int c) {return c <= 1; };
 
-            auto res = delta()->db.exec(saved_select_stmt, callbacks); //TODO add callbacks
+            auto res = delta()->db.exec(saved_select_stmt, callbacks);
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to select!");
                 msg.set_content("Failed to select, internal error!");
@@ -327,7 +344,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             }
 
             mln::database_callbacks_t callbacks;
-            std::string s{}; //TODO add logic for when lenght > limit. Also this is a bad implementation, fix later
+            std::string s{};
             callbacks.callback_data = &s;
             callbacks.data_adder_callback = [](void* s_v, int c, mln::db_column_data_t&& d) {
                 std::string* s_p = static_cast<std::string*>(s_v);
@@ -343,7 +360,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             callbacks.statement_index_callback = nullptr;
             callbacks.type_definer_callback = [](void*, int c) {return c <= 1; };
 
-            res = delta()->db.exec(saved_show_records_stmt, callbacks);//TODO add callbacks
+            res = delta()->db.exec(saved_show_records_stmt, callbacks);
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to show_records!");
                 msg.set_content("Failed to show_records, internal error!");
@@ -356,9 +373,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             }
         }},
         {"update", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
-            const dpp::command_value broadcast_param = event.get_parameter("broadcast");
-            const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
-            auto waiting = event.co_thinking(!broadcast);//this one requires !broadcast since the condition wants true for ephemeral
+            auto waiting = event.co_thinking(false);//this one requires !broadcast since the condition wants true for ephemeral
 
             std::string desc;
             const dpp::command_value desc_param = event.get_parameter("description");
@@ -373,7 +388,23 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             const dpp::snowflake file_id = std::get<dpp::snowflake>(event.get_parameter("file"));
             const dpp::attachment att = event.command.get_resolved_attachment(file_id);
 
-            std::string url = att.url;
+            auto r = co_await delta()->bot.co_request(att.url, dpp::http_method::m_get, "", att.content_type);
+
+            dpp::message message = dpp::message("File uploaded:").add_file(att.filename, r.body, att.content_type).set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id);
+            co_await waiting;
+            co_await event.co_edit_response(message);
+            auto co_mess = co_await event.co_get_original_response();
+
+            if (co_mess.is_error()) {
+                delta()->bot.log(dpp::loglevel::ll_debug, "Err update: " + co_mess.get_error().human_readable);
+                event.co_edit_response("Failed to update element to database! Error: " + co_mess.get_error().human_readable);
+                co_return;
+            }
+            dpp::message temp_msg = co_mess.get<dpp::message>();
+
+            delta()->bot.log(dpp::loglevel::ll_debug, std::to_string(temp_msg.attachments.size()));
+            delta()->bot.log(dpp::loglevel::ll_debug, temp_msg.attachments[0].url);
+            std::string url = temp_msg.attachments[0].url;
             std::string name = std::get<std::string>(event.get_parameter("name"));
 
             //TODO I might need to "store" the original url to a dedicated channel to make the url work
@@ -387,29 +418,23 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
             }else {
                 res5 = delta()->db.bind_parameter(saved_update_stmt, 0, saved_update_desc);
             }
-            dpp::message msg{};
-            if (!broadcast) {
-                msg.set_flags(dpp::m_ephemeral);
-            }
 
             if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok || res4 != mln::db_result::ok || res5 != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to bind update params!" + name + " " + desc);
-                msg.set_content("Failed to update element, internal error!");
-                co_await waiting;
-                event.edit_response(msg);
+                temp_msg.set_content("Failed to update element, internal error!");
+                event.edit_original_response(temp_msg);
                 co_return;
             }
 
             auto res = delta()->db.exec(saved_update_stmt, mln::database_callbacks_t());
             if (res != mln::db_result::ok) {
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to update element!");
-                msg.set_content("Failed to update element, internal error!");
+                temp_msg.set_content("Failed to update element, internal error!");
             }else {
-                msg.set_content("Element updated to the db!");
+                temp_msg.set_content("Element updated to the db!");
             }
 
-            co_await waiting;
-            event.edit_response(msg);
+            event.edit_original_response(temp_msg);
         }},
         {"remove", [this](dpp::command_data_option& opt, const dpp::slashcommand_t& event) -> dpp::task<void> {
             const dpp::command_value broadcast_param = event.get_parameter("broadcast");
@@ -463,6 +488,11 @@ dpp::job mln::db::command(dpp::slashcommand_t event){//TODO put each sub command
         event.reply(dpp::message("Failed to execute the command, internal error!").set_flags(dpp::m_ephemeral));
         co_return;
     }
+
+    /*if (delta()->is_dev_id_valid && event.command.usr.id != delta()->dev_id) {
+        event.reply("These commands are temporarily disabled for normal users, wip!");
+        co_return;
+    }*/
 
     dpp::command_interaction cmd_data = event.command.get_command_interaction();
     dpp::command_data_option primary_cmd = cmd_data.options[0];

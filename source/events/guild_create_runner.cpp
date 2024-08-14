@@ -4,7 +4,7 @@
 
 #include <dpp/dispatcher.h>
 
-void mln::guild_create_runner::attach_event(bot_delta* const delta) {
+void mln::guild_create_runner::attach_event(mln::bot_delta* const delta) {
     actions.emplace_back(std::make_unique<mln::insert_guild_db>(delta));
 
     delta->bot.on_guild_create([this](const dpp::guild_create_t& event) ->dpp::job {
