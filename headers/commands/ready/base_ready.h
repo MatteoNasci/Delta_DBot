@@ -5,11 +5,12 @@
 #include "commands/base_action.h"
 
 #include <dpp/dispatcher.h>
+#include <dpp/coro/task.h>
 
 #include <memory>
 
 namespace mln {
-	class base_ready : public base_action<std::shared_ptr<dpp::ready_t>> {
+	class base_ready : public base_action<dpp::task<void>, const dpp::ready_t&> {
 	protected:
 		base_ready(bot_delta* const delta);
 	public:

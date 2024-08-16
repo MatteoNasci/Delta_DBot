@@ -10,6 +10,7 @@
 
 #include <optional>
 #include <string>
+#include <functional>
 
 namespace mln {
 	class utility {
@@ -20,8 +21,10 @@ namespace mln {
 		static void print(const dpp::cluster& bot, const dpp::message& msg);
 		static void print(const dpp::cluster& bot, const dpp::message_file_data& msg_fd);
 		static void print(const dpp::cluster& bot, const dpp::message::message_interaction_struct& msg_i);
-		static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::interaction_create_t& event);
+		static dpp::task<std::optional<dpp::guild_member>> resolve_guild_member(const dpp::interaction_create_t& event_data, const dpp::snowflake& user_id);
 		static dpp::task<void> send_msg_recursively(dpp::cluster& bot, const dpp::interaction_create_t& event, const std::string& msg, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast);
+		
+		static dpp::task<bool> send_msg_recursively_embed(dpp::cluster& bot, const dpp::interaction_create_t& event, const std::function<std::string(size_t requested_size, size_t max_size)>& get_text_callback, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast);
 	};
 }
 

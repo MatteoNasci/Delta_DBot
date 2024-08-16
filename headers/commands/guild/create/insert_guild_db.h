@@ -12,7 +12,7 @@ namespace mln {
         bool valid_saved_insert;
     public:
         insert_guild_db(bot_delta* const delta);
-        dpp::job command(std::shared_ptr<dpp::guild_create_t> event_data) override;
+        dpp::task<void> command(const dpp::guild_create_t& event_data) override;
     };
 }
 

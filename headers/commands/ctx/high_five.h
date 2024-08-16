@@ -8,7 +8,7 @@ namespace mln {
     class high_five final : public base_ctx_command{
 	public:
 		high_five(bot_delta* const delta);
-		dpp::job command(dpp::user_context_menu_t event_data) override;
+		dpp::task<void> command(const dpp::user_context_menu_t& event_data) override;
     };
 }
 

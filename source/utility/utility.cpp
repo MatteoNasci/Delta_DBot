@@ -2,6 +2,7 @@
 #include "utility/constants.h"
 
 #include <dpp/cluster.h>
+#include <dpp/colors.h>
 
 
 void mln::utility::print(const dpp::cluster& bot, const dpp::message& msg){
@@ -16,15 +17,15 @@ void mln::utility::print(const dpp::cluster& bot, const dpp::message& msg){
     bot.log(dpp::loglevel::ll_debug, "Sent: " + std::to_string(msg.sent));
     bot.log(dpp::loglevel::ll_debug, "Guild: " + std::to_string(msg.webhook_id));
 
-    for (const auto& att : msg.attachments) {
+    for (const dpp::attachment& att : msg.attachments) {
         mln::utility::print(bot, att);
     }
 
-    for (const auto& com : msg.components) {
+    for (const dpp::component& com : msg.components) {
         mln::utility::print(bot, com);
     }
 
-    for (const auto& f : msg.file_data) {
+    for (const dpp::message_file_data& f : msg.file_data) {
         mln::utility::print(bot, f);
     }
 
@@ -85,39 +86,144 @@ void mln::utility::print(const dpp::cluster& bot, const dpp::message::message_in
     bot.log(dpp::loglevel::ll_debug, "Print msg interaction over.");
 }
 
-dpp::task<std::optional<dpp::guild_member>> mln::utility::resolve_guild_member(const dpp::interaction_create_t& event){
-    const dpp::command_value& user_param = event.get_parameter("user");
-    //If parameter has an user use that, otherwise get sender user
-    const dpp::snowflake user_id = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : event.command.usr.id;
-
+dpp::task<std::optional<dpp::guild_member>> mln::utility::resolve_guild_member(const dpp::interaction_create_t& event_data, const dpp::snowflake& user_id){
     // If we have the guild member in the command's resolved data, return it
-    const auto& member_map = event.command.resolved.members;
-    if (auto member = member_map.find(user_id); member != member_map.end()) {
-        co_return member->second;
+    const std::map<dpp::snowflake, dpp::guild_member>& member_map = event_data.command.resolved.members;
+    if (const auto& member_it = member_map.find(user_id); member_it != member_map.end()) {
+        co_return member_it->second;
     }
 
     // Try looking in guild cache
-    dpp::guild* guild = dpp::find_guild(event.command.guild_id);
-    if (guild) {
+    dpp::guild* guild = dpp::find_guild(event_data.command.guild_id);
+    if (guild != nullptr) {
         // Look in guild's member cache
-        if (auto member = guild->members.find(user_id); member != guild->members.end()) {
-            co_return member->second;
+        if (const auto& member_it = guild->members.find(user_id); member_it != guild->members.end()) {
+            co_return member_it->second;
         }
     }
 
     // Finally if everything else failed, request API
-    dpp::confirmation_callback_t confirmation = co_await event.from->creator->co_guild_get_member(event.command.guild_id, user_id);
+    const dpp::confirmation_callback_t confirmation = co_await event_data.from->creator->co_guild_get_member(event_data.command.guild_id, user_id);
     if (confirmation.is_error()) {
         co_return std::nullopt; // Member not found, return empty
-    }else {
-        co_return confirmation.get<dpp::guild_member>();
     }
+    co_return confirmation.get<dpp::guild_member>();
 }
 
-dpp::task<void> mln::utility::send_msg_recursively(dpp::cluster& bot, const dpp::interaction_create_t& event, const std::string& in_msg, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast){
+dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, const dpp::interaction_create_t& event_data, const std::function<std::string(size_t requested_size, size_t max_size)>& get_text_callback, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast) {
+    static const std::function<dpp::embed(size_t)> s_get_new_embed = [](size_t fields_to_reserve) {
+        dpp::embed e{};
+        e   .set_color(dpp::colors::sti_blue)
+            .set_title("")
+            .set_author("", "", "")
+            .set_description("")
+            .set_thumbnail("")
+            .set_image("")
+            .set_footer(
+                dpp::embed_footer()
+                .set_text("")
+                .set_icon("")
+            )
+            .set_timestamp(time(0));
+        e.fields.reserve(fields_to_reserve);
+        return std::move(e);
+    };
+    
+    //NOTE: I am putting as much data inside each field without splitting the input strings, but event with the worst input strings cases (where the most available space is wasted in the fields) I will not reach the mln::constants::get_max_embed_fields() limit of 25 fields (currently). 
+    //Worst case: first input = 1 length, second input = mln::constants::get_max_characters_embed_field_value() length, wasting mln::constants::get_max_characters_embed_field_value() - 1 space with 2 fields used.
+    //With this worst case scenario I can display mln::constants::get_max_characters_embed_field_value()+1 chars per every 2 fields, which will still reach the mln::constants::get_max_characters_embed_total() limit before the field count limit.
+    //This means I can safely ignore the field count limit in this function
+    //All of this is considering the discord embed limits of 16/08/2024
+
+    if (!get_text_callback) {
+        co_return false;
+    }
+
+    const size_t max_space_available_total = mln::constants::get_max_characters_embed_total();
+    const size_t max_space_available_field = mln::constants::get_max_characters_embed_field_value();
+    const size_t max_possible_fields_count = static_cast<size_t>(std::ceil((static_cast<double>(max_space_available_total) / max_space_available_field) * 2.0)); //This considers worst case scenario where 2 fields contain a max of 'max_space_available_field+1' (rounded to 'max_space_available_field' for simplicity)
+    size_t current_space_used = 0;
+    size_t current_field_space_used = 0;
+
+    dpp::async<dpp::confirmation_callback_t> thinking;
+    bool waiting_valid = false;
+
+    dpp::embed embed = s_get_new_embed(max_possible_fields_count);
+    dpp::embed_field field{};
+    bool over = false;
+
+    while (!over) {
+
+        size_t space_left_field = max_space_available_field - current_field_space_used;
+        size_t space_left_embed = max_space_available_total - current_space_used;
+        size_t available_space = std::min(space_left_field, space_left_embed);
+        const std::string to_add = get_text_callback(available_space, max_space_available_field);
+        over = to_add.empty();
+
+        //The callback has sent us a string with an illegal length amount, return an error
+        if (to_add.length() > max_space_available_field) {
+            co_return false;
+        }
+
+        //update current field/embed in case input string is too big for the available space or send remaining data in case process is over
+        if (to_add.length() > available_space || over) {
+            //If the field has at least 1 char it means that we need to push the field into the embed and prepare a new one
+            if (field.value.length() > 0) {
+                embed.fields.push_back(field);
+                field = dpp::embed_field{};
+                current_field_space_used = 0;
+
+                space_left_field = max_space_available_field - current_field_space_used;
+                available_space = std::min(space_left_field, space_left_embed);
+            }
+
+            //If the input string length is still greater than our available space it means that the embed remaining size is limiting us; the embed can be considered full and should be sent in a message, preparing a new embed after. If the process is over send any pending data left in the field/embed.
+            if (to_add.length() > available_space || (over && embed.fields.size() > 0)) {
+
+                dpp::message msg{ embed };
+                if (!broadcast) {
+                    msg.set_flags(dpp::m_ephemeral);
+                }
+
+                if (use_first_reply) {
+                    use_first_reply = !use_first_reply;
+                    event_data.edit_response(msg.set_type(dpp::message_type::mt_reply));
+                }else {
+                    msg.set_type(dpp::message_type::mt_default);
+                    if (waiting_valid) {
+                        co_await thinking;
+                    }
+                    thinking = broadcast ? bot.co_message_create(msg.set_channel_id(event_data.command.channel_id).set_guild_id(event_data.command.guild_id)) :
+                        bot.co_direct_message_create(target_user, msg);
+                    waiting_valid = true;
+                }
+
+                if (!over) {
+                    embed = s_get_new_embed(max_possible_fields_count);
+                }
+                
+                current_space_used = 0;
+                current_field_space_used = 0;
+            }
+        }
+        //updates field data and counters if not over
+        if(!over){
+            field.value += to_add;
+            current_space_used += to_add.length();
+            current_field_space_used += to_add.length();
+        }
+    }
+
+    if (waiting_valid) {
+        co_await thinking;
+    }
+
+    co_return true;
+}
+dpp::task<void> mln::utility::send_msg_recursively(dpp::cluster& bot, const dpp::interaction_create_t& event_data, const std::string& in_msg, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast){
     size_t text_length = in_msg.length();
     size_t start = 0;
-    dpp::async<dpp::confirmation_callback_t> waiting;
+    dpp::async<dpp::confirmation_callback_t> thinking;
     bool waiting_valid = false;
     while (text_length > 0) {
         size_t count_to_send = std::min(mln::constants::get_max_characters_reply_msg(), text_length);
@@ -129,13 +235,13 @@ dpp::task<void> mln::utility::send_msg_recursively(dpp::cluster& bot, const dpp:
 
         if (use_first_reply) {
             use_first_reply = !use_first_reply;
-            event.edit_response(msg.set_type(dpp::message_type::mt_reply));
+            event_data.edit_response(msg.set_type(dpp::message_type::mt_reply));
         }else {
             msg.set_type(dpp::message_type::mt_default);
             if (waiting_valid) {
-                co_await waiting;
+                co_await thinking;
             }
-            waiting = broadcast ? bot.co_message_create(msg.set_channel_id(event.command.channel_id).set_guild_id(event.command.guild_id)) :
+            thinking = broadcast ? bot.co_message_create(msg.set_channel_id(event_data.command.channel_id).set_guild_id(event_data.command.guild_id)) :
                 bot.co_direct_message_create(target_user, msg);
             waiting_valid = true;
         }
@@ -145,6 +251,6 @@ dpp::task<void> mln::utility::send_msg_recursively(dpp::cluster& bot, const dpp:
     }
 
     if (waiting_valid) {
-        co_await waiting;
+        co_await thinking;
     }
 }

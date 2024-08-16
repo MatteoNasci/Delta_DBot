@@ -156,10 +156,10 @@ static const std::unordered_map<mln::db_destructor_behavior, void(*)(void*)> s_m
 };
 
 
-mln::database_callbacks_t::database_callbacks_t(const row_callback_f& in_row_callback, const data_adder_callback_f& in_data_adder_callback, const type_definer_callback_f& in_type_definer_callback, const statement_index_callback_f& in_statement_index_callback, void* const in_callback_data) :
-	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), callback_data(in_callback_data) {}
+mln::database_callbacks_t::database_callbacks_t(const row_callback_f& in_row_callback, const data_adder_callback_f& in_data_adder_callback, const type_definer_callback_f& in_type_definer_callback, const statement_index_callback_f& in_statement_index_callback, const statement_completed_callback_f& in_statement_completed_callback, void* const in_callback_data) :
+	row_callback(in_row_callback), data_adder_callback(in_data_adder_callback), type_definer_callback(in_type_definer_callback), statement_index_callback(in_statement_index_callback), statement_completed_callback(in_statement_completed_callback), callback_data(in_callback_data) {}
 
-mln::database_callbacks_t::database_callbacks_t() : database_callbacks_t(nullptr, nullptr, nullptr, nullptr, nullptr){}
+mln::database_callbacks_t::database_callbacks_t() : database_callbacks_t(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr){}
 
 mln::db_column_data_t::db_column_data_t(const char* in_name, double in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
 mln::db_column_data_t::db_column_data_t(const char* in_name, int in_data, int in_bytes) : name(in_name), data(in_data), bytes(in_bytes) {}
@@ -321,6 +321,9 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 		return res;
 	}
 
+	if (callbacks.statement_completed_callback) {
+		callbacks.statement_completed_callback(callbacks.callback_data);
+	}
 	//this will prompt sqlite to free all allocated resources (like strings) in this execution
 	return static_cast<mln::db_result>(sqlite3_reset(stmt));
 }
@@ -383,8 +386,8 @@ mln::db_result mln::database_handler::delete_statement(const size_t saved_statem
 	return mln::db_result::ok;
 }
 void mln::database_handler::delete_all_statement() {
-	for (const auto& pair : saved_statements) {
-		for (const auto& stmt : pair.second) {
+	for (const std::pair<size_t, std::vector<sqlite3_stmt*>>& pair : saved_statements) {
+		for (sqlite3_stmt* stmt : pair.second) {
 			sqlite3_finalize(stmt);
 		}
 	}
@@ -513,6 +516,13 @@ mln::db_result mln::database_handler::get_bind_parameter_index(const size_t save
 std::string mln::database_handler::get_last_err_msg() const{
 	const char* err = sqlite3_errmsg(db);
 	return std::string(err == nullptr ? "Error not found" : err);
+}
+
+size_t mln::database_handler::get_last_changes() const {
+	return static_cast<size_t>(sqlite3_changes64(db));
+}
+int64_t mln::database_handler::get_last_insert_rowid() const {
+	return static_cast<int64_t>(sqlite3_last_insert_rowid(db));
 }
 
 std::string mln::database_handler::get_db_debug_info() {

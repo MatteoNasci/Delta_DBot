@@ -106,7 +106,6 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/ctx/high_five.cpp 
             source/commands/slash/db.cpp
             source/commands/slash/pm.cpp
-            source/commands/slash/msgs_get.cpp
             source/commands/slash/add_role.cpp
             source/events/cmd_runner.cpp
             source/events/cmd_ctx_runner.cpp

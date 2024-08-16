@@ -2,14 +2,12 @@
 #ifndef H_MLN_DB_BASE_ACTION_H
 #define H_MLN_DB_BASE_ACTION_H
 
-#include <dpp/coro/job.h>
-
 #include <string>
 
 namespace mln {
 	class bot_delta;
 
-	template<typename T_interaction_create_t, typename... T_args>
+	template<typename T_return, typename T_interaction_create_t, typename... T_args>
 	class base_action {
 	private:
 		bot_delta* delta_ptr;
@@ -30,7 +28,7 @@ namespace mln {
 
 		base_action& operator=(base_action&& rhs) = default;
 
-		virtual dpp::job command(T_interaction_create_t event, T_args... args) = 0;
+		virtual T_return command(T_interaction_create_t event, T_args... args) = 0;
 	};
 }
 

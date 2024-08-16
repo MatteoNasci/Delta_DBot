@@ -17,6 +17,15 @@ namespace mln {
 
 		static size_t get_min_retrievable_msgs();
 		static size_t get_max_retrievable_msgs();
+
+		static size_t get_max_characters_embed_total();
+		static size_t get_max_characters_embed_title();
+		static size_t get_max_characters_embed_description();
+		static size_t get_max_embed_fields();
+		static size_t get_max_characters_embed_field_name();
+		static size_t get_max_characters_embed_field_value();
+		static size_t get_max_characters_embed_footer();
+		static size_t get_max_characters_embed_author();
 	};
 }
 

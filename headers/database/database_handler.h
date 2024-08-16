@@ -89,6 +89,8 @@ namespace mln {
 		db_result get_bind_parameter_index(size_t saved_statement_id, size_t stmt_index, const char* param_name, int& out_index) const;
 
 		std::string get_last_err_msg() const;
+		size_t get_last_changes() const;
+		int64_t get_last_insert_rowid() const;
 
 		/*Value and pointer binds will not be supported at the moment*/
 	private:

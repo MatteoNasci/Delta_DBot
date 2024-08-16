@@ -5,11 +5,12 @@
 #include "commands/base_action.h"
 
 #include <dpp/dispatcher.h>
+#include <dpp/coro/task.h>
 
 #include <memory>
 
 namespace mln {
-	class base_guild_create : public base_action<std::shared_ptr<dpp::guild_create_t>> {
+	class base_guild_create : public base_action<dpp::task<void>, const dpp::guild_create_t&> {
 	protected:
 		base_guild_create(bot_delta* const delta);
 	public:

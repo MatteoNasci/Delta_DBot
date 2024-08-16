@@ -8,7 +8,7 @@ namespace mln {
     class help final : public base_slashcommand {
     public:
         help(bot_delta* const delta);
-        dpp::job command(dpp::slashcommand_t event_data) override;
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
     };
 }
 

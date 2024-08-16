@@ -9,7 +9,7 @@ namespace mln {
     class register_commands final : public base_ready{
     public:
         register_commands(bot_delta* const delta);
-        dpp::job command(std::shared_ptr<dpp::ready_t> event_data) override;
+        dpp::task<void> command(const dpp::ready_t& event_data) override;
         bool execute_command() override;
     };
 }

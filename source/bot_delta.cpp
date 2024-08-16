@@ -127,7 +127,7 @@ std::string mln::bot_delta::start(bool register_cmds) {
 
     return "Bot deployed!";
 }
-
+//TODO manage intents permissions as well
 bool mln::bot_delta::close() {
     return db.close_connection() == mln::db_result::ok;
 }

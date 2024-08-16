@@ -6,7 +6,7 @@
 mln::bot_info::bot_info(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("bot_info", "Send an embed with the bot info!", delta->bot.me.id))) {}
 
-dpp::job mln::bot_info::command(dpp::slashcommand_t event){
+dpp::task<void> mln::bot_info::command(const dpp::slashcommand_t& event_data){
     dpp::embed embed = dpp::embed()
         .set_color(dpp::colors::sti_blue)
         .set_title("Delta")
@@ -35,8 +35,6 @@ dpp::job mln::bot_info::command(dpp::slashcommand_t event){
         )
         .set_timestamp(time(0));
 
-    dpp::message msg(event.command.channel_id, embed);
-
-    event.reply(msg.set_flags(dpp::m_ephemeral));
+    event_data.reply(dpp::message(event_data.command.channel_id, embed).set_flags(dpp::m_ephemeral));
     co_return;
 }

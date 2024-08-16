@@ -7,13 +7,11 @@
 void mln::ready_runner::attach_event(mln::bot_delta* const delta){
     actions.emplace_back(std::make_unique<mln::register_commands>(delta));
 
-    delta->bot.on_ready([this](const dpp::ready_t& event) ->dpp::job {
-        std::shared_ptr<dpp::ready_t> ptr(std::make_shared<dpp::ready_t>(event));
-        for (const auto& action : this->actions) {
+    delta->bot.on_ready([this](const dpp::ready_t& event) ->dpp::task<void> {
+        for (const std::unique_ptr<mln::base_ready>& action : this->actions) {
             if (action->execute_command()) {
-                action->command(ptr);
+                co_await action->command(event);
             }
         }
-        co_return;
     });
 }

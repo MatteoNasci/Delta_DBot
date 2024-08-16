@@ -24,7 +24,7 @@ size_t mln::constants::get_min_characters_emoji(){
 }
 
 size_t mln::constants::get_max_characters_emoji(){
-	return 20;
+	return 30;
 }
 
 size_t mln::constants::get_min_retrievable_msgs(){
@@ -32,5 +32,30 @@ size_t mln::constants::get_min_retrievable_msgs(){
 }
 
 size_t mln::constants::get_max_retrievable_msgs(){
-	return 1000;
+	return 300;
+}
+
+size_t mln::constants::get_max_characters_embed_total() {
+	return 6000;
+}
+size_t mln::constants::get_max_characters_embed_title() {
+	return 256;
+}
+size_t mln::constants::get_max_characters_embed_description() {
+	return 4096;
+}
+size_t mln::constants::get_max_embed_fields() {
+	return 25;
+}
+size_t mln::constants::get_max_characters_embed_field_name() {
+	return 256;
+}
+size_t mln::constants::get_max_characters_embed_field_value() {
+	return 1024;
+}
+size_t mln::constants::get_max_characters_embed_footer() {
+	return 2048;
+}
+size_t mln::constants::get_max_characters_embed_author() {
+	return 256;
 }
