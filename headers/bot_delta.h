@@ -45,11 +45,18 @@ namespace mln {
 		bool close();
 
 		db_result print_main_db() const;
+		bool get_dump_channel_id(uint64_t guild_id, uint64_t& out_channel_id) const;
+		bool update_dump_channels_cache(uint64_t guild_id, uint64_t channel_id);
+		bool update_dump_channels_cache(uint64_t guild_id);
+		db_result update_dump_channels_cache();
 
 		const cmd_runner& get_cmd_runner() const;
 		const cmd_ctx_runner& get_cmd_ctx_runner() const;
 	private:
+		std::unordered_map<uint64_t, std::variant<uint64_t, void*>> guild_profile_cache;
+
 		size_t saved_select_all_query;
+		size_t saved_select_all_gp_query;
 
 		cmd_runner cmds;
 		cmd_ctx_runner ctxs;
@@ -60,6 +67,11 @@ namespace mln {
 		void setup_db();
 
 	public:
+		struct upd_dump_channel_t {
+			std::unordered_map<uint64_t, std::variant<uint64_t, void*>>& map;
+			uint64_t guild;
+		};
+
 		static void initialize_environment();
 		static void shutdown_environment();
 

@@ -104,7 +104,7 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/avatar.cpp
             source/commands/slash/bot_info.cpp
             source/commands/ctx/high_five.cpp 
-            source/commands/slash/db.cpp
+            source/commands/slash/db/db.cpp
             source/commands/slash/pm.cpp
             source/commands/slash/add_role.cpp
             source/events/cmd_runner.cpp
@@ -121,7 +121,16 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/base_slashcommand.cpp
             source/commands/ctx/base_ctx_command.cpp 
             source/commands/ready/base_ready.cpp 
-            source/commands/guild/create/base_guild_create.cpp)
+            source/commands/guild/create/base_guild_create.cpp 
+            source/commands/slash/db/db_insert.cpp
+            source/commands/slash/db/base_db_command.cpp 
+            source/commands/slash/db/db_insert_update.cpp
+            source/commands/slash/db/db_update.cpp
+            source/commands/slash/db/db_delete.cpp
+            source/commands/slash/db/db_update_description.cpp
+            source/commands/slash/db/db_select.cpp
+            source/commands/slash/db/db_show_records.cpp
+            source/commands/slash/db/db_update_dump_channel.cpp)
 
 add_executable(deploy_delta ${botsrc})
 

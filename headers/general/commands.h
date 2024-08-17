@@ -4,7 +4,7 @@
 
 #include "commands/slash/ping.h"
 #include "commands/slash/bot_info.h"
-#include "commands/slash/db.h"
+#include "commands/slash/db/db.h"
 #include "commands/slash/pm.h"
 #include "commands/slash/add_role.h"
 #include "commands/slash/add_emoji.h"

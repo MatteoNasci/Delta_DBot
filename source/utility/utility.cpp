@@ -4,6 +4,17 @@
 #include <dpp/cluster.h>
 #include <dpp/colors.h>
 
+void mln::utility::any_results_da_callback(void* d, int, mln::db_column_data_t&&) {
+    bool* const bool_ptr = static_cast<bool*>(d);
+    *bool_ptr = true;
+}
+bool mln::utility::any_results_td_callback(void*, int) {
+    return false;
+}
+const mln::database_callbacks_t& mln::utility::get_any_results_callback() {
+    static const mln::database_callbacks_t callbacks{nullptr, mln::utility::any_results_da_callback, mln::utility::any_results_td_callback, nullptr, nullptr, nullptr};
+    return callbacks;
+}
 
 void mln::utility::print(const dpp::cluster& bot, const dpp::message& msg){
     bot.log(dpp::loglevel::ll_debug, "Printing msg...");
@@ -86,6 +97,15 @@ void mln::utility::print(const dpp::cluster& bot, const dpp::message::message_in
     bot.log(dpp::loglevel::ll_debug, "Print msg interaction over.");
 }
 
+std::string mln::utility::get_string(mln::url_type type) {
+    static const std::unordered_map<mln::url_type, std::string> s_mapped_types{
+        {mln::url_type::none, "none"},
+        {mln::url_type::file, "file"},
+        {mln::url_type::msg, "text"},
+    };
+    return s_mapped_types.at(type);
+}
+
 dpp::task<std::optional<dpp::guild_member>> mln::utility::resolve_guild_member(const dpp::interaction_create_t& event_data, const dpp::snowflake& user_id){
     // If we have the guild member in the command's resolved data, return it
     const std::map<dpp::snowflake, dpp::guild_member>& member_map = event_data.command.resolved.members;
@@ -110,7 +130,7 @@ dpp::task<std::optional<dpp::guild_member>> mln::utility::resolve_guild_member(c
     co_return confirmation.get<dpp::guild_member>();
 }
 
-dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, const dpp::interaction_create_t& event_data, const std::function<std::string(size_t requested_size, size_t max_size)>& get_text_callback, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast) {
+dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, const dpp::interaction_create_t& event_data, const std::function<std::string(size_t index, size_t requested_size, size_t max_size)>& get_text_callback, const dpp::snowflake& target_user, bool use_first_reply, bool broadcast) {
     static const std::function<dpp::embed(size_t)> s_get_new_embed = [](size_t fields_to_reserve) {
         dpp::embed e{};
         e   .set_color(dpp::colors::sti_blue)
@@ -128,7 +148,8 @@ dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, cons
         e.fields.reserve(fields_to_reserve);
         return std::move(e);
     };
-    
+    static const char s_next_page_text[] = "\n\nContinues next page...";
+    static const char s_next_page_dm_text[] = "\n\nContinues next page, sent to you by dm...";
     //NOTE: I am putting as much data inside each field without splitting the input strings, but event with the worst input strings cases (where the most available space is wasted in the fields) I will not reach the mln::constants::get_max_embed_fields() limit of 25 fields (currently). 
     //Worst case: first input = 1 length, second input = mln::constants::get_max_characters_embed_field_value() length, wasting mln::constants::get_max_characters_embed_field_value() - 1 space with 2 fields used.
     //With this worst case scenario I can display mln::constants::get_max_characters_embed_field_value()+1 chars per every 2 fields, which will still reach the mln::constants::get_max_characters_embed_total() limit before the field count limit.
@@ -139,9 +160,9 @@ dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, cons
         co_return false;
     }
 
-    const size_t max_space_available_total = mln::constants::get_max_characters_embed_total();
+    const size_t max_space_available_total = mln::constants::get_max_characters_embed_total() - (broadcast ? sizeof s_next_page_text : sizeof s_next_page_dm_text);//because I will add 'next page' text when creating new embed
     const size_t max_space_available_field = mln::constants::get_max_characters_embed_field_value();
-    const size_t max_possible_fields_count = static_cast<size_t>(std::ceil((static_cast<double>(max_space_available_total) / max_space_available_field) * 2.0)); //This considers worst case scenario where 2 fields contain a max of 'max_space_available_field+1' (rounded to 'max_space_available_field' for simplicity)
+    const size_t max_possible_fields_count = static_cast<size_t>(std::ceil((static_cast<double>(max_space_available_total) / max_space_available_field) * 2.0)) + 1; //This considers worst case scenario where 2 fields contain a max of 'max_space_available_field+1' (rounded to 'max_space_available_field' for simplicity). The + 1 is for 'next page' stuff if necessary
     size_t current_space_used = 0;
     size_t current_field_space_used = 0;
 
@@ -151,13 +172,14 @@ dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, cons
     dpp::embed embed = s_get_new_embed(max_possible_fields_count);
     dpp::embed_field field{};
     bool over = false;
+    size_t current_index = 0;
 
     while (!over) {
 
         size_t space_left_field = max_space_available_field - current_field_space_used;
         size_t space_left_embed = max_space_available_total - current_space_used;
         size_t available_space = std::min(space_left_field, space_left_embed);
-        const std::string to_add = get_text_callback(available_space, max_space_available_field);
+        const std::string to_add = get_text_callback(current_index++, available_space, max_space_available_field);
         over = to_add.empty();
 
         //The callback has sent us a string with an illegal length amount, return an error
@@ -179,6 +201,13 @@ dpp::task<bool> mln::utility::send_msg_recursively_embed(dpp::cluster& bot, cons
 
             //If the input string length is still greater than our available space it means that the embed remaining size is limiting us; the embed can be considered full and should be sent in a message, preparing a new embed after. If the process is over send any pending data left in the field/embed.
             if (to_add.length() > available_space || (over && embed.fields.size() > 0)) {
+
+                //add new page text if the text procesing is not over
+                if (!over) {
+                    dpp::embed_field nxt_pg{};
+                    nxt_pg.value = broadcast ? s_next_page_text : s_next_page_dm_text;
+                    embed.fields.push_back(std::move(nxt_pg));
+                }
 
                 dpp::message msg{ embed };
                 if (!broadcast) {
