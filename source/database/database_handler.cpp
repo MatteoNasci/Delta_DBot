@@ -307,7 +307,7 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 				}
 				//We know that the column_type func can only return one of the 5 (7) available types, and the map contains all of them (and they are all valid funcs). This is safe.
 				const get_column_value_f& column_func = s_mapped_column_funcs.find(type)->second;
-				callbacks.data_adder_callback(callbacks.callback_data, i, std::move(column_func(stmt, i)));
+				callbacks.data_adder_callback(callbacks.callback_data, i, std::forward<mln::db_column_data_t>(column_func(stmt, i)));
 			}
 
 			if (can_use_row_call) {
@@ -474,6 +474,18 @@ mln::db_result mln::database_handler::bind_parameter(const size_t saved_statemen
 	}
 
 	return static_cast<mln::db_result>(sqlite3_bind_text64(it->second[stmt_index], param_index, text, bytes, s_mapped_destructor_behaviors.find(mem_management)->second, static_cast<unsigned char>(encoding)));
+}
+mln::db_result mln::database_handler::bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const {
+	const auto& it = saved_statements.find(saved_statement_id);
+	if (it == saved_statements.end()) {
+		return mln::db_result::range;
+	}
+
+	if (stmt_index >= it->second.size()) {
+		return mln::db_result::range;
+	}
+
+	return static_cast<mln::db_result>(sqlite3_bind_text64(it->second[stmt_index], param_index, text.c_str(), text.length(), s_mapped_destructor_behaviors.find(mln::db_destructor_behavior::transient_b)->second, static_cast<unsigned char>(encoding)));
 }
 mln::db_result mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void* blob, const uint64_t bytes, const db_destructor_behavior mem_management) const {
 	const auto& it = saved_statements.find(saved_statement_id);

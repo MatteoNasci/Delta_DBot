@@ -2,7 +2,8 @@
 #include "bot_delta.h"
 
 mln::ping::ping(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("ping", "Ping pong!", delta->bot.me.id))) {}
+    std::move(dpp::slashcommand("ping", "Ping pong!", delta->bot.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands))) {}
 
 dpp::task<void> mln::ping::command(const dpp::slashcommand_t& event_data){
     if (event_data.from == nullptr) {

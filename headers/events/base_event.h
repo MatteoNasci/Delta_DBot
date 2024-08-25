@@ -19,7 +19,7 @@ namespace mln {
 		 */
 		base_event(const base_event&) = delete;
 
-		base_event(base_event&& rhs) : actions(std::move(rhs.actions)) {}
+		base_event(base_event&& rhs) : actions(std::forward<base_event>(rhs.actions)) {}
 
 		/**
 		 * @brief base_event is non-copyable
@@ -27,7 +27,7 @@ namespace mln {
 		base_event& operator=(const base_event&) = delete;
 
 		base_event& operator=(base_event&& rhs) {
-			this->actions = std::move(rhs.actions);
+			this->actions = std::forward<base_event>(rhs.actions);
 			return *this;
 		}
 

@@ -4,6 +4,7 @@
 
 mln::pm::pm(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("pm", "Send a private message.", delta->bot.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "The user to message", true))
         .add_option(dpp::command_option(dpp::co_string, "msg", "The message to send", true)
             .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))

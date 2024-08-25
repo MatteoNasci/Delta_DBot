@@ -6,6 +6,7 @@ static constexpr uint16_t s_avatar_pixel_size{ 512 };
 
 mln::avatar::avatar(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("avatar", "Get your or another user's avatar image", delta->bot.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from", true))
         .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel", false)))) {}
 
@@ -20,7 +21,7 @@ dpp::task<void> mln::avatar::command(const dpp::slashcommand_t& event_data){
     //If parameter has an user use that, otherwise get sender user
     const dpp::snowflake user_id = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : event_data.command.usr.id;
     // Call our coroutine to retrieve the member requested
-    const std::optional<dpp::guild_member> member = co_await mln::utility::resolve_guild_member(event_data, user_id);
+    const std::optional<dpp::guild_member> member = co_await mln::utility::get_member(event_data, user_id, delta()->bot);
 
     if (!member.has_value()) {
         co_await thinking;
@@ -28,7 +29,7 @@ dpp::task<void> mln::avatar::command(const dpp::slashcommand_t& event_data){
         co_return;
     }
     
-    std::string avatar_url = member->get_avatar_url(s_avatar_pixel_size);
+    std::string avatar_url = member->get_avatar_url();
     if (avatar_url.empty()) { // Member does not have a custom avatar for this server, get their user avatar
         const dpp::confirmation_callback_t confirmation = co_await event_data.from->creator->co_user_get_cached(member->user_id);
         if (confirmation.is_error()) {

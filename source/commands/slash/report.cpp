@@ -4,6 +4,7 @@
 
 mln::report::report(mln::bot_delta* const delta) : base_slashcommand(delta,
 	std::move(dpp::slashcommand("report_issue", "Report a bug or anything else related to the bot.", delta->bot.me.id)
+		.set_default_permissions(dpp::permissions::p_use_application_commands)
 		.add_option(dpp::command_option(dpp::command_option_type::co_string, "description", "Description of the issue", true)
 			.set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))
 			.set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_reply_msg())))))), 

@@ -8,7 +8,7 @@ void run_app(const bool register_bot_cmds);
 //TODO https://gist.github.com/LeviSnoot/d9147767abeef2f770e9ddcd91eb85aa stuff about timestamps
 int main(int argc, char** argv){
     bool register_bot_cmds = false;
-
+    //TODO add better version of commands parsing below, also add different commands (one of which will be used to alter tables if needed
     for (size_t i = 1; !register_bot_cmds && i < argc; ++i) {
         register_bot_cmds = std::strcmp(argv[i], "-r") == 0;
     }

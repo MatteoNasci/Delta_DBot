@@ -82,6 +82,7 @@ namespace mln {
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, double value) const;
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index) const;
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const char* text, uint64_t bytes, db_destructor_behavior mem_management, db_text_encoding encoding) const;
+		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const;
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const void* blob, uint64_t bytes, db_destructor_behavior mem_management) const;
 		//The void* is ignored here
 		db_result bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const void*, uint64_t bytes) const;

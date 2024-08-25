@@ -13,19 +13,19 @@ namespace mln {
 	private:
 		dpp::slashcommand cmd;
 	protected:
-		base_command(bot_delta* const in_delta, dpp::slashcommand&& in_cmd) : base_action<dpp::task<void>, const T_interaction_create_t&>(in_delta), cmd(std::move(in_cmd)) {}
+		base_command(bot_delta* const in_delta, dpp::slashcommand&& in_cmd) : base_action<dpp::task<void>, const T_interaction_create_t&>(in_delta), cmd(std::forward<dpp::slashcommand>(in_cmd)) {}
 	public:
 		base_command() = delete;
 
 		base_command(const base_command&) = default;
 
-		base_command(base_command&& rhs) : base_action<dpp::task<void>, const T_interaction_create_t&>(std::move(rhs)), cmd(std::move(rhs.cmd)) {}
+		base_command(base_command&& rhs) : base_action<dpp::task<void>, const T_interaction_create_t&>(std::forward<base_command>(rhs)), cmd(std::move(rhs.cmd)) {}
 
 		base_command& operator=(const base_command&) = default;
 
 		base_command& operator=(base_command&& rhs) {
 			this->cmd = std::move(rhs.cmd);
-			base_action<dpp::task<void>, const T_interaction_create_t&>::operator=(std::move(rhs));
+			base_action<dpp::task<void>, const T_interaction_create_t&>::operator=(std::forward<base_command>(rhs));
 			return *this;
 		}
 

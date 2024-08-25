@@ -20,57 +20,95 @@ saved_stmt(), saved_param_guild(), saved_param_channel(), valid_stmt(true) {
     }
 }
 
-dpp::task<void> mln::db_update_dump_channel::command(const dpp::command_data_option&, const dpp::slashcommand_t& event_data, url_type) {
-    dpp::async<dpp::confirmation_callback_t> thinking = event_data.co_thinking(true);
+mln::db_init_type_flag mln::db_update_dump_channel::get_requested_initialization_type(db_command_type cmd) {
+    static const std::unordered_map<db_command_type, db_init_type_flag> s_mapped_initialization_types{
+        {db_command_type::update_dump_channel, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
+        {db_command_type::help, db_init_type_flag::cmd_data},
+    };
 
-    if (!valid_stmt) {
-        co_await thinking;
-        event_data.edit_response("Failed database operation, the database was not initialized correctly!");
-        co_return;
+    const auto it = s_mapped_initialization_types.find(cmd);
+    if (it == s_mapped_initialization_types.end()) {
+        return mln::db_init_type_flag::all;
     }
+    return it->second;
+}
 
-    dpp::user command_usr = event_data.command.get_issuing_user();
-    dpp::guild command_gld = event_data.command.get_guild();
-    if (command_usr.id != delta()->dev_id && command_usr.id != command_gld.owner_id) {
-        co_await thinking;
-        event_data.edit_response("Failed to update the dump channel for this server, missing the required permission!");
-        co_return;
-    }
-
-    dpp::snowflake channel_id;
+dpp::task<void> mln::db_update_dump_channel::update_dump(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+    dpp::snowflake channel_id{0};
     const dpp::command_value channel_param = event_data.get_parameter("channel");
-    const bool valid_channel = std::holds_alternative<dpp::snowflake>(channel_param);
-    if (valid_channel) {
+    if (std::holds_alternative<dpp::snowflake>(channel_param)) {
         channel_id = std::get<dpp::snowflake>(channel_param);
     }
 
-    mln::db_result res1 = delta()->db.bind_parameter(saved_stmt, 0, saved_param_guild, static_cast<int64_t>(command_gld.id));
-    mln::db_result res2;
-    if (valid_channel) {
-        res2 = delta()->db.bind_parameter(saved_stmt, 0, saved_param_channel, static_cast<int64_t>(channel_id));
-    } else {
-        res2 = delta()->db.bind_parameter(saved_stmt, 0, saved_param_channel);
+    const std::optional<uint64_t> opt_cached_channel = delta()->dump_channels_cache.get_element(cmd_data.cmd_guild->id);
+    if (opt_cached_channel.has_value()) {
+        if (opt_cached_channel.value() == channel_id) {
+            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Channel found in cache. The given channel_id is already set as the dump channel!");
+            co_return;
+        }
     }
 
+    mln::db_result res1 = delta()->db.bind_parameter(saved_stmt, 0, saved_param_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    mln::db_result res2 = delta()->db.bind_parameter(saved_stmt, 0, saved_param_channel, static_cast<int64_t>(channel_id));
+
     if (res1 != mln::db_result::ok || res2 != mln::db_result::ok) {
-        co_await thinking;
-        event_data.edit_response("Failed to bind query params, internal error!");
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to bind query params, internal error!");
         co_return;
     }
 
     bool db_success = false;
-    mln::database_callbacks_t calls = mln::utility::get_any_results_callback();
-    calls.callback_data = &db_success;
+    mln::database_callbacks_t calls = mln::utility::get_any_results_callback(&db_success);
 
-    dpp::message msg{};
+    std::string msg{};
     mln::db_result res = delta()->db.exec(saved_stmt, calls);
     if (res != mln::db_result::ok || !db_success) {
-        msg.set_content(res == mln::db_result::ok && !db_success ? "Failed to update the dump channel, either no record found in the main database with the given guild id or you are not allowed to modify it!" : "Failed to update the dump channel, internal error!");
+        msg = (res == mln::db_result::ok && !db_success ? "Failed to update the dump channel, either no record found in the main database with the given guild id or you are not allowed to modify it!" : "Failed to update the dump channel, internal error!");
+        delta()->dump_channels_cache.remove_element(cmd_data.cmd_guild->id);
     } else {
-        msg.set_content("Dump channel updated!");
-        valid_channel ? delta()->update_dump_channels_cache(command_gld.id, channel_id) : delta()->update_dump_channels_cache(command_gld.id);
+        msg = ("Dump channel updated!");
+        delta()->dump_channels_cache.add_element(cmd_data.cmd_guild->id, channel_id);
     }
 
-    co_await thinking;
-    event_data.edit_response(msg);
+    co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, std::move(msg), {false, dpp::loglevel::ll_debug});
+}
+
+dpp::task<void> mln::db_update_dump_channel::help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+    static const dpp::message s_info = dpp::message{"Information regarding the `/db setup` commands..."}
+        .set_flags(dpp::m_ephemeral)
+        .add_embed(dpp::embed{}.set_description(R"""(The `/db setup` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
+
+This set of commands is generally reserved for users with specific permissions.
+
+**Types of setup:**
+
+- **/db setup update_dump_channel**  
+  *Parameters:* channel[text_channel, optional].  
+  This command asks for a valid text channel to be used for storage purposes. If not provided, the current dump channel will be unset, and the database will use the channel where the database commands are used as the dump channel.  
+  To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  
+  Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)"""));
+
+    event_data.reply(s_info);
+    co_return;
+}
+
+dpp::task<void> mln::db_update_dump_channel::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+    static const std::unordered_map<mln::db_command_type, std::function<dpp::task<void>(mln::db_update_dump_channel*, const dpp::slashcommand_t&, const db_cmd_data_t&, std::optional<dpp::async<dpp::confirmation_callback_t>>&)>> s_allowed_subcommands{
+        {mln::db_command_type::update_dump_channel, &mln::db_update_dump_channel::update_dump},
+        {mln::db_command_type::help, &mln::db_update_dump_channel::help},
+    };
+
+    //Find the command variant and execute it. If no valid command variant found return an error
+    const auto it_func = s_allowed_subcommands.find(type);
+    if (it_func == s_allowed_subcommands.end()) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
+            "Failed command, the given sub_command is not supported!");
+        co_return;
+    }
+    
+    if (!valid_stmt) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed database operation, the database was not initialized correctly!");
+        co_return;
+    }
+
+    co_await it_func->second(this, event_data, cmd_data, thinking);
 }

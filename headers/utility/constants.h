@@ -11,6 +11,10 @@ namespace mln {
 
 		static size_t get_min_characters_text_id();
 		static size_t get_max_characters_text_id();
+		static size_t get_min_characters_description();
+		static size_t get_max_characters_description();
+		static size_t get_min_characters_url();
+		static size_t get_max_characters_url();
 
 		static size_t get_min_characters_emoji();
 		static size_t get_max_characters_emoji();
@@ -18,7 +22,11 @@ namespace mln {
 		static size_t get_min_retrievable_msgs();
 		static size_t get_max_retrievable_msgs();
 
+		static size_t get_max_characters_modal_component();
+
 		static size_t get_max_characters_embed_total();
+		static size_t get_min_characters_embed();
+
 		static size_t get_max_characters_embed_title();
 		static size_t get_max_characters_embed_description();
 		static size_t get_max_embed_fields();

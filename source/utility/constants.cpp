@@ -19,6 +19,22 @@ size_t mln::constants::get_max_characters_text_id(){
 	return mln::bot_delta::max_text_id_size();
 }
 
+size_t mln::constants::get_min_characters_url() {
+	return 30;
+}
+
+size_t mln::constants::get_max_characters_url() {
+	return 400;
+}
+
+size_t mln::constants::get_min_characters_description() {
+	return 1;
+}
+
+size_t mln::constants::get_max_characters_description() {
+	return 100;
+}
+
 size_t mln::constants::get_min_characters_emoji(){
 	return 1;
 }
@@ -35,8 +51,15 @@ size_t mln::constants::get_max_retrievable_msgs(){
 	return 300;
 }
 
+size_t mln::constants::get_max_characters_modal_component() {
+	return 4000;
+}
+
 size_t mln::constants::get_max_characters_embed_total() {
 	return 6000;
+}
+size_t mln::constants::get_min_characters_embed() {
+	return 1;
 }
 size_t mln::constants::get_max_characters_embed_title() {
 	return 256;

@@ -3,6 +3,7 @@
 
 mln::add_role::add_role(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("add_role", "Give user a role", delta->bot.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to give role to", true))
         .add_option(dpp::command_option(dpp::co_role, "role", "Role to give", true))
         .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast the role addition to the server. Default: false", false)))) {}

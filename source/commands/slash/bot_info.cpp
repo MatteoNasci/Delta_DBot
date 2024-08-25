@@ -4,7 +4,8 @@
 #include <dpp/colors.h>
 
 mln::bot_info::bot_info(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("bot_info", "Send an embed with the bot info!", delta->bot.me.id))) {}
+    std::move(dpp::slashcommand("bot_info", "Send an embed with the bot info!", delta->bot.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands))) {}
 
 dpp::task<void> mln::bot_info::command(const dpp::slashcommand_t& event_data){
     dpp::embed embed = dpp::embed()
