@@ -75,15 +75,15 @@ dpp::task<void> mln::db_update_dump_channel::update_dump(const dpp::slashcommand
 }
 
 dpp::task<void> mln::db_update_dump_channel::help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
-    static const dpp::message s_info = dpp::message{"Information regarding the `/db setup` commands..."}
+    static const dpp::message s_info = dpp::message{"Information regarding the `/db config` commands..."}
         .set_flags(dpp::m_ephemeral)
-        .add_embed(dpp::embed{}.set_description(R"""(The `/db setup` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
+        .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
 
 This set of commands is generally reserved for users with specific permissions.
 
-**Types of setup:**
+**Types of config:**
 
-- **/db setup update_dump_channel**  
+- **/db config update_dump_channel**  
   *Parameters:* channel[text_channel, optional].  
   This command asks for a valid text channel to be used for storage purposes. If not provided, the current dump channel will be unset, and the database will use the channel where the database commands are used as the dump channel.  
   To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  

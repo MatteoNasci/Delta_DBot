@@ -8,6 +8,8 @@
 
 #include <dpp/unicode_emoji.h>
 
+#include <unordered_set>
+
 static const uint64_t s_confirmation_button_timeout{ 60 };
 
 mln::db_delete::db_delete(bot_delta* const delta) : base_db_command(delta), data{.valid_stmt = true} {
@@ -41,7 +43,7 @@ mln::db_delete::db_delete(bot_delta* const delta) : base_db_command(delta), data
     }
 
     //Delete all record of the guild, works only if used by admin
-    res1 = delta->db.save_statement("DELETE FROM storage WHERE guild_id = ?1 RETURNING url;", data.saved_guild);
+    res1 = delta->db.save_statement("DELETE FROM storage WHERE guild_id = ?1 RETURNING url, user_id;", data.saved_guild);
     if (res1 != mln::db_result::ok) {
         delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
         data.valid_stmt = false;
@@ -205,7 +207,7 @@ dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, co
         co_return;
     }
 
-    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, thinking, data.saved_single);
+    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_single, target);
 }
 dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
     const dpp::command_value user_param = event_data.get_parameter("user");
@@ -225,7 +227,7 @@ dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, cons
         co_return;
     }
 
-    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, thinking, data.saved_user);
+    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_user, target);
 }
 dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
     if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
@@ -247,7 +249,7 @@ dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, con
         co_return;
     }
 
-    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, thinking, data.saved_guild);
+    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_guild, 0);
 }
 dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
 
@@ -258,16 +260,29 @@ dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, cons
         co_return;
     }
 
-    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, thinking, data.saved_self);
+    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_self, cmd_data.cmd_usr->user_id);
 }
-
-dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t&, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, size_t stmt) {
+//TODO add changelog as command
+struct db_delete_url_data_t {
+    std::string url;
+    uint64_t user;
+};
+struct db_delete_lists_data_t {
+    std::vector<std::vector<dpp::snowflake>> lists;
+};
+dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, size_t stmt, uint64_t target) {
     //Extract all deleted urls and attempt to delete the original messages
-    std::vector<std::string> urls{};
+    std::vector<db_delete_url_data_t> urls{};
     mln::database_callbacks_t calls{};
-    calls.type_definer_callback = [](void*, int) {return true; };
-    calls.data_adder_callback = [&urls](void*, int, mln::db_column_data_t&& d) {
-        urls.emplace_back(reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)));
+    calls.type_definer_callback = [](void*, int c) {return c == 0; };
+    calls.data_adder_callback = [&urls](void*, int c, mln::db_column_data_t&& d) {
+        if (c == 0) {
+            urls.emplace_back(reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)), 0);
+            return;
+        }
+
+        const size_t index = urls.size() - 1;
+        urls[index].user = static_cast<uint64_t>(std::get<int64_t>(d.data));
         };
 
     mln::db_result res = delta()->db.exec(stmt, calls);
@@ -279,40 +294,118 @@ dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t&, const dpp::inte
     }
 
     const size_t total_urls_to_delete = urls.size();
-    std::map<dpp::snowflake, std::vector<std::vector<dpp::snowflake>>> messages_per_channel_map{};
+    std::unordered_set<uint64_t> visited_guilds{};
+    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash> visited_guild_by_user{};
+    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash> visited_guild_by_channel{};
+    std::map<uint64_t, db_delete_lists_data_t> messages_per_channel_map{};
     size_t malformed_urls = 0;
-    for (const std::string& url : urls) {
+    size_t failed_deletes = 0;
+    for (const db_delete_url_data_t& url : urls) {
         uint64_t url_guild{}, url_channel{}, url_message{};
-        if (!mln::utility::extract_message_url_data(url, url_guild, url_channel, url_message) || url_channel == 0 || url_message == 0) {
+        if (!mln::utility::extract_message_url_data(url.url, url_guild, url_channel, url_message) || url_channel == 0 || url_message == 0 || url_guild == 0) {
             ++malformed_urls;
             delta()->bot.log(dpp::loglevel::ll_warning, "Failed to retrieve data from url for delete bulk messages.");
             continue;
         }
 
-        std::vector<std::vector<dpp::snowflake>>& lists = messages_per_channel_map[url_channel];
-        if (lists.empty()) {
-            lists.emplace_back(std::vector<dpp::snowflake>{});
+        db_delete_lists_data_t& lists = messages_per_channel_map[url_channel];
+        if (lists.lists.empty()) {
+            lists.lists.emplace_back(std::vector<dpp::snowflake>{});
         }
 
-        for (size_t i = lists.size() - 1; i < lists.size(); ++i) {
-            std::vector<dpp::snowflake>& list = lists[i];
+        const auto it = visited_guilds.find(url_guild);
+        if (it == visited_guilds.end()) {
+            visited_guilds.insert(url_guild);
+
+            mln::caches::show_all_cache.remove_element(url_guild);
+        }
+
+        const uint64_t actual_target = url.user != 0 ? url.user : target;
+        if (actual_target != 0) {
+            const auto it2 = visited_guild_by_user.find({ url_guild, actual_target });
+            if (it2 == visited_guild_by_user.end()) {
+                visited_guild_by_user.insert({ url_guild, actual_target });
+
+                mln::caches::show_user_cache.remove_element({ url_guild, actual_target });
+            }
+        }
+
+        const auto it3 = visited_guild_by_channel.find({ url_guild, url_channel });
+        if (it3 == visited_guild_by_channel.end()) {
+            visited_guild_by_channel.insert({ url_guild, url_channel });
+
+            //Retrieve guild data
+            std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(url_guild);
+            if (!guild.has_value()) {
+                guild = co_await mln::caches::get_guild_task(url_guild);
+                if (!guild.has_value()) {
+                    //Error can't find guild
+                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve guild data! guild_id: "
+                        + std::to_string(url_guild));
+                    co_return;
+                }
+            }
+
+            //Retrieve channel data
+            std::optional<std::shared_ptr<const dpp::channel>> channel = mln::caches::get_channel(url_channel, &reply_data);
+            if (!channel.has_value()) {
+                channel = co_await mln::caches::get_channel_task(url_channel);
+                if (!channel.has_value()) {
+                    //Error can't find channel
+                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve channel data! channel_id: "
+                        + std::to_string(url_channel));
+                    co_return;
+                }
+            }
+
+            //Retrieve bot information
+            std::optional<std::shared_ptr<const dpp::guild_member>> bot = mln::caches::get_member({ url_guild, reply_data.command.application_id }, &reply_data);
+            if (!bot.has_value()) {
+                bot = co_await mln::caches::get_member_task({ url_guild, reply_data.command.application_id });
+                if (!bot.has_value()) {
+                    //Error can't find bot
+                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve command bot data! bot id: "
+                        + std::to_string(reply_data.command.application_id));
+                    co_return;
+                }
+            }
+
+            std::optional<dpp::permission> bot_perm = mln::perms::get_computed_permission(*(guild.value()), *(channel.value()), *(bot.value()), &reply_data);
+            if (!bot_perm.has_value()) {
+                bot_perm = co_await mln::perms::get_computed_permission_task(*(guild.value()), *(channel.value()), *(bot.value()), &reply_data);
+                if (!bot_perm.has_value()) {
+                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve bot permission data! bot id: "
+                        + std::to_string(bot.value()->user_id));
+                    co_return;
+                }
+            }
+
+            if (!mln::perms::check_permissions(bot_perm.value(), dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) {
+                ++failed_deletes;
+                delta()->bot.log(dpp::loglevel::ll_warning, "The bot doesn't have the permission to delete bulk a message! Guild: " + std::to_string(url_guild) + ", channel: " + std::to_string(url_channel));
+                continue;
+            }
+        }
+
+        for (size_t i = lists.lists.size() - 1; i < lists.lists.size(); ++i) {
+            std::vector<dpp::snowflake>& list = lists.lists[i];
 
             if (list.size() < mln::constants::get_max_msg_bulk_delete()) {
                 list.emplace_back(url_message);
                 break;
             }
             else {
-                lists.emplace_back(std::vector<dpp::snowflake>{});
+                lists.lists.emplace_back(std::vector<dpp::snowflake>{});
             }
         }
     }
-    //TODO add permission checks for guild and channels (it could be different guilds as well)
-    size_t failed_deletes = 0;
-    for (const std::pair<dpp::snowflake, std::vector<std::vector<dpp::snowflake>>>& map_pair : messages_per_channel_map) {
-        if (map_pair.second.size() == 0) {
+
+    for (const std::pair<uint64_t, db_delete_lists_data_t>& map_pair : messages_per_channel_map) {
+        if (map_pair.second.lists.size() == 0) {
             continue;
         }
-        for (const std::vector<dpp::snowflake>& list : map_pair.second) {
+
+        for (const std::vector<dpp::snowflake>& list : map_pair.second.lists) {
             if (list.size() == 0) {
                 continue;
             }
@@ -334,7 +427,7 @@ dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t&, const dpp::inte
 
     const bool error = failed_deletes != 0 || malformed_urls != 0;
     co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, error ?
-        "Command concluded with some errors, failed to remove all the stored messages related to the deleted records! malformed urls: " + std::to_string(malformed_urls) + ", failed dels: " + std::to_string(failed_deletes) :
+        "Command concluded with some errors, failed to remove all the stored messages related to the deleted records! malformed urls: " + std::to_string(malformed_urls) + ", failed dels: " + std::to_string(failed_deletes) + ", total urls: " + std::to_string(total_urls_to_delete) :
         "Command executed!", { false, dpp::loglevel::ll_debug });
     co_return;
 }

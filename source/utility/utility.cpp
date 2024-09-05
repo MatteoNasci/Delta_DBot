@@ -143,7 +143,7 @@ bool extract_attachment_url(const std::regex& url_regex, const std::string& atta
 }
 dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::shared_ptr<const std::vector<std::string>> text_ptr) {
     static const dpp::message s_msg_template = 
-        dpp::message{"This is the current list of records, use the buttons below to switch the displayed page!"}
+        dpp::message{"This message is displaying paginated information, use the buttons below to switch the displayed page!"}
         .add_component(
             dpp::component{}.set_type(dpp::component_type::cot_action_row)
             .add_component(

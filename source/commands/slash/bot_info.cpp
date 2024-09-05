@@ -1,5 +1,6 @@
 #include "commands/slash/bot_info.h"
 #include "bot_delta.h"
+#include "version.h"
 
 #include <dpp/colors.h>
 
@@ -12,28 +13,9 @@ dpp::task<void> mln::bot_info::command(const dpp::slashcommand_t& event_data){
         .set_color(dpp::colors::sti_blue)
         .set_title("Delta")
         .set_author("Erk_Krea", "https://github.com/MatteoNasci/Delta_DBot", "https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        .set_description("Bot description")
+        .set_description("Bot version: " + std::string(mln::get_version()))
         .set_thumbnail("https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        .add_field(
-            "Regular field title",
-            "Some value here"
-        )
-        .add_field(
-            "Inline field title",
-            "Some value here",
-            true
-        )
-        .add_field(
-            "Inline field title",
-            "Some value here",
-            true
-        )
         .set_image("https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        .set_footer(
-            dpp::embed_footer()
-            .set_text("Some footer text here")
-            .set_icon("https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        )
         .set_timestamp(time(0));
 
     event_data.reply(dpp::message{event_data.command.channel_id, dpp::embed{s_embed}}.set_flags(dpp::m_ephemeral));

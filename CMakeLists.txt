@@ -131,7 +131,8 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/db/db_delete.cpp
             source/commands/slash/db/db_update.cpp
             source/commands/slash/db/db_help.cpp
-            source/commands/slash/db/db_privacy.cpp)
+            source/commands/slash/db/db_privacy.cpp
+            source/commands/slash/changelog.cpp)
 
 add_executable(deploy_delta ${botsrc})
 
@@ -143,7 +144,7 @@ target_compile_definitions(deploy_delta PRIVATE DPP_CORO)
 target_include_directories(deploy_delta PRIVATE "${PROJECT_SOURCE_DIR}/headers/")
 
 find_path(DPP_INCLUDES
-  NAMES dpp
+  NAMES dpp/dpp.h
   PATHS "${dpp_headers_path}/"
 )
 if(DPP_INCLUDE_DIR)

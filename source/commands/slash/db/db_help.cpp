@@ -17,7 +17,8 @@ The main database commands are:
 - `/db select`: A collection of commands that extracts and displays the content of a specific record from the database.
 - `/db update`: A collection of commands that modifies an existing record in the database.
 - `/db delete`: A collection of commands that deletes one or more records from the database and also attempts to remove the stored messages related to the deleted records.
-- `/db setup`: A collection of commands related to database configuration.
+- `/db config`: A collection of commands related to database configuration.
+- `/db privacy`: A collection of commands related to the bot's privacy policy.
 
 Each of these command sets has a `help` variant, providing in-depth information about the respective commands.)"""));
 

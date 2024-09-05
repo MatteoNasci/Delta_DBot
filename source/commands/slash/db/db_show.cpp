@@ -66,7 +66,7 @@ mln::db_init_type_flag mln::db_show::get_requested_initialization_type(db_comman
     return it->second;
 }
 dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, const exec_show_t& stmt_data, const std::optional<std::shared_ptr<const std::vector<std::string>>>& cached_show) {
-    const bool use_cache = cached_show.has_value();//TODO to make this work I need to delete the show element cached element (for both show all and show user) when inserting/deleting/updating descriptions, so that is gets refreshed next show performed
+    const bool use_cache = cached_show.has_value();
 
     //If we found the text data from cache there's no need to execute the SQL query. If not found, then we contact the database (and store the result in cache as well)
     std::shared_ptr<const std::vector<std::string>> records;

@@ -24,14 +24,14 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id)
         //Minimum permission required for using the commands
         .set_default_permissions(dpp::permissions::p_use_application_commands)
-        //Setup command group
-        .add_option(cmd_opt(dpp::co_sub_command_group, "setup", "Collection of commands used to enhance the database features", false)
-            //Setup update_dump_channel command
+        //Config command group
+        .add_option(cmd_opt(dpp::co_sub_command_group, "config", "Collection of commands used to enhance the database features", false)
+            //Config update_dump_channel command
             .add_option(cmd_opt(dpp::co_sub_command, "update_dump_channel", "Updates the dump channel used for this bot in the current server!", false)
                 .add_option(cmd_opt(dpp::co_channel, "channel", "The channel dedicated to this bot.", false)
                     .add_channel_type(dpp::channel_type::CHANNEL_TEXT)))
-            //Setup help command
-            .add_option(cmd_opt(dpp::co_sub_command, "help", "Gives detailed information about the setup group command", false)))
+            //Config help command
+            .add_option(cmd_opt(dpp::co_sub_command, "help", "Gives detailed information about the config group command", false)))
         //Insert command group
         .add_option(cmd_opt(dpp::co_sub_command_group, "insert", "Insert a new record in the database", false)
             //Insert url command
@@ -149,7 +149,7 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
         {"guild", {commands[4], mln::db_command_type::guild}},
         {"help", {commands[4], mln::db_command_type::help}},
     };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_setup_sub_commands{
+    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_config_sub_commands{
         {"update_dump_channel", {commands[1], mln::db_command_type::update_dump_channel}},
         {"help", {commands[1], mln::db_command_type::help}},
     };
@@ -170,7 +170,7 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
     };
     static const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>>&> s_allowed_primary_sub_commands{
         {"insert", s_allowed_insert_sub_commands},
-        {"setup", s_allowed_setup_sub_commands},
+        {"config", s_allowed_config_sub_commands},
         {"select", s_allowed_select_sub_commands},
         {"show", s_allowed_show_sub_commands},
         {"delete", s_allowed_delete_sub_commands},

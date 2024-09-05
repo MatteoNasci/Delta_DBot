@@ -3,7 +3,7 @@
 
 mln::db_privacy::db_privacy(bot_delta* const delta) : base_db_command(delta) {
 }
-
+//TODO remove bot_delta.h as much as possible, remove how many classes have its pointer as well
 dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking)
 {
     static const dpp::message s_info = dpp::message{ "**Privacy Policy**" }
@@ -38,7 +38,7 @@ You have the right to request the deletion of your information. If you wish to r
 - **For Discord Server Admins: To remove all records related to your server:**
   1. Ensure no one in your guild can use the bot's commands.
   2. Use the command `/db delete guild` in a channel of the guild you wish to remove from the database.
-  3. Use the command `/db setup update_dump_channel` without specifying the channel parameter.
+  3. Use the command `/db config update_dump_channel` without specifying the channel parameter.
   4. Remove the bot from your guild.
 
 - **For Users: To remove all your records from a specific Discord server:**

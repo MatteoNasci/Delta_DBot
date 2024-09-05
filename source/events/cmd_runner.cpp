@@ -8,6 +8,7 @@
 #include "commands/slash/db/db.h"
 #include "commands/slash/help.h"
 #include "commands/slash/report.h"
+#include "commands/slash/changelog.h"
 #include "bot_delta.h"
 
 #include <dpp/dispatcher.h>
@@ -40,6 +41,9 @@ void mln::cmd_runner::attach_event(mln::bot_delta* const delta){
     actions.emplace(ptr->get_command().name, std::move(ptr));
 
     ptr = std::make_unique<mln::report>(mln::report(delta));
+    actions.emplace(ptr->get_command().name, std::move(ptr));
+
+    ptr = std::make_unique<mln::changelog>(mln::changelog(delta));
     actions.emplace(ptr->get_command().name, std::move(ptr));
 
     delta->bot.on_slashcommand([this](const dpp::slashcommand_t& event) -> dpp::task<void> {

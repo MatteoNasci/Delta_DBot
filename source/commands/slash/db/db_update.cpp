@@ -115,6 +115,10 @@ dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_dat
         co_return;
     }
 
+    //Update caches
+    mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
+    mln::caches::show_user_cache.remove_element({ cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id });
+
     co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
         "Description updated!", {false, dpp::loglevel::ll_debug});
 }
