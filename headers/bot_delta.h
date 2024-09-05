@@ -9,6 +9,7 @@
 #include "database/database_handler.h"
 
 #include <dpp/cluster.h>
+#include <dpp/timer.h>
 
 #include <string>
 #include <optional>
@@ -55,6 +56,9 @@ namespace mln {
 		const cmd_runner& get_cmd_runner() const;
 		const cmd_ctx_runner& get_cmd_ctx_runner() const;
 	private:
+		dpp::timer db_optimize_timer;
+
+		size_t saved_optimize_db;
 		size_t saved_select_all_query;
 		size_t saved_select_all_gp_query;
 

@@ -66,11 +66,11 @@ namespace mln {
 		static cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, composite_tuple_hash> show_user_cache;
 		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_user(const std::tuple<uint64_t, uint64_t>& guild_user_ids);
 
-		static cache<uint64_t, dpp::guild, false, 400, 30, 0.7, true> guild_cache;
+		static cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> guild_cache;
 		static std::optional<std::shared_ptr<const dpp::guild>> get_guild(uint64_t guild_id);
 		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_task(uint64_t guild_id);
 		
-		static cache<uint64_t, dpp::channel, false, 2500, 300, 0.7, true> channel_cache;
+		static cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> channel_cache;
 		static std::optional<std::shared_ptr<const dpp::channel>> get_channel(uint64_t channel_id, const dpp::interaction_create_t* event_data);
 		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_task(uint64_t channel_id);
 

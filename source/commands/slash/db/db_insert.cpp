@@ -347,6 +347,8 @@ Attempting to insert a new record using a name that is already being used by ano
 
 If a dump channel has been set for the current server, all the stored records will be kept in the dump channel for storage purposes.
 
+Currently only a total of roughly 200 MB size for the attachments is supported, attempting to store a bigger total file size will likely result in an error.
+
 Only ASCII printable characters are accepted as input for the `name` and `description` parameters.
 
 **Types of insert:**
@@ -376,7 +378,7 @@ Only ASCII printable characters are accepted as input for the `name` and `descri
     event_data.reply(s_info);
     co_return;
 }
-
+//TODO add limits to api requests/uploads/ram usage
 dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const std::tuple<std::string, std::string>& url_name, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
     const bool create_msg_permission = mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, 
         dpp::permissions::p_send_messages | dpp::permissions::p_view_channel | dpp::permissions::p_attach_files);

@@ -12,14 +12,14 @@ size_t mln::bot_delta::max_text_id_size() {
 size_t mln::bot_delta::min_text_id_size() {
     return 1;
 }
-//TODO once the bot db gets big it might be usefull to use a cache instead of always interrogating the database, same for retrieved text messages (where i have to do an api call to get that single message for its contents)
+
 void mln::bot_delta::setup_db() {
     mln::db_result res = db.open_connection("dbs/main.db");
     if (res != mln::db_result::ok) {
         std::string err_msg = "An error occurred while connecting to database: " + mln::database_handler::get_name_from_result(res) + ". " + db.get_last_err_msg();
         throw std::exception(err_msg.c_str());
     }
-    //TODO also make "PRAGMA optimize;" run either once per day or when the db has changed a lot (maybe even more frequently than 1 day)
+
     res = db.exec("PRAGMA foreign_keys = ON;PRAGMA optimize=0x10002;", mln::database_callbacks_t());
     if (mln::database_handler::is_exec_error(res)) {
         std::string err_msg = "An error occurred while executing pragmas: " + mln::database_handler::get_name_from_result(res) + ". " + db.get_last_err_msg();
@@ -57,6 +57,24 @@ void mln::bot_delta::setup_db() {
         std::string err_msg = "An error occurred while saving the select all guild profile stmt: " + mln::database_handler::get_name_from_result(res) + ". " + db.get_last_err_msg();
         throw std::exception(err_msg.c_str());
     }
+
+    res = db.save_statement("PRAGMA optimize;", saved_optimize_db);
+    if (res != mln::db_result::ok) {
+        std::string err_msg = "An error occurred while saving the optimize db stmt: " + mln::database_handler::get_name_from_result(res) + ". " + db.get_last_err_msg();
+        throw std::exception(err_msg.c_str());
+    }
+
+    static const uint64_t s_optimize_timer_seconds{ 60 * 60 * 24 };
+    db_optimize_timer = bot.start_timer([this](dpp::timer timer) {
+        bot.log(dpp::loglevel::ll_debug, "Optimizing database...");
+        mln::db_result res = db.exec(saved_optimize_db, mln::database_callbacks_t());
+        if (mln::database_handler::is_exec_error(res)) {
+            bot.log(dpp::loglevel::ll_error, "An error occurred while optimizing database: " + mln::database_handler::get_name_from_result(res) + ". " + db.get_last_err_msg());
+        }
+        else {
+            bot.log(dpp::loglevel::ll_debug, "Database optimized!");
+        }
+        }, s_optimize_timer_seconds);
 
     bot.log(dpp::loglevel::ll_debug, "Main db successfully created database table and saved queries!");
 }
@@ -115,21 +133,23 @@ mln::bot_delta::bot_delta() :
             .channel_policy = dpp::cache_policy_setting_t::cp_none,
             .guild_policy = dpp::cache_policy_setting_t::cp_none,
         }),
-        dev_id(dpp::snowflake(DISCORD_DEV_ID)),
-        is_dev_id_valid(
-        #ifdef MLN_DB_DISCORD_DEV_ID
-            true),
+        dev_id{ dpp::snowflake{DISCORD_DEV_ID} },
+        is_dev_id_valid{
+#ifdef MLN_DB_DISCORD_DEV_ID
+            true},
 #else //MLN_DB_DISCORD_DEV_ID
-            false),
+    false},
 #endif //MLN_DB_DISCORD_DEV_ID
-    registered_new_cmds(false),
-    db(), 
-    saved_select_all_query(),
-    saved_select_all_gp_query(),
-    cmds(), 
-    ctxs(), 
-    readys(),
-    guild_creates()
+    registered_new_cmds{false},
+    db{},
+    db_optimize_timer{},
+    saved_optimize_db{},
+    saved_select_all_query{},
+    saved_select_all_gp_query{},
+    cmds{},
+    ctxs{},
+    readys{},
+    guild_creates{}
 {
     
 }
@@ -145,6 +165,8 @@ std::string mln::bot_delta::start(bool register_cmds) {
 }
 //TODO manage intents permissions as well
 bool mln::bot_delta::close() {
+    bot.stop_timer(db_optimize_timer);
+
     mln::caches::cleanup();
 
     return db.close_connection() == mln::db_result::ok;

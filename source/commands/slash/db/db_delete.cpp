@@ -262,7 +262,6 @@ dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, cons
 
     co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_self, cmd_data.cmd_usr->user_id);
 }
-//TODO add changelog as command
 struct db_delete_url_data_t {
     std::string url;
     uint64_t user;
