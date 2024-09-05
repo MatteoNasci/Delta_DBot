@@ -82,3 +82,18 @@ size_t mln::constants::get_max_characters_embed_footer() {
 size_t mln::constants::get_max_characters_embed_author() {
 	return 256;
 }
+size_t mln::constants::get_max_embeds_in_msg() {
+	return 10;
+}
+
+size_t mln::constants::get_min_msg_bulk_delete(){
+	return 2;
+}
+
+size_t mln::constants::get_max_msg_bulk_delete(){
+	return 100;
+}
+
+long long int mln::constants::get_big_files_request_timeout(){
+	return long long int{ 60 * 25 };
+}

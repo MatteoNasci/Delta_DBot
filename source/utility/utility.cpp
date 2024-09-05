@@ -4,6 +4,7 @@
 #include <dpp/colors.h>
 #include <dpp/channel.h>
 #include <dpp/cache.h>
+#include <dpp/unicode_emoji.h>
 
 #include <regex>
 
@@ -29,292 +30,6 @@ mln::database_callbacks_t mln::utility::get_any_results_callback(bool* found) {
     return copy;
 }
 
-dpp::task<std::tuple<dpp::channel*, dpp::channel>> mln::utility::get_channel(const dpp::interaction_create_t& event_data, const dpp::snowflake& channel_id, dpp::cluster& bot) {
-    if (event_data.command.id == 0) {
-        co_return{nullptr, {}};
-    }
-
-    auto it = event_data.command.resolved.channels.find(channel_id);
-    if (it != event_data.command.resolved.channels.end()) {
-        dpp::channel channel = it->second;
-        if (channel.id != 0) {
-            co_return{nullptr, std::move(channel)};
-        }
-    }
-
-    co_return co_await mln::utility::get_channel(channel_id, bot);
-}
-dpp::task<std::tuple<dpp::channel*, dpp::channel>> mln::utility::get_channel(const dpp::snowflake& channel_id, dpp::cluster& bot) {
-    if (channel_id == 0) {
-        co_return {nullptr, {}};
-    }
-
-    dpp::channel* channel = dpp::find_channel(channel_id);
-    if (channel != nullptr && channel->id != 0) {
-        co_return {channel, {}};
-    }
-
-    const dpp::confirmation_callback_t result = co_await bot.co_channel_get(channel_id);
-    if (result.is_error()) {
-        bot.log(dpp::loglevel::ll_warning, "Failed to retrieve channel, even from API! Error: " + result.get_error().human_readable);
-        co_return {nullptr, {}};
-    }
-    
-    co_return {nullptr, {std::move(result.get<dpp::channel>())}};
-}
-dpp::task<std::tuple<dpp::guild*, dpp::guild>> mln::utility::get_guild(const dpp::interaction_create_t& event_data, dpp::cluster& bot) {
-    if (event_data.command.id == 0) {
-        co_return {nullptr, {}};
-    }
-
-    co_return co_await mln::utility::get_guild(event_data.command.guild_id, bot);
-}
-dpp::task<std::tuple<dpp::guild*, dpp::guild>> mln::utility::get_guild(const dpp::snowflake& guild_id, dpp::cluster& bot) {
-    if (guild_id == 0) {
-        co_return {nullptr, {}};
-    }
-
-    dpp::guild* guild = dpp::find_guild(guild_id);
-    if (guild != nullptr && guild->id != 0) {
-        co_return {guild, {}};
-    }
-    
-    const dpp::confirmation_callback_t result = co_await bot.co_guild_get(guild_id);
-    if (result.is_error()) {
-        bot.log(dpp::loglevel::ll_warning, "Failed to retrieve guild, even from API! Error: " + result.get_error().human_readable);
-        co_return{nullptr, {}};
-    }
-
-    co_return {nullptr, {std::move(result.get<dpp::guild>())}};
-}
-dpp::task<std::optional<dpp::guild_member>> mln::utility::get_member(const dpp::interaction_create_t& event_data, const dpp::guild* const guild, const dpp::snowflake& user_id, dpp::cluster& bot) {
-    if (event_data.command.id == 0 || user_id == 0) {
-        co_return std::nullopt;
-    }
-
-    const auto it = event_data.command.resolved.members.find(user_id);
-    if (it != event_data.command.resolved.members.end()) {
-        co_return it->second;
-    }
-
-    co_return co_await mln::utility::get_member(guild, user_id, bot);
-}
-dpp::task<std::optional<dpp::guild_member>> mln::utility::get_member(const dpp::interaction_create_t& event_data, const dpp::snowflake& user_id, dpp::cluster& bot) {
-    if (event_data.command.id == 0 || user_id == 0) {
-        co_return std::nullopt;
-    }
-
-    const auto it = event_data.command.resolved.members.find(user_id);
-    if (it != event_data.command.resolved.members.end()) {
-        co_return it->second;
-    }
-
-    std::tuple<dpp::guild*, dpp::guild> guild_pair = co_await mln::utility::get_guild(event_data, bot);
-    dpp::guild* ptr = std::get<0>(guild_pair);
-    if (ptr == nullptr) {
-        ptr = &(std::get<1>(guild_pair));
-    }
-
-    co_return co_await mln::utility::get_member(ptr, user_id, bot);
-}
-dpp::task<std::optional<dpp::guild_member>> mln::utility::get_member(const dpp::guild* const guild, const dpp::snowflake& user_id, dpp::cluster& bot) {
-    if (guild == nullptr || guild->id == 0 || user_id == 0) {
-        co_return std::nullopt;
-    }
-
-    const auto it_usr = guild->members.find(user_id);
-    if (it_usr != guild->members.end()) {
-
-        dpp::guild_member user = it_usr->second;
-        if (user.user_id != 0) {
-            co_return std::move(user);
-        }
-    }
-
-    const dpp::confirmation_callback_t result = co_await bot.co_guild_get_member(guild->id, user_id);
-    
-    if (result.is_error()) {
-        bot.log(dpp::loglevel::ll_warning, "Failed to retrieve guild member, even from API! Error: " + result.get_error().human_readable);
-        co_return std::nullopt;
-    }
-
-    co_return std::move(result.get<dpp::guild_member>());
-}
-
-dpp::task<std::tuple<std::optional<dpp::guild_member>, std::optional<dpp::guild_member>>> mln::utility::get_members(const dpp::interaction_create_t& event_data, dpp::cluster& bot) {
-    if (event_data.command.id == 0) {
-        co_return {std::nullopt, std::nullopt};
-    }
-
-    std::tuple<dpp::guild*, dpp::guild> guild = co_await mln::utility::get_guild(event_data, bot);
-
-    dpp::guild* ptr = std::get<0>(guild);
-    if (ptr == nullptr) {
-        ptr = &std::get<1>(guild);
-    }
-
-    co_return {co_await mln::utility::get_member(ptr, event_data.command.usr.id, bot), 
-        co_await mln::utility::get_member(ptr, event_data.command.application_id, bot)};
-}
-
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<dpp::guild_member*>& users, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const dpp::guild_member* member : users) {
-        if (member == nullptr || member->user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(*member, *channel), permissions_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<dpp::guild_member*>& users, dpp::permissions permission_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const dpp::guild_member* member : users) {
-        if (member == nullptr || member->user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(*member, *channel), permission_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const dpp::guild_member* user, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (guild == nullptr || channel == nullptr || user == nullptr || user->user_id == 0) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild->permission_overwrites(*user, *channel), permissions_to_check);
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const dpp::guild_member* user, dpp::permissions permission_to_check) {
-    if (guild == nullptr || channel == nullptr || user == nullptr || user->user_id == 0) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild->permission_overwrites(*user, *channel), permission_to_check);
-}
-
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<dpp::guild_member>& users, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const dpp::guild_member& member : users) {
-        if (member.user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(member, *channel), permissions_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<dpp::guild_member>& users, dpp::permissions permission_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const dpp::guild_member& member : users) {
-        if (member.user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(member, *channel), permission_to_check)) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const dpp::guild_member& user, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (guild == nullptr || channel == nullptr || user.user_id == 0) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild->permission_overwrites(user, *channel), permissions_to_check);
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const dpp::guild_member& user, dpp::permissions permission_to_check) {
-    if (guild == nullptr || channel == nullptr || user.user_id == 0) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild->permission_overwrites(user, *channel), permission_to_check);
-}
-
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<std::optional<dpp::guild_member>>& users, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const std::optional<dpp::guild_member>& opt_member : users) {
-        if (!opt_member.has_value() || opt_member->user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(*opt_member, *channel), permissions_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::vector<std::optional<dpp::guild_member>>& users, dpp::permissions permission_to_check) {
-    if (guild == nullptr || channel == nullptr || guild->id == 0 || channel->id == 0) {
-        return false;
-    }
-
-    for (const std::optional<dpp::guild_member>& opt_member : users) {
-        if (!opt_member.has_value() || opt_member->user_id == 0 || !mln::utility::check_permissions(guild->permission_overwrites(*opt_member, *channel), permission_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::optional<dpp::guild_member>& user, const std::vector<dpp::permissions>& permissions_to_check) {
-    if (!user.has_value()) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild, channel, *user, permissions_to_check);
-}
-bool mln::utility::check_permissions(const dpp::guild* guild, const dpp::channel* channel, const std::optional<dpp::guild_member>& user, dpp::permissions permission_to_check) {
-    if (!user.has_value()) {
-        return false;
-    }
-
-    return mln::utility::check_permissions(guild, channel, *user, permission_to_check);
-}
-
-
-bool mln::utility::check_permissions(const std::vector<dpp::permission>& permissions, const std::vector<dpp::permissions>& permissions_to_check) {
-
-    for (const dpp::permissions& flag_to_check : permissions_to_check) {
-        for (const dpp::permission& perm : permissions) {
-            if (!perm.can(flag_to_check)) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(const std::vector<dpp::permission>& permissions, dpp::permissions permission_to_check) {
-    for (const dpp::permission& perm : permissions) {
-        if (!perm.can(permission_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(dpp::permission permission, const std::vector<dpp::permissions>& permissions_to_check) {
-    for (const dpp::permissions& flag_to_check : permissions_to_check) {
-        if (!permission.can(flag_to_check)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-bool mln::utility::check_permissions(dpp::permission permission, dpp::permissions permission_to_check) {
-    return permission.can(permission_to_check);
-}
-
 dpp::task<void> mln::utility::co_conclude_thinking_response(dpp::async<dpp::confirmation_callback_t>& thinking, const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& to_respond, const std::tuple<bool, dpp::loglevel>& log_always) {
     dpp::confirmation_callback_t confirmation = co_await thinking;
     bool logged = false;
@@ -333,17 +48,20 @@ dpp::task<void> mln::utility::co_conclude_thinking_response(dpp::async<dpp::conf
         bot.log(std::get<1>(log_always), to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ".");
     }
 }
-dpp::task<void> mln::utility::co_conclude_thinking_response(std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& to_respond, const std::tuple<bool, dpp::loglevel>& log_always) {
+dpp::task<void> mln::utility::co_conclude_thinking_response(std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& to_respond, const std::tuple<bool, dpp::loglevel>& log_always, bool default_reply_behaviour) {
     bool logged = false;
-    if (thinking.has_value()) {
+    const bool valid_thinking = thinking.has_value();
+    if (valid_thinking) {
         dpp::confirmation_callback_t confirmation = co_await thinking.value();
+        thinking = std::nullopt;
         if (confirmation.is_error()) {
             bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed thinking confirmation : " + confirmation.get_error().human_readable);
             logged = true;
         }
     }
 
-    dpp::confirmation_callback_t confirmation = co_await event_data.co_edit_response(to_respond);
+    dpp::confirmation_callback_t confirmation = (!default_reply_behaviour || valid_thinking) ? co_await event_data.co_edit_response(to_respond) : co_await event_data.co_reply(to_respond);
+
     if (confirmation.is_error()) {
         bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed edit response confirmation : " + confirmation.get_error().human_readable);
         logged = true;
@@ -423,13 +141,273 @@ bool extract_attachment_url(const std::regex& url_regex, const std::string& atta
 
     return valid_results;
 }
-dpp::job mln::utility::manage_paginated_embed(dpp::interaction_create_t event_data, dpp::cluster* bot, const std::shared_ptr<std::vector<std::string>> text_ptr, uint64_t time_limit_seconds) {
-    event_data.edit_response("Processing the data, please wait...");
+dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::shared_ptr<const std::vector<std::string>> text_ptr) {
+    static const dpp::message s_msg_template = 
+        dpp::message{"This is the current list of records, use the buttons below to switch the displayed page!"}
+        .add_component(
+            dpp::component{}.set_type(dpp::component_type::cot_action_row)
+            .add_component(
+                dpp::component{}
+                .set_label("first page")
+                .set_type(dpp::component_type::cot_button)
+                .set_emoji(dpp::unicode_emoji::rewind)
+                .set_style(dpp::component_style::cos_primary))
+            .add_component(
+                dpp::component{}
+                .set_label("prev page")
+                .set_type(dpp::component_type::cot_button)
+                .set_emoji(dpp::unicode_emoji::arrow_backward)
+                .set_style(dpp::component_style::cos_primary))
+            .add_component(
+                dpp::component{}
+                .set_label("next page")
+                .set_type(dpp::component_type::cot_button)
+                .set_emoji(dpp::unicode_emoji::arrow_forward)
+                .set_style(dpp::component_style::cos_primary))
+            .add_component(
+                dpp::component{}
+                .set_label("last page")
+                .set_type(dpp::component_type::cot_button)
+                .set_emoji(dpp::unicode_emoji::fast_forward)
+                .set_style(dpp::component_style::cos_primary))
+    );
 
-    std::vector<dpp::message> messages{};
-    //There's a limit of 10 embeds per message, if more are needed just use several msgs I guess
-    //Prepare all the embeds beforehand, then use the when_any stuff for the reaction pagine behavior.
-    //I'm gonna need embeds count
+    if (data.bot == nullptr || data.token.empty()) {
+        std::cerr << "Error while executing paginated embed job, no cluster or token found!\n";
+        co_return;
+    }
+    dpp::cluster& bot = *(data.bot);
+    if (data.channel_id == 0 || data.guild_id == 0) {
+        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, no guild_id or channel_id found!");
+        co_return;
+    }
+
+    if (data.time_limit_seconds == 0) {
+        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the time_limit_seconds cannot be == 0!");
+        bot.interaction_response_edit(data.token,
+            dpp::message{"Error while executing paginated embed job, the time_limit_seconds cannot be == 0!"}
+            .set_guild_id(data.guild_id)
+            .set_channel_id(data.channel_id));
+        co_return;
+    }
+
+    if (!text_ptr || text_ptr->size() == 0) {
+        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is either invalid or empty!");
+        bot.interaction_response_edit(data.token,
+            dpp::message{"Error while executing paginated embed job, the given text list is either invalid or empty!"}
+            .set_guild_id(data.guild_id)
+            .set_channel_id(data.channel_id));
+        co_return;
+    }
+
+    dpp::async<dpp::confirmation_callback_t> processing = bot.co_interaction_response_edit(data.token,
+        dpp::message{"Processing the data, please wait..."}
+        .set_guild_id(data.guild_id)
+        .set_channel_id(data.channel_id));
+
+    std::vector<dpp::message> msgs{};
+    msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.guild_id).set_channel_id(data.channel_id));
+
+    dpp::embed current_embed{};
+    const std::vector<std::string>& input_strings = *text_ptr;
+    size_t current_size = 0;
+    size_t current_msgs_index = 0;
+    const size_t max_desc_size = std::min(data.text_limit, mln::constants::get_max_characters_embed_description());
+    //Fill the msgs array with all the msgs required to display all the input text
+    for (const std::string& input : input_strings) {
+        if (input.size() == 0) {
+            bot.log(dpp::loglevel::ll_warning, "Found empty string while creating paginated embeds!");
+            continue;
+        }
+
+        //The +3 refers to the "\n\n" added to the input.
+        const size_t new_string_size = input.size() + 3;
+
+        if (new_string_size > max_desc_size) {
+            bot.log(dpp::loglevel::ll_warning, "Found string that exceeds the max char limits while creating paginated embeds!");
+            continue;
+        }
+
+        const bool exceeded_embed_limit = (current_size + new_string_size > max_desc_size);
+        //If the new string exceeds the remaining text space, submit embed to message (and, if required, submit msg to msg list) and prepare new one. 
+        if (exceeded_embed_limit) {
+            msgs[current_msgs_index].add_embed(current_embed);
+            current_embed = dpp::embed{};
+
+            ++current_msgs_index;
+            msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.guild_id).set_channel_id(data.channel_id));
+
+            current_size = 0;
+        }
+
+        //Add new string to embed and update size counter
+        current_embed.description += input + "\n\n";
+        current_size += new_string_size;
+    }
+
+    if (current_size > 0) {
+        msgs[current_msgs_index].add_embed(current_embed);
+    }
+
+    //If only 1 msg present and embeds is empty (for example when all input strings are empty), return an error
+    if (msgs.size() == 1 && msgs[current_msgs_index].embeds.size() == 0) {
+        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is filled with empty strings!");
+        bot.interaction_response_edit(data.token,
+            dpp::message{"Error while executing paginated embed job, the given text list is empty! Internal error."}
+            .set_guild_id(data.guild_id)
+            .set_channel_id(data.channel_id));
+        co_return;
+    }
+
+    const std::string base_id{std::to_string(data.event_id)};
+    const std::array<std::string, 4> button_ids{base_id + "L", base_id + "l", base_id + "r", base_id + "R"};
+    const bool disable_buttons = msgs.size() <= 1;
+    size_t index = 1;
+    for (dpp::message& m : msgs) {
+        m.content += " Page " + std::to_string(index++) + "/" + std::to_string(msgs.size());
+
+        dpp::component& c = m.components[0];
+
+        c.components[0].custom_id = button_ids[0];
+        c.components[0].disabled = disable_buttons;
+
+        c.components[1].custom_id = button_ids[1];
+        c.components[1].disabled = disable_buttons;
+
+        c.components[2].custom_id = button_ids[2];
+        c.components[2].disabled = disable_buttons;
+
+        c.components[3].custom_id = button_ids[3];
+        c.components[3].disabled = disable_buttons;
+    }
+
+    //If only one message, skip pagination and just display the message
+    if (msgs.size() == 1) {
+        bot.interaction_response_edit(data.token, msgs[0]);
+        co_return;
+    }
+
+    //Manage the pages by switching between them (if needed).
+    current_msgs_index = 1;
+    size_t next_msgs_index = 0;
+    dpp::button_click_t button_data{};
+    button_data.command.id = 0;
+    while (true) {
+        if (current_msgs_index != next_msgs_index) {
+            current_msgs_index = next_msgs_index;
+
+            co_await bot.co_interaction_response_edit(data.token, msgs[current_msgs_index]);
+        }
+
+        if (button_data.command.id != 0) {
+            //Positive reply to the button press
+            co_await button_data.co_reply();
+        }
+
+        const auto& result = co_await dpp::when_any{
+            bot.co_sleep(data.time_limit_seconds),
+            bot.on_button_click.when([&button_ids](const dpp::button_click_t& event_data) {
+                for (const std::string s : button_ids) {
+                    if (s == event_data.custom_id) {
+                        return true;
+                    }
+                }
+                return false;
+                })};
+
+        //If the timer run out return an error
+        if (result.index() == 0) {
+            bot.interaction_response_edit(data.token, dpp::message{"Too much time has passed since the last interaction, the command execution has terminated"});
+            co_return;
+        }
+
+        //If an exception occurred return an error
+        if (result.is_exception()) {
+            bot.interaction_response_edit(data.token, dpp::message{"An unknown error occurred!"});
+            co_return;
+        }
+
+        //It was suggested to copy the event from documentation of ::when
+        button_data = result.get<1>();
+        if (button_data.cancelled) {
+            bot.interaction_response_edit(data.token, dpp::message{"The event was cancelled!"});
+            co_return;
+        }
+
+        if (button_data.custom_id == button_ids[0]) {
+            next_msgs_index = 0;
+        } else if (button_data.custom_id == button_ids[1]) {
+            if (next_msgs_index != 0) {
+                --next_msgs_index;
+            }
+        } else if (button_data.custom_id == button_ids[2]) {
+            if (next_msgs_index != msgs.size() - 1) {
+                ++next_msgs_index;
+            }
+        } else if (button_data.custom_id == button_ids[3]) {
+            next_msgs_index = msgs.size() - 1;
+        } else {
+            bot.interaction_response_edit(data.token, dpp::message{"Invalid button id found, internal error!"});
+            co_return;
+        }
+
+    }
 
     co_return;
+}
+
+bool mln::utility::is_ascii(const std::string& text) {
+    return mln::utility::is_ascii(text.c_str());
+}
+bool mln::utility::is_ascii(const char* const text) {
+    return mln::utility::is_ascii(reinterpret_cast<const unsigned char* const>(text));
+}
+bool mln::utility::is_ascii(const unsigned char* const text) {
+    static const unsigned char bit_to_check = (1 << 8);
+    for (size_t i = 0;;++i) {
+        const unsigned char c = text[i];
+        if (c == '\0') {
+            break;
+        }
+        if (c & bit_to_check) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool mln::utility::is_ascii_printable(const std::string& text) {
+    return mln::utility::is_ascii_printable(text.c_str());
+}
+bool mln::utility::is_ascii_printable(const char* const text) {
+    return mln::utility::is_ascii_printable(reinterpret_cast<const unsigned char* const>(text));
+}
+bool mln::utility::is_ascii_printable(const unsigned char* const text) {
+    static const unsigned char min_limit = 32;
+    static const unsigned char max_limit = 126;
+    for (size_t i = 0;;++i) {
+        const unsigned char c = text[i];
+        if (c == '\0') {
+            break;
+        }
+        if (c < min_limit || c > max_limit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<dpp::snowflake> mln::utility::extract_emojis(const std::string& content) {
+    static const std::regex s_custom_emoji_regex("<a?:\\w+:(\\d+)>");
+    std::vector<dpp::snowflake> result{};
+    std::smatch matches;
+
+    std::string to_check = content;
+    while (std::regex_search(to_check, matches, s_custom_emoji_regex)) {
+        result.push_back(std::stoull(matches[1].str()));
+
+        to_check = matches.suffix().str();
+    }
+
+    return result;
 }

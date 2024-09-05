@@ -2,6 +2,8 @@
 #include "database/database_handler.h"
 #include "bot_delta.h"
 #include "utility/utility.h"
+#include "utility/caches.h"
+#include "utility/perms.h"
 
 mln::db_update_dump_channel::db_update_dump_channel(bot_delta* const delta) : base_db_command(delta),
 saved_stmt(), saved_param_guild(), saved_param_channel(), valid_stmt(true) {
@@ -23,7 +25,7 @@ saved_stmt(), saved_param_guild(), saved_param_channel(), valid_stmt(true) {
 mln::db_init_type_flag mln::db_update_dump_channel::get_requested_initialization_type(db_command_type cmd) {
     static const std::unordered_map<db_command_type, db_init_type_flag> s_mapped_initialization_types{
         {db_command_type::update_dump_channel, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
-        {db_command_type::help, db_init_type_flag::cmd_data},
+        {db_command_type::help, db_init_type_flag::none},
     };
 
     const auto it = s_mapped_initialization_types.find(cmd);
@@ -40,10 +42,11 @@ dpp::task<void> mln::db_update_dump_channel::update_dump(const dpp::slashcommand
         channel_id = std::get<dpp::snowflake>(channel_param);
     }
 
-    const std::optional<uint64_t> opt_cached_channel = delta()->dump_channels_cache.get_element(cmd_data.cmd_guild->id);
-    if (opt_cached_channel.has_value()) {
-        if (opt_cached_channel.value() == channel_id) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Channel found in cache. The given channel_id is already set as the dump channel!");
+    std::optional<uint64_t> opt_channel = mln::caches::dump_channels_cache.get_element(cmd_data.cmd_guild->id);
+
+    if (opt_channel.has_value()) {
+        if (opt_channel.value() == channel_id) {
+            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Channel found in cache. The given channel_id is already set as the dump channel!", {false, dpp::loglevel::ll_debug});
             co_return;
         }
     }
@@ -61,14 +64,13 @@ dpp::task<void> mln::db_update_dump_channel::update_dump(const dpp::slashcommand
 
     std::string msg{};
     mln::db_result res = delta()->db.exec(saved_stmt, calls);
-    if (res != mln::db_result::ok || !db_success) {
-        msg = (res == mln::db_result::ok && !db_success ? "Failed to update the dump channel, either no record found in the main database with the given guild id or you are not allowed to modify it!" : "Failed to update the dump channel, internal error!");
-        delta()->dump_channels_cache.remove_element(cmd_data.cmd_guild->id);
+    if (mln::database_handler::is_exec_error(res) || !db_success) {
+        msg = (!mln::database_handler::is_exec_error(res) && !db_success ? "Failed to update the dump channel, either no record found in the main database with the given guild id or you are not allowed to modify it!" : "Failed to update the dump channel, internal error!");
+        mln::caches::dump_channels_cache.remove_element(cmd_data.cmd_guild->id);
     } else {
         msg = ("Dump channel updated!");
-        delta()->dump_channels_cache.add_element(cmd_data.cmd_guild->id, channel_id);
+        mln::caches::dump_channels_cache.add_element(cmd_data.cmd_guild->id, channel_id);
     }
-
     co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, std::move(msg), {false, dpp::loglevel::ll_debug});
 }
 
@@ -102,6 +104,11 @@ dpp::task<void> mln::db_update_dump_channel::command(const dpp::slashcommand_t& 
     if (it_func == s_allowed_subcommands.end()) {
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
             "Failed command, the given sub_command is not supported!");
+        co_return;
+    }
+
+    if (cmd_data.cmd_usr && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed database operation, admin permission is required to access this group command!");
         co_return;
     }
     

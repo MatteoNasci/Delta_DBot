@@ -29,7 +29,7 @@ dpp::task<void> mln::insert_guild_db::command(const dpp::guild_create_t& event_d
     }
     
     res = delta()->db.exec(saved_insert_guild_query, mln::database_callbacks_t());
-    if (res != mln::db_result::ok) {
+    if (mln::database_handler::is_exec_error(res)) {
         delta()->bot.log(dpp::loglevel::ll_error, "Failed to execute insert guild " + std::to_string(guild_id) + " stmt! " + mln::database_handler::get_name_from_result(res) + ". " + delta()->db.get_last_err_msg());
     }
 }

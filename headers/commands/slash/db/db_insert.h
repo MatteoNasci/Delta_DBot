@@ -35,7 +35,7 @@ namespace mln {
 		dpp::task<void> command_help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking);
 
 		dpp::task<bool> execute_query(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& current_event, const db_cmd_data_t& cmd_data, const std::string& url, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking);
-		dpp::task<void> manage_attach_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const std::string& url, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking);
+		dpp::task<void> manage_attach_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const std::tuple<std::string, std::string>& url_name, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking);
 		dpp::task<void> manage_msg_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const msg_url_t& url_ids, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking);
 	};
 }

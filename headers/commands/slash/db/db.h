@@ -1,6 +1,6 @@
 #pragma once
-#ifndef H_MLN_DB_SHOW_H
-#define H_MLN_DB_SHOW_H
+#ifndef H_MLN_DB_DB_H
+#define H_MLN_DB_DB_H
 
 #include "commands/slash/base_slashcommand.h"
 
@@ -12,4 +12,4 @@ namespace mln {
     };
 }
 
-#endif //H_MLN_DB_SHOW_H
+#endif //H_MLN_DB_DB_H

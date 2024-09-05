@@ -104,6 +104,7 @@ namespace mln {
 		static bool is_step_valid(db_result result);
 		
 	public:
+		static bool is_exec_error(db_result result);
 		static std::string get_db_debug_info();
 		static bool get_name_from_result(db_result result, std::string& out_name);
 		static std::string get_name_from_result(db_result result);

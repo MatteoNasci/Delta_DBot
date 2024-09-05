@@ -34,6 +34,12 @@ namespace mln {
 		static size_t get_max_characters_embed_field_value();
 		static size_t get_max_characters_embed_footer();
 		static size_t get_max_characters_embed_author();
+		static size_t get_max_embeds_in_msg();
+
+		static size_t get_min_msg_bulk_delete();
+		static size_t get_max_msg_bulk_delete();
+
+		static long long int get_big_files_request_timeout();
 	};
 }
 

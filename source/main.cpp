@@ -29,19 +29,25 @@ void run_app(const bool register_bot_cmds) {
     {
         mln::bot_delta delta{};
 
-        delta.start(register_bot_cmds);
+        delta.bot.set_request_timeout(300);
 
-        delta.bot.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
+        delta.start(register_bot_cmds);
 
         delta.bot.log(dpp::loglevel::ll_debug, "Press any key to stop the bot...");
 
-        int c = getchar();
+        while (true) {
+            int c = getchar();
+            if (c == 'q') {
+                break;
+            }
+            if (c == 'p') {
+                delta.print_main_db();
+            } else if (c == 'd') {
+                delta.bot.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
+            }
+        }      
 
         delta.bot.log(dpp::loglevel::ll_debug, "Closing the bot...");
-
-        delta.bot.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
-
-        delta.print_main_db();
 
         while (!delta.close()) {
             //TODO change this while loop to something more decent

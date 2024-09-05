@@ -50,7 +50,7 @@ dpp::task<void> mln::report::command(const dpp::slashcommand_t& event_data){
 	}
 
 	const mln::db_result res4 = delta()->db.exec(saved_insert_rep_query, mln::database_callbacks_t());
-	if (res4 != mln::db_result::ok) {
+	if (mln::database_handler::is_exec_error(res4)) {
 		delta()->bot.log(dpp::loglevel::ll_error, "Cannot perform the report command, failed execution! " + mln::database_handler::get_name_from_result(res4) + ". " + delta()->db.get_last_err_msg());
 		co_await thinking;
 		event_data.edit_response(dpp::message("Failed to log the report, internal database error!"));

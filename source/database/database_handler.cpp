@@ -245,7 +245,7 @@ mln::db_result mln::database_handler::exec(const char* stmt_text, int length_wit
 	//execution/finalize phase
 	size_t stmt_index = 0;
 	const bool use_stmt_index_callback = stmt_queue.size() > 1 && callbacks.statement_index_callback;
-	while (!stmt_queue.empty() && res == mln::db_result::ok) {
+	while (!stmt_queue.empty() && !mln::database_handler::is_exec_error(res)) {
 		if (use_stmt_index_callback) {
 			callbacks.statement_index_callback(callbacks.callback_data, stmt_index++);
 		}
@@ -278,13 +278,14 @@ mln::db_result mln::database_handler::exec(const size_t saved_statement_id, cons
 		}
 
 		const mln::db_result res = mln::database_handler::exec(it->second[i], callbacks);
-		if (res != mln::db_result::ok) {
+		if (mln::database_handler::is_exec_error(res)) {
 			return res;
 		}
 	}
 
 	return mln::db_result::ok;
 }
+
 mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) const {
 	const bool can_use_callbacks = (callbacks.data_adder_callback && callbacks.type_definer_callback);
 	const bool can_use_row_call = (callbacks.row_callback && true);
@@ -293,8 +294,9 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 	while (res != mln::db_result::done) {
 		res = static_cast<mln::db_result>(sqlite3_step(stmt));
 		if (!mln::database_handler::is_step_valid(res)) {
-			//If an error occurs during _step the db will automatically run _reset on the stmt
-			return res;
+
+			mln::db_result reset_res = static_cast<mln::db_result>(sqlite3_reset(stmt));
+			return mln::database_handler::is_step_valid(reset_res) ? res : reset_res;
 		}
 
 		const int column_count = sqlite3_data_count(stmt);
@@ -316,16 +318,12 @@ mln::db_result mln::database_handler::exec(sqlite3_stmt* stmt, const database_ca
 		}
 	}
 
-	//This is to return the last error (if any). If an error occurred in step the statement will be automatically reset
-	if (res != mln::db_result::ok && res != mln::db_result::done) {
-		return res;
-	}
-
 	if (callbacks.statement_completed_callback) {
 		callbacks.statement_completed_callback(callbacks.callback_data);
 	}
 	//this will prompt sqlite to free all allocated resources (like strings) in this execution
-	return static_cast<mln::db_result>(sqlite3_reset(stmt));
+	mln::db_result reset_res = static_cast<mln::db_result>(sqlite3_reset(stmt));
+	return mln::database_handler::is_step_valid(reset_res) ? res : reset_res;
 }
 
 mln::db_result mln::database_handler::save_statement(const std::string& statement, size_t& out_saved_statement_id) {
@@ -660,6 +658,9 @@ mln::db_result mln::database_handler::shutdown_db_environment() {
 
 bool mln::database_handler::is_step_valid(const mln::db_result result) {
 	return result == mln::db_result::row || result == mln::db_result::done || result == mln::db_result::ok;
+}
+bool mln::database_handler::is_exec_error(const mln::db_result result) {
+	return result != mln::db_result::row && result != mln::db_result::done && result != mln::db_result::ok;
 }
 
 mln::db_column_data_t read_data_int(sqlite3_stmt* stmt, int col) {

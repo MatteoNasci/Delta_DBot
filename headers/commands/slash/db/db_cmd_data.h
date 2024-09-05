@@ -4,14 +4,21 @@
 
 #include <dpp/guild.h>
 #include <dpp/channel.h>
+#include <dpp/permissions.h>
+
+#include <memory>
 
 namespace mln {
 	struct db_cmd_data_t {
-		dpp::guild* cmd_guild;
-		dpp::channel* cmd_channel;
-		dpp::channel* dump_channel;
-		const dpp::guild_member* cmd_usr;
-		const dpp::guild_member* cmd_bot;
+		std::shared_ptr<const dpp::guild> cmd_guild;
+		std::shared_ptr<const dpp::channel> cmd_channel;
+		std::shared_ptr<const dpp::channel> dump_channel;
+		std::shared_ptr<const dpp::guild_member> cmd_usr;
+		std::shared_ptr<const dpp::guild_member> cmd_bot;
+
+		dpp::permission cmd_usr_perm;
+		dpp::permission cmd_bot_perm;
+		dpp::permission dump_channel_bot_perm;
 	};
 }
 

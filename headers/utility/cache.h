@@ -11,6 +11,7 @@
 #include <optional>
 #include <algorithm>
 #include <type_traits>
+#include <utility>
 
 namespace mln {
 
@@ -33,55 +34,106 @@ namespace mln {
 
 	private:
 		using ptr_type = typename std::conditional<use_unique_over_shared_ptr, std::unique_ptr<T_value>, std::shared_ptr<T_value>>::type;
-		using get_return = typename std::conditional<use_unique_over_shared_ptr, T_value, std::shared_ptr<T_value>>::type;
+		using get_return = typename std::conditional<use_unique_over_shared_ptr, T_value, std::shared_ptr<const T_value>>::type;
 
 		std::unordered_map<T_key, std::tuple<ptr_type, size_t>, T_hash> mapped_storage;
-		std::multimap<size_t, T_key> mapped_frequencies;//TODO the multimap is the bottleneck of this class, maybe using a priority queue would be better?
+		std::multimap<size_t, T_key> mapped_frequencies;//TODO the multimap is the bottleneck of this class, maybe using a priority queue would be better? Or I could use a std::map<size_t, std::unordered_set<T_key>> which will mantaint the size_t ordering
 		mutable std::shared_mutex storage_mutex;
-		//multimap might be used in place of linked_list array
+
 	public:
 		cache() : mapped_storage(), mapped_frequencies() {
 			mapped_storage.reserve(purge_limit);
 		}
 
-		bool add_element(const T_key& key, T_value&& value) {
+		get_return add_element(const T_key& key, T_value&& value) {
 			std::unique_lock<std::shared_mutex> lock(storage_mutex);
 
 			auto it = mapped_storage.find(key);
 			if (it != mapped_storage.end()) {
 				update_element_locked(it, std::forward<T_value>(value));
-				return true;
+				return return_correct_element_locked(it);
 			}
 
 			if (get_count_locked() >= purge_limit) {
-				return remove_least_retrieved_elements_locked(purge_count);
+				remove_least_retrieved_elements_locked(purge_count);
 			}
 
-			mapped_storage.emplace(key, std::make_tuple(make_pointer_locked(std::forward<T_value>(value)), 0));
-			
 			mapped_frequencies.emplace(0, key);
 
-			return true;
+			auto emplaced = mapped_storage.emplace(key, std::make_tuple(make_pointer_locked(std::forward<T_value>(value)), 0));
+			return return_correct_element_locked(emplaced.first);
 		}
 
-		bool add_element(const T_key& key, ptr_type&& value) {
+		get_return add_element(const T_key& key, const T_value& value) {
+			std::unique_lock<std::shared_mutex> lock(storage_mutex);
+
+			auto it = mapped_storage.find(key);
+			if (it != mapped_storage.end()) {
+				update_element_locked(it, T_value{value});
+				return return_correct_element_locked(it);
+			}
+
+			if (get_count_locked() >= purge_limit) {
+				remove_least_retrieved_elements_locked(purge_count);
+			}
+
+			mapped_frequencies.emplace(0, key);
+
+			auto emplaced = mapped_storage.emplace(key, std::make_tuple(make_pointer_locked(T_value{value}), 0));
+			return return_correct_element_locked(emplaced.first);
+		}
+
+		get_return add_element(const T_key& key, ptr_type&& value) {
 			std::unique_lock<std::shared_mutex> lock(storage_mutex);
 
 			auto it = mapped_storage.find(key);
 			if (it != mapped_storage.end()) {
 				update_element_locked(it, std::forward<ptr_type>(value));
-				return true;
+				return return_correct_element_locked(it);
 			}
 
 			if (get_count_locked() >= purge_limit) {
-				return remove_least_retrieved_elements_locked(purge_count);
+				remove_least_retrieved_elements_locked(purge_count);
 			}
-
-			mapped_storage.emplace(key, std::make_tuple(std::forward<ptr_type>(value), 0));
 
 			mapped_frequencies.emplace(0, key);
 
-			return true;
+			return return_correct_element_locked(mapped_storage.emplace(key, std::make_tuple(std::forward<ptr_type>(value), 0)).first);
+		}
+
+		std::optional<get_return> update_element(const T_key& key, T_value&& value) {
+			std::unique_lock<std::shared_mutex> lock(storage_mutex);
+
+			auto it = mapped_storage.find(key);
+			if (it != mapped_storage.end()) {
+				update_element_locked(it, std::forward<T_value>(value));
+				return return_correct_element_locked(it);
+			}
+
+			return std::nullopt;
+		}
+		std::optional<get_return> update_element(const T_key& key, const T_value& value) {
+			std::unique_lock<std::shared_mutex> lock(storage_mutex);
+
+			auto it = mapped_storage.find(key);
+			if (it != mapped_storage.end()) {
+				update_element_locked(it, T_value{value});
+				return return_correct_element_locked(it);
+			}
+
+			return std::nullopt;
+		}
+
+		std::optional<get_return> update_element(const T_key& key, ptr_type&& value) {
+			std::unique_lock<std::shared_mutex> lock(storage_mutex);
+
+			auto it = mapped_storage.find(key);
+			if (it != mapped_storage.end()) {
+				update_element_locked(it, std::forward<ptr_type>(value));
+				return return_correct_element_locked(it);
+			}
+
+			return std::nullopt;
 		}
 
 		bool remove_element(const T_key& key) {
@@ -116,11 +168,7 @@ namespace mln {
 
 			update_frequency_locked(it);
 
-			if constexpr (use_unique_over_shared_ptr) {
-				return T_value{*(std::get<0>(it->second))};
-			} else {
-				return std::get<0>(it->second);
-			}
+			return return_correct_element_locked(it);
 		}
 
 		bool is_element_present(const T_key& key) const {
@@ -149,6 +197,13 @@ namespace mln {
 			mapped_frequencies.clear();
 		}
 	private:
+		auto return_correct_element_locked(std::unordered_map<T_key, std::tuple<ptr_type, size_t>>::iterator& it) {
+			if constexpr (use_unique_over_shared_ptr) {
+				return T_value{*(std::get<0>(it->second))};
+			} else {
+				return std::get<0>(it->second);
+			}
+		}
 		auto make_pointer_locked(T_value&& value) {
 			if constexpr (use_unique_over_shared_ptr) {
 				return std::make_unique<T_value>(std::forward<T_value>(value));
@@ -159,13 +214,9 @@ namespace mln {
 
 		void update_element_locked(std::unordered_map<T_key, std::tuple<ptr_type, size_t>>::iterator& it, T_value&& value) {
 			std::get<0>(it->second) = make_pointer_locked(std::forward<T_value>(value));
-			
-			update_frequency_locked(it);
 		}
 		void update_element_locked(std::unordered_map<T_key, std::tuple<ptr_type, size_t>>::iterator& it, ptr_type&& value) {
 			std::get<0>(it->second) = ptr_type(std::forward<ptr_type>(value));
-
-			update_frequency_locked(it);
 		}
 		void update_frequency_locked(std::unordered_map<T_key, std::tuple<ptr_type, size_t>>::iterator& it) {
 			const size_t old_frequency = std::get<1>(it->second);
@@ -230,30 +281,42 @@ namespace mln {
 		std::unordered_map<T_key, std::tuple<T_value_primitive, size_t>> mapped_storage;
 		std::multimap<size_t, T_key> mapped_frequencies;
 		mutable std::shared_mutex storage_mutex;
-		//multimap might be used in place of linked_list array
+
 	public:
 		cache_primitive() : mapped_storage{}, mapped_frequencies{} {
 			mapped_storage.reserve(purge_limit);
 		}
 
-		bool add_element(const T_key& key, const T_value_primitive& value) {
+		T_value_primitive add_element(const T_key& key, const T_value_primitive& value) {
 			std::unique_lock<std::shared_mutex> lock(storage_mutex);
 
 			auto it = mapped_storage.find(key);
 			if (it != mapped_storage.end()) {
 				update_element_locked(it, value);
-				return true;
+				return T_value_primitive{value};
 			}
 
 			if (get_count_locked() >= purge_limit) {
-				return remove_least_retrieved_elements_locked(purge_count);
+				remove_least_retrieved_elements_locked(purge_count);
 			}
 
 			mapped_storage.emplace(key, std::make_tuple(value, 0));
 
 			mapped_frequencies.emplace(0, key);
 
-			return true;
+			return T_value_primitive{value};
+		}
+
+		std::optional<T_value_primitive> update_element(const T_key& key, const T_value_primitive& value) {
+			std::unique_lock<std::shared_mutex> lock(storage_mutex);
+
+			auto it = mapped_storage.find(key);
+			if (it != mapped_storage.end()) {
+				update_element_locked(it, value);
+				return T_value_primitive{value};
+			}
+
+			return std::nullopt;
 		}
 
 		bool remove_element(const T_key& key) {

@@ -16,6 +16,10 @@ namespace mln {
 		description = 9,
 		update_dump_channel = 10,
 		generic = 11,
+		self = 12,
+		guild = 13,
+		policy = 14,
+		enum_count
 	};
 }
 

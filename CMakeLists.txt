@@ -29,7 +29,7 @@ set(sqlite_libs_path "${sqlite_path}/lib")
 set(sqlite_headers_path "${sqlite_path}/include")
 
 set(dpp_path "${libs_path}/DPP/out/install/x64-MSVC-Release-Coro")
-set(dpp_headers_path "${dpp_path}/include/dpp-10.0")
+set(dpp_headers_path "${libs_path}/DPP/include/")
 set(dpp_cmake_path "${dpp_path}/lib/cmake/dpp")
 set(dpp_dlls_path "${dpp_path}/bin")
 set(dpp_libs_path "${dpp_path}/lib/dpp-10.0")
@@ -103,7 +103,6 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/add_emoji.cpp
             source/commands/slash/avatar.cpp
             source/commands/slash/bot_info.cpp
-            source/commands/ctx/high_five.cpp
             source/commands/slash/db/db.cpp
             source/commands/slash/pm.cpp
             source/commands/slash/add_role.cpp
@@ -126,7 +125,13 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/db/db_update_dump_channel.cpp
             source/commands/slash/db/db_insert.cpp
             source/commands/slash/db/db_select.cpp
-            source/commands/slash/db/db_show.cpp)
+            source/commands/slash/db/db_show.cpp
+            source/utility/caches.cpp
+            source/utility/perms.cpp
+            source/commands/slash/db/db_delete.cpp
+            source/commands/slash/db/db_update.cpp
+            source/commands/slash/db/db_help.cpp
+            source/commands/slash/db/db_privacy.cpp)
 
 add_executable(deploy_delta ${botsrc})
 
@@ -137,13 +142,13 @@ target_compile_definitions(deploy_delta PRIVATE DPP_CORO)
 
 target_include_directories(deploy_delta PRIVATE "${PROJECT_SOURCE_DIR}/headers/")
 
-find_path(DPP_INCLUDE_DIR
-  NAMES dpp/dpp.h
+find_path(DPP_INCLUDES
+  NAMES dpp
   PATHS "${dpp_headers_path}/"
 )
 if(DPP_INCLUDE_DIR)
-  target_include_directories(deploy_delta PRIVATE ${DPP_INCLUDE_DIR})
-  message(STATUS "Found ${DPP_NAME} includes: ${DPP_INCLUDE_DIR}")
+  target_include_directories(deploy_delta PRIVATE ${DPP_INCLUDES})
+  message(STATUS "Found ${DPP_NAME} includes: ${DPP_INCLUDES}")
 else()
   message(FATAL_ERROR "Could not find include directory for ${DPP_NAME}")
 endif()

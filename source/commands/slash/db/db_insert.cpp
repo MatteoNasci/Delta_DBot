@@ -3,10 +3,13 @@
 #include "bot_delta.h"
 #include "utility/utility.h"
 #include "utility/constants.h"
+#include "utility/perms.h"
+#include "utility/caches.h"
 
 #include <dpp/guild.h>
 #include <dpp/channel.h>
 #include <dpp/permissions.h>
+#include <dpp/utility.h>
 
 mln::db_insert::db_insert(bot_delta* const delta) : base_db_command(delta), data{.valid_stmt = true}{
 
@@ -59,7 +62,7 @@ mln::db_init_type_flag mln::db_insert::get_requested_initialization_type(db_comm
         {db_command_type::file, db_init_type_flag::all},
         {db_command_type::text, db_init_type_flag::cmd_data | db_init_type_flag::dump_channel},
         {db_command_type::url, db_init_type_flag::all},
-        {db_command_type::help, db_init_type_flag::cmd_data},
+        {db_command_type::help, db_init_type_flag::none},
     };
 
     const auto it = s_mapped_initialization_types.find(cmd);
@@ -77,7 +80,8 @@ dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_dat
 
     if (!is_url_msg) {
         //Verify if the given url is a valid discord attachment url
-        const bool is_url_attach = mln::utility::extract_generic_attachment_url_data(input_url, url_guild_id, url_channel_id);
+        std::string name{};
+        const bool is_url_attach = mln::utility::extract_generic_attachment_url_data(input_url, url_guild_id, url_channel_id, name);
 
         //The given url is neither a message url nor an attachment url, return an error
         if (!is_url_attach) {
@@ -87,7 +91,7 @@ dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_dat
         }
 
         //Handle attachment url
-        co_await manage_attach_url(event_data, cmd_data, input_url, thinking);
+        co_await manage_attach_url(event_data, cmd_data, {input_url, name}, thinking);
     } else {
         msg_url_t url_data{.guild_id = url_guild_id, .channel_id = url_channel_id, .message_id = url_message_id};
         //Handle msg url
@@ -152,6 +156,13 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
         .set_type(dpp::component_type::cot_text)
         .set_placeholder("Text that will be shown as part of a discord message embed field value"));
 
+    //If the bot cannot send messages in the dump channel don't bother, return an error
+    const bool create_msg_permission = mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, dpp::permissions::p_send_messages | dpp::permissions::p_view_channel);
+    if (!create_msg_permission) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed command, the bot doesn't have permission to write into the dump channel!");
+        co_return;
+    }
+
     //We get a copy of the 'standard' modal, and give it an unique id
     dpp::interaction_modal_response modal{s_modal};
     const std::string modal_id = "modal_" + std::to_string(event_data.command.id);
@@ -160,10 +171,22 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
     //Try to reply with a dialog box, return an error if failure
     dpp::confirmation_callback_t dialog_conf = co_await event_data.co_dialog(modal);
     if (dialog_conf.is_error()) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to create dialog! Error: " + dialog_conf.get_error().human_readable);
+        //co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to create dialog! Error: " + dialog_conf.get_error().human_readable);
+        event_data.edit_response("Failed to create dialog! Error: " + dialog_conf.get_error().human_readable);
+        co_return;
+    }
+
+    const dpp::confirmation dialog_conf_data = dialog_conf.get<dpp::confirmation>();
+    if (!dialog_conf_data.success) {
+        //delta()->bot.log(dpp::loglevel::ll_error, "The co_dialog confirmation result is false!");
+        event_data.edit_response("The co_dialog confirmation result is false!");
         co_return;
     }
     
+    event_data.edit_response("Dialog menu opened, waiting for the user's input!");
+    //TODO remove the utility function for co_response, create more problems than its actual help
+    //TODO change thinking response to something else that warns user the wait might be long
+
     //Wait for a max amount of time for the dialog submission
     const auto &result = co_await dpp::when_any{
         delta()->bot.co_sleep(s_max_time),
@@ -171,25 +194,24 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
 
     //If the timer run out return an error
     if (result.index() == 0) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to insert text data in time!");
+        delta()->bot.log(dpp::loglevel::ll_error, "Failed to insert text data in time!");
         co_return;
     }
 
     //If an exception occurred return an error
     if (result.is_exception()) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to insert text data, unknown error occurred!");
+        delta()->bot.log(dpp::loglevel::ll_error, "Failed to insert text data, unknown error occurred!");
         co_return;
     }
 
     //It was suggested to copy the event from documentation of ::when
     dpp::form_submit_t form_data = result.get<1>();
     if (form_data.cancelled) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to insert text data! Internal error!");
+        delta()->bot.log(dpp::loglevel::ll_error, "Failed to insert text data! Internal error!");
         co_return;
     }
 
     thinking = form_data.co_thinking(true);
-    //From here on we need a normal reply instead of an edit_response sicne we are doing a dialog form
     //Get parameters, make sure there is at least 1 character. Remember the parameters are optional!
     dpp::message msg = dpp::message{}.set_guild_id(cmd_data.cmd_guild->id).set_channel_id(cmd_data.dump_channel->id);
     dpp::embed embed{};
@@ -199,17 +221,15 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
         }
         const dpp::component field = component.components[0];
 
-        if (!std::holds_alternative<std::string>(field.value)) {
+        if (!std::holds_alternative<std::string>(field.value) || std::get<std::string>(field.value).size() == 0) {
             continue;
         }
 
         if (field.custom_id == "0") {
             msg.set_content(std::get<std::string>(field.value));
-        } else if (field.custom_id == "1" && std::get<std::string>(field.value).size() > 0) {
+        } else if (field.custom_id == "1") {
             embed.set_description(std::get<std::string>(field.value));
-        } else if (field.custom_id == "2" && std::get<std::string>(field.value).size() > 0) {
-            embed.add_field("", std::get<std::string>(field.value));
-        } else if (field.custom_id == "3" && std::get<std::string>(field.value).size() > 0) {
+        } else if (field.custom_id == "2" || field.custom_id == "3") {
             embed.add_field("", std::get<std::string>(field.value));
         }
     }
@@ -225,13 +245,6 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
         }
     }
 
-    //If the bot cannot send messages in the dump channel return an error
-    const bool create_msg_permission = mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_send_messages);
-    if (!create_msg_permission) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, form_data, delta()->bot, "Failed command, the bot doesn't have permission to write into the dump channel!");
-        co_return;
-    }
-
     //Return an error if we fail to send the message
     const dpp::confirmation_callback_t create_msg_conf = co_await delta()->bot.co_message_create(msg);
     if (create_msg_conf.is_error()) {
@@ -239,18 +252,27 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
         co_return;
     }
 
-    dpp::message created = create_msg_conf.get<dpp::message>();
     //Execute the database query using the created message url
-    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, form_data, cmd_data, created.get_url(), thinking);//TODO make sure thinking is still valid here, we might have co_awaited it
+    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, form_data, cmd_data, 
+        dpp::utility::message_url(cmd_data.cmd_guild->id, cmd_data.dump_channel->id, std::get<dpp::message>(create_msg_conf.value).id), thinking);
     //Errors are handled by execute_query
     if (!is_query_success) {
+        //If the query failed make sure to delete the message we created for storage (if present)
+        if (std::get<dpp::message>(create_msg_conf.value).id != 0) {
+            //We don't need to check for permissions here, the created message was created by the bot. No need for perms to delete your own message
+            dpp::confirmation_callback_t delete_res = co_await delta()->bot.co_message_delete(std::get<dpp::message>(create_msg_conf.value).id, cmd_data.dump_channel->id);
+            if (delete_res.is_error()) {
+                //We don't do edit_response because exec_query is already handling that
+                delta()->bot.log(dpp::loglevel::ll_error, "Failed to delete the created msg! Error: " + delete_res.get_error().human_readable);
+            }
+        }
+
         co_return;
     }
 
     //Update caches
-    delta()->messages_cache.add_element(created.id, std::move(created));
-    delta()->show_all_cache.remove_element(cmd_data.cmd_guild->id);
-    delta()->show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
+    mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
+    mln::caches::show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
 
     co_await mln::utility::co_conclude_thinking_response(thinking, form_data, delta()->bot, "Database operation successful!", {false, dpp::loglevel::ll_debug});
 }
@@ -264,14 +286,16 @@ dpp::task<void> mln::db_insert::command_file(const dpp::slashcommand_t& event_da
     }
 
     //Verify bot permission
-    if (!mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, {dpp::permissions::p_attach_files, dpp::permissions::p_send_messages})) {
+    if (!mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, 
+        dpp::permissions::p_attach_files | dpp::permissions::p_send_messages | dpp::permissions::p_view_channel)) {
+
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
             "Failed command, the bot doesn't have the permission to upload attachments or send messages in the dump channel!");
         co_return;
     }
 
     //Download attachment, return error on failure
-    const dpp::http_request_completion_t download_res = co_await delta()->bot.co_request(it->second.url, dpp::http_method::m_get, "", it->second.content_type);
+    const dpp::http_request_completion_t download_res = co_await delta()->bot.co_request(it->second.url, dpp::http_method::m_get, "", it->second.content_type, {}, "1.1", mln::constants::get_big_files_request_timeout());
     if (download_res.status != 200) {
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, 
             "Failed database operation, failed to download given file! Error: " + std::to_string(download_res.error) + ", status: " + std::to_string(download_res.status));
@@ -291,15 +315,24 @@ dpp::task<void> mln::db_insert::command_file(const dpp::slashcommand_t& event_da
         co_return;
     }
 
-    dpp::message created = create_res.get<dpp::message>();
-    if (!co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, created.get_url(), thinking)) {
+    if (!co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, 
+        dpp::utility::message_url(cmd_data.cmd_guild->id, cmd_data.dump_channel->id, std::get<dpp::message>(create_res.value).id), thinking)) {
+        //If the query failed make sure to delete the message we created for storage (if present)
+        if (std::get<dpp::message>(create_res.value).id != 0) {
+            //We don't need to check for permissions here, the created message was created by the bot. No need for perms to delete your own message
+            dpp::confirmation_callback_t delete_res = co_await delta()->bot.co_message_delete(std::get<dpp::message>(create_res.value).id, cmd_data.dump_channel->id);
+            if (delete_res.is_error()) {
+                //We don't do edit_response because exec_query is already handling that
+                delta()->bot.log(dpp::loglevel::ll_error, "Failed to delete the created msg! Error: " + delete_res.get_error().human_readable);
+            }
+        }
+
         co_return;
     }
 
     //Update caches
-    delta()->messages_cache.add_element(created.id, std::move(created));
-    delta()->show_all_cache.remove_element(cmd_data.cmd_guild->id);
-    delta()->show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
+    mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
+    mln::caches::show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
 
     co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Database operation successful!", {false, dpp::loglevel::ll_debug});
 }
@@ -313,6 +346,8 @@ Each record can be supplied with a description (max 100 characters), which will 
 Attempting to insert a new record using a name that is already being used by another record will result in an error.
 
 If a dump channel has been set for the current server, all the stored records will be kept in the dump channel for storage purposes.
+
+Only ASCII printable characters are accepted as input for the `name` and `description` parameters.
 
 **Types of insert:**
 
@@ -342,9 +377,9 @@ If a dump channel has been set for the current server, all the stored records wi
     co_return;
 }
 
-
-dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const std::string& url, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
-    const bool create_msg_permission = mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_send_messages);
+dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const std::tuple<std::string, std::string>& url_name, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+    const bool create_msg_permission = mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, 
+        dpp::permissions::p_send_messages | dpp::permissions::p_view_channel | dpp::permissions::p_attach_files);
     //Return an error if the bot is not allowed to send messages in the dump channel
     if (!create_msg_permission) {
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
@@ -352,9 +387,20 @@ dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& eve
         co_return;
     }
 
+    //Download the url first, then attach to msg and send to dump
+    const dpp::http_request_completion_t downloaded_attach = co_await delta()->bot.co_request(std::get<0>(url_name), dpp::http_method::m_get, "", "text/plain", {}, "1.1", mln::constants::get_big_files_request_timeout());
+    if (downloaded_attach.status != 200) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
+            "Failed to download the given attachment! Error: " + std::to_string(downloaded_attach.error) + ", status: " + std::to_string(downloaded_attach.status));
+        co_return;
+    }
+
     //Make an API request to create a message in the dump channel with the given attachment url
-    dpp::message msg{url};
-    const dpp::confirmation_callback_t msg_create_result = co_await delta()->bot.co_message_create(msg.set_channel_id(cmd_data.dump_channel->id).set_guild_id(cmd_data.cmd_guild->id));
+    const dpp::confirmation_callback_t msg_create_result = 
+        co_await delta()->bot.co_message_create(dpp::message{}
+            .set_channel_id(cmd_data.dump_channel->id)
+            .set_guild_id(cmd_data.cmd_guild->id)
+            .add_file(std::get<1>(url_name), downloaded_attach.body));
 
     //If message creation failed return an error
     if (msg_create_result.is_error()) {
@@ -363,140 +409,126 @@ dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& eve
         co_return;
     }
 
-    dpp::message created = msg_create_result.get<dpp::message>();
     //Execute the database query using the created message url
-    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, created.get_url(), thinking);
+    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, 
+        dpp::utility::message_url(cmd_data.cmd_guild->id, cmd_data.dump_channel->id, std::get<dpp::message>(msg_create_result.value).id), thinking);
     //Errors are handled by execute_query
     if (!is_query_success) {
+        //If the query failed make sure to delete the message we created for storage (if present)
+        if (std::get<dpp::message>(msg_create_result.value).id != 0) {
+            //We don't need to check for permissions here, the created message was created by the bot. No need for perms to delete your own message
+            dpp::confirmation_callback_t delete_res = co_await delta()->bot.co_message_delete(std::get<dpp::message>(msg_create_result.value).id, cmd_data.dump_channel->id);
+            if (delete_res.is_error()) {
+                //We don't do edit_response because exec_query is already handling that
+                delta()->bot.log(dpp::loglevel::ll_error, "Failed to delete the created msg! Error: " + delete_res.get_error().human_readable);
+            }
+        }
+
         co_return;
     }
 
     //Update caches
-    delta()->messages_cache.add_element(created.id, std::move(created));
-    delta()->show_all_cache.remove_element(cmd_data.cmd_guild->id);
-    delta()->show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
+    mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
+    mln::caches::show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
 
     //Return a success reply to the user
     co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Database operation successful!", {false, dpp::loglevel::ll_debug});
 }
 dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const mln::msg_url_t& url_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking){
+    
+    //Check permission for storing msg
+    const bool create_msg_permission =
+        mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, dpp::permissions::p_send_messages | dpp::permissions::p_view_channel);
+    //Return an error if the bot is not allowed to send messages in the dump channel or if it can't access the url message
+    if (!create_msg_permission) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
+            "Failed command, the bot doesn't have the permission to send messages to the dump channel!", {true, dpp::loglevel::ll_debug});
+        co_return;
+    }
+
     //Retrieve url guild data
-    dpp::guild* url_guild = cmd_data.cmd_guild;
-    std::tuple<dpp::guild*, dpp::guild> url_guild_pair;
-    if (url_data.guild_id != cmd_data.cmd_guild->id) {
-        url_guild_pair = co_await mln::utility::get_guild(url_data.guild_id, delta()->bot);
-        url_guild = std::get<0>(url_guild_pair);
-        if (url_guild == nullptr) {
-            //Make sure this pointer stays alive to the end of the function at least. Make sure to co_await the manage_... functions at the end
-            url_guild = &std::get<1>(url_guild_pair);
+    std::shared_ptr<const dpp::guild> url_guild;
+    if (url_data.guild_id == cmd_data.cmd_guild->id && cmd_data.cmd_guild) {
+        url_guild = cmd_data.cmd_guild;
+    } else {
+        std::optional<std::shared_ptr<const dpp::guild>> url_guild_opt = mln::caches::get_guild(url_data.guild_id);
+        if (!url_guild_opt.has_value()) {
+            url_guild_opt = co_await mln::caches::get_guild_task(url_data.guild_id);
+            if (!url_guild_opt.has_value()) {
+                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve url guild data! guild_id: "
+                    + std::to_string(url_data.guild_id));
+                co_return;
+            }
         }
+        url_guild = url_guild_opt.value();
     }
 
     //Retrieve url channel data
-    dpp::channel* url_channel = cmd_data.cmd_channel;
-    std::tuple<dpp::channel*, dpp::channel> url_channel_pair;
-    if (url_data.channel_id != cmd_data.cmd_channel->id) {
-        url_channel_pair = co_await mln::utility::get_channel(event_data, url_data.channel_id, delta()->bot);
-        url_channel = std::get<0>(url_channel_pair);
-        if (url_channel == nullptr) {
-            //Make sure this pointer stays alive to the end of the function at least. Make sure to co_await the manage_... functions at the end
-            url_channel = &std::get<1>(url_channel_pair);
+    std::shared_ptr<const dpp::channel> url_channel;
+    if (url_data.channel_id == cmd_data.cmd_channel->id && cmd_data.cmd_channel) {
+        url_channel = cmd_data.cmd_channel;
+    } else {
+        std::optional<std::shared_ptr<const dpp::channel>> url_channel_opt = mln::caches::get_channel(url_data.channel_id, &event_data);
+        if (!url_channel_opt.has_value()) {
+            url_channel_opt = co_await mln::caches::get_channel_task(url_data.channel_id);
+            if (!url_channel_opt.has_value()) {
+                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve url channel data! channel_id: "
+                    + std::to_string(url_data.channel_id));
+                co_return;
+            }
+        }
+        url_channel = url_channel_opt.value();
+    }
+
+    //Retrieve perms for url msg channel
+    std::optional<dpp::permission> url_bot_perm_opt = mln::perms::get_computed_permission(*(url_guild), *(url_channel), *(cmd_data.cmd_bot), &event_data);
+    if (!url_bot_perm_opt.has_value()) {
+        url_bot_perm_opt = co_await mln::perms::get_computed_permission_task(*(url_guild), *(url_channel), *(cmd_data.cmd_bot), &event_data);
+        if (!url_bot_perm_opt.has_value()) {
+            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve bot permission data for url message! bot id: "
+                + std::to_string(cmd_data.cmd_bot->user_id));
+            co_return;
         }
     }
 
-    //If we failed to find the url guild or the url channel, we return an error
-    if (url_channel->id == 0 || url_guild->id == 0) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed command, impossible to retrieve url guild and url channel data!");
+    const bool retrieve_msg_permission =
+        mln::perms::check_permissions(url_bot_perm_opt.value(), dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history);
+    //Return an error if the bot is not allowed to access the url message
+    if (!retrieve_msg_permission) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
+            "Failed command, the bot doesn't have the permission to retrieve the original msg!", {true, dpp::loglevel::ll_debug});
         co_return;
     }
-    
-    //Retrieve message from cache (if present) using the given url message id value
-    const std::optional<dpp::message> opt_cached_msg = delta()->messages_cache.get_element(url_data.message_id);
-    const bool cached_msg_found = opt_cached_msg.has_value();
 
-    //Prepare output values for following if/else
-    dpp::message created_msg{};
-    std::string final_url{};
-
-    //If we found a valid entry from the cache we use that message
-    if (cached_msg_found) {
-
-        //We create a new storage msg if the cache entry message is located in a different guild or in a channel different than the local dump channel. Note that if a dump channel is not set, we use the local channel as the dump channel.
-        const bool need_to_create_storage = opt_cached_msg->channel_id != cmd_data.dump_channel->id || opt_cached_msg->guild_id != cmd_data.cmd_guild->id;
-        if (need_to_create_storage) {
-            const bool create_msg_permission = opt_cached_msg->tts ?
-                mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, {dpp::permissions::p_send_messages, dpp::permissions::p_send_tts_messages}) :
-                mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_send_messages);
-            //Return an error if the bot is not allowed to send messages in the dump channel
-            if (!create_msg_permission) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                    "Failed command, the bot doesn't have the permission to send messages in the dump channel!", {true, dpp::loglevel::ll_debug});
-                co_return;
-            }
-
-            //Create a copy of the cached message in the dump channel
-            const dpp::confirmation_callback_t msg_create_result = 
-                co_await delta()->bot.co_message_create(dpp::message{opt_cached_msg.value()}.set_channel_id(cmd_data.dump_channel->id).set_guild_id(cmd_data.cmd_guild->id));
-
-            //Return an error if we couldn't create the copy
-            if (msg_create_result.is_error()) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, 
-                    "Failed to create message in the designated dump channel! Error: " + msg_create_result.get_error().human_readable + ".");
-                co_return;
-            }
-
-            created_msg = std::move(msg_create_result.get<dpp::message>());
-            final_url = created_msg.get_url();
-        } else {
-            //The cached message is already located in the dump channel, we use its url directly
-            final_url = opt_cached_msg->get_url();
+    //Retrieve message from cache (if present) using the given url message id value, otherwise ask discord api
+    std::optional<dpp::message> opt_msg = mln::caches::get_message(url_data.message_id, &event_data);
+    if (!opt_msg.has_value()) {
+        //Get message from API
+        opt_msg = co_await mln::caches::get_message_task(url_data.message_id, url_data.channel_id);
+        if (!opt_msg.has_value()) {
+            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve the original message data! message_id: "
+                + std::to_string(url_data.message_id) + ", channel_id: " + std::to_string(url_data.channel_id));
+            co_return;
         }
+    }
 
-    } else { 
-        const bool retrieve_create_msg_permission = 
-            mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_send_messages) &&
-            mln::utility::check_permissions(url_guild, url_channel, cmd_data.cmd_bot, {dpp::permissions::p_view_channel, dpp::permissions::p_read_message_history});
-        //Return an error if the bot is not allowed to send messages in the dump channel or if it can't access the url message
-        if (!retrieve_create_msg_permission) {
+    //Check other perms to check to store msg to dump channel
+    dpp::permission to_check = co_await mln::perms::get_additional_perms_required(opt_msg.value(), delta()->bot, cmd_data.cmd_guild->id);
+
+    if (to_check != 0) {
+        if (!mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, to_check)) {
             co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Failed command, the bot doesn't have the permission to either retrieve the original msg or to send messages to the dump channel!", {true, dpp::loglevel::ll_debug});
+                "Failed command, the bot doesn't have the additional permissions to send a msg to dump channel!", {true, dpp::loglevel::ll_debug});
             co_return;
         }
+    }
 
-        //If we didn't find a cache result we retrieve the original msg, then we create a new storage msg that we will link to in the database
-        const dpp::confirmation_callback_t msg_retrieve_result = co_await delta()->bot.co_message_get(url_data.message_id, url_data.channel_id);
-
-        //Return an error if we couldn't retrieve the original message
-        if (msg_retrieve_result.is_error()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, 
-                "Failed to retrieve message described by the given url! Error: " + msg_retrieve_result.get_error().human_readable + ".");
-            co_return;
-        }
-
-        dpp::message original_msg = std::move(msg_retrieve_result.get<dpp::message>());
-        
-        if (original_msg.tts) {
-            //Return error if the message is tts and the bot doesn't have the permission to send it to dump channel
-            if (!mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_send_tts_messages)) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                    "Failed command, the bot doesn't have the permission to send tts messages to the dump channel!", {true, dpp::loglevel::ll_debug});
-                co_return;
-            }
-        }
-
-        //Iterate through all available attachments, download them and attach them to message to store in dump channel. Check permission first
+    //Verify if the attachments are already stored as file_data and, if not, iterate through all available attachments, download them and attach them to message to store in dump channel.
+    if (opt_msg.value().attachments.size() != opt_msg.value().file_data.size()) {
         std::vector<std::tuple<dpp::http_request_completion_t, std::string, std::string>> download_results{};
-        download_results.reserve(original_msg.attachments.size());
+        download_results.reserve(opt_msg.value().attachments.size());
 
-        if (original_msg.attachments.size() != 0) {
-            if (!mln::utility::check_permissions(cmd_data.cmd_guild, cmd_data.dump_channel, cmd_data.cmd_bot, dpp::permissions::p_attach_files)) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                    "Failed command, the bot doesn't have the permission to upload attachments in the dump channel!");
-                co_return;
-            }
-        }
-
-        for (const dpp::attachment& attach : original_msg.attachments) {
+        for (const dpp::attachment& attach : opt_msg.value().attachments) {
             //The attachment is not valid, return an error
             if (attach.owner == nullptr || attach.owner->owner == nullptr ||
                 attach.id == 0 || attach.url.empty()) {
@@ -506,7 +538,7 @@ dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_
             }
 
             //Download attachments and add them to list of downloaded attachments, return an error if operation fails
-            dpp::http_request_completion_t download_res = co_await delta()->bot.co_request(attach.url, dpp::http_method::m_get, "", attach.content_type);
+            dpp::http_request_completion_t download_res = co_await delta()->bot.co_request(attach.url, dpp::http_method::m_get, "", attach.content_type, {}, "1.1", mln::constants::get_big_files_request_timeout());
             if (download_res.status != 200) {
                 co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
                     "Failed to download valid attachment while inserting an url to database! Error: "
@@ -518,34 +550,33 @@ dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_
         }
 
         //Attach data to message
-        original_msg.attachments.clear();
+        opt_msg.value().attachments.clear();
+        opt_msg.value().file_data.clear();
         for (const std::tuple<dpp::http_request_completion_t, std::string, std::string>& http_res_tuple : download_results) {
-            original_msg.add_file(std::get<1>(http_res_tuple), std::get<0>(http_res_tuple).body, std::get<2>(http_res_tuple));
+            opt_msg.value().add_file(std::get<1>(http_res_tuple), std::get<0>(http_res_tuple).body, std::get<2>(http_res_tuple));
         }
-
-        //Store the retrieved message in the dump channel
-        const dpp::confirmation_callback_t msg_create_result = co_await delta()->bot.co_message_create(
-            original_msg.set_channel_id(cmd_data.dump_channel->id).set_guild_id(cmd_data.cmd_guild->id));
-
-        //Return an error if we failed to create the storage message
-        if (msg_create_result.is_error()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Failed to create message in the designated dump channel! Error: " + msg_create_result.get_error().human_readable + ".");
-            co_return;
-        }
-
-        created_msg = std::move(msg_create_result.get<dpp::message>());
-        final_url = created_msg.get_url();
     }
-    
-    //Execute the query using the storage msg we created (or retrieved from cache) for the stored url
-    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, final_url, thinking);
 
+    //Store the retrieved message in the dump channel
+    const dpp::confirmation_callback_t msg_create_result = co_await delta()->bot.co_message_create(
+        opt_msg.value().set_channel_id(cmd_data.dump_channel->id).set_guild_id(cmd_data.cmd_guild->id));
+
+    //Return an error if we failed to create the storage message
+    if (msg_create_result.is_error()) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
+            "Failed to create message in the designated dump channel! Error: " + msg_create_result.get_error().human_readable + ".");
+        co_return;
+    }
+
+    //NOTE: the dpp::message::get_url() is sometime bugged when used on a message received from a callback, the guild_id is set to 0 which makes the method return an empty url string
+    //Execute the query using the storage msg we created (or retrieved from cache) for the stored url
+    const bool is_query_success = co_await mln::db_insert::execute_query(event_data, event_data, cmd_data, 
+        dpp::utility::message_url(cmd_data.cmd_guild->id, cmd_data.dump_channel->id, std::get<dpp::message>(msg_create_result.value).id) , thinking);
     if (!is_query_success) {
         //If the query failed make sure to delete the message we created for storage (if present)
-        if (created_msg.id != 0) {
+        if (std::get<dpp::message>(msg_create_result.value).id != 0) {
             //We don't need to check for permissions here, the created message was created by the bot. No need for perms to delete your own message
-            dpp::confirmation_callback_t delete_res = co_await delta()->bot.co_message_delete(created_msg.id, cmd_data.dump_channel->id);
+            dpp::confirmation_callback_t delete_res = co_await delta()->bot.co_message_delete(std::get<dpp::message>(msg_create_result.value).id, cmd_data.dump_channel->id);
             if (delete_res.is_error()) {
                 //We don't do edit_response because exec_query is already handling that
                 delta()->bot.log(dpp::loglevel::ll_error, "Failed to delete the created msg! Error: " + delete_res.get_error().human_readable);
@@ -556,25 +587,39 @@ dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_
     }
 
     //Update caches
-    if (created_msg.id != 0) {
-        delta()->messages_cache.add_element(created_msg.id, std::move(created_msg));
-    }
-    delta()->show_all_cache.remove_element(cmd_data.cmd_guild->id);
-    delta()->show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
+    mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
+    mln::caches::show_user_cache.remove_element({cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id});
 
     //Return a success reply to the user
     co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, 
         "Database operation successful!", {false, dpp::loglevel::ll_debug});
 }
+
 dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& current_event, const db_cmd_data_t& cmd_data, const std::string& url, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+    if (url.empty()) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, "Failed to bind query parameters, given url is empty!");
+        co_return false;
+    }
+    
     //Retrieve remaining data required for the database query
     std::string description;
     const dpp::command_value desc_param = event_data.get_parameter("description");
     const bool valid_description = std::holds_alternative<std::string>(desc_param);
     if (valid_description) {
         description = std::get<std::string>(desc_param);
+
+        if (!mln::utility::is_ascii_printable(description)) {
+            co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, 
+                "Failed to bind query parameters, given description is composed of invalid characters! Only ASCII printable characters are accepted [32,126]");
+            co_return false;
+        }
     }
     const std::string name = std::get<std::string>(event_data.get_parameter("name"));
+    if (!mln::utility::is_ascii_printable(name)) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot,
+            "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]");
+        co_return false;
+    }
 
     //Bind query parameters
     mln::db_result res1 = delta()->db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
@@ -590,7 +635,10 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
 
     //Check if any error occurred in the binding process, in case return an error
     if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok || res4 != mln::db_result::ok || res5 != mln::db_result::ok) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, "Failed to bind query parameters, internal error!");
+        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, "Failed to bind query parameters, internal error! " + delta()->db.get_last_err_msg() +
+            ": " + mln::database_handler::get_name_from_result(res1) + ", " + mln::database_handler::get_name_from_result(res2) + ", " +
+            mln::database_handler::get_name_from_result(res3) + ", " + mln::database_handler::get_name_from_result(res4) + ", " +
+            mln::database_handler::get_name_from_result(res5));
         co_return false;
     }
 
@@ -600,12 +648,12 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
 
     //Execute query and return an error if the query failed or if no element was added
     mln::db_result res = delta()->db.exec(data.saved_stmt, calls);
-    if (res != mln::db_result::ok || !db_success) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, res == mln::db_result::ok && !db_success ?
-            "Failed while executing database query!" " The given name was already taken by another record in the database!" :
-            "Failed while executing database query! Internal error!");
+    if (mln::database_handler::is_exec_error(res) || !db_success) {
+        co_await mln::utility::co_conclude_thinking_response(thinking, current_event, delta()->bot, (!mln::database_handler::is_exec_error(res) || res == mln::db_result::constraint_primary_key) && !db_success ?
+            "Failed while executing database query! The given name was already taken by another record in the database!" :
+            "Failed while executing database query! Internal error! " + mln::database_handler::get_name_from_result(res));
         co_return false;
     }
-    
+
     co_return true;
 }

@@ -2,6 +2,8 @@
 #include "bot_delta.h"
 #include "utility/utility.h"
 #include "utility/constants.h"
+#include "utility/caches.h"
+#include "utility/perms.h"
 
 mln::add_emoji::add_emoji(mln::bot_delta* const delta) : base_slashcommand(delta,
     std::move(dpp::slashcommand("add_emoji", "Add an emoji", delta->bot.me.id)
@@ -10,53 +12,24 @@ mln::add_emoji::add_emoji(mln::bot_delta* const delta) : base_slashcommand(delta
         .add_option(dpp::command_option(dpp::co_string, "name", "Name of the emoji to add", true)
             .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_emoji())))
             .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_emoji()))))
-        .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Broadcast result to the channel", false)))){}
+    )){}
 
 dpp::task<void> mln::add_emoji::command(const dpp::slashcommand_t& event_data){
-    const dpp::command_value broadcast_param = event_data.get_parameter("broadcast");
-    const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
-    dpp::async<dpp::confirmation_callback_t> thinking = event_data.co_thinking(!broadcast);
+    dpp::async<dpp::confirmation_callback_t> thinking = event_data.co_thinking(true);
 
     //Retrieve guild data
-    std::tuple<dpp::guild*, dpp::guild> guild_pair = co_await mln::utility::get_guild(event_data, delta()->bot);
-    dpp::guild* cmd_guild = std::get<0>(guild_pair);
-    if (cmd_guild == nullptr) {
-        //Make sure this pointer is no longer used when this function ends. Make sure to co_await the manage_... functions at the end
-        cmd_guild = &std::get<1>(guild_pair);
+    std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(event_data.command.guild_id);
+    if (!guild.has_value()) {
+        guild = co_await mln::caches::get_guild_task(event_data.command.guild_id);
+        if (!guild.has_value()) {
+            //Error can't find guild
+            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve guild data! guild_id: "
+                + std::to_string(event_data.command.guild_id));
+            co_return;
+        }
     }
 
-    //Retrieve channel data
-    std::tuple<dpp::channel*, dpp::channel> channel_pair = co_await mln::utility::get_channel(event_data, event_data.command.channel_id, delta()->bot);
-    dpp::channel* cmd_channel = std::get<0>(channel_pair);
-    if (cmd_channel == nullptr) {
-        //Make sure this pointer is no longer used when this function ends. Make sure to co_await the manage_... functions at the end
-        cmd_channel = &std::get<1>(channel_pair);
-    }
-
-    //If we failed to find the guild the command originated from or the channel, we return an error
-    if (cmd_channel->id == 0 || cmd_guild->id == 0) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed command, impossible to retrieve guild and channel data!");
-        co_return;
-    }
-
-    const std::optional<dpp::guild_member> bot = co_await mln::utility::get_member(event_data, cmd_guild, event_data.command.application_id, delta()->bot);
-    const std::optional<dpp::guild_member> usr = co_await mln::utility::get_member(event_data, cmd_guild, event_data.command.usr.id, delta()->bot);
-
-    //If we failed to find the bot or the usr, we return an error
-    if (!bot.has_value() || bot->user_id == 0 || !usr.has_value() || usr->user_id == 0) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed command, impossible to retrieve bot and user data!");
-        co_return;
-    }
-
-    const bool are_perms_valid = mln::utility::check_permissions(cmd_guild, cmd_channel, bot, dpp::permissions::p_manage_emojis_and_stickers) &&
-        mln::utility::check_permissions(cmd_guild, cmd_channel, {bot, usr}, dpp::permissions::p_use_application_commands);
-    if (!are_perms_valid) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-            "Failed to add new emoji, either the bot or the user do not possess the required permissions!");
-        co_return;
-    }
-
-    const dpp::confirmation_callback_t emojis = co_await delta()->bot.co_guild_emojis_get(cmd_guild->id);
+    const dpp::confirmation_callback_t emojis = co_await delta()->bot.co_guild_emojis_get(guild.value()->id);
     if (emojis.is_error()) {
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
             "Failed to add new emoji, error while attempting to get server emoji list! Error: " + emojis.get_error().human_readable);
@@ -119,7 +92,7 @@ dpp::task<void> mln::add_emoji::command(const dpp::slashcommand_t& event_data){
         dpp::emoji emoji(emoji_name);
         emoji.load_image(response.body, allowed_img_type_it->second);
 
-        const dpp::confirmation_callback_t confirmation = co_await delta()->bot.co_guild_emoji_create(cmd_guild->id, emoji);
+        const dpp::confirmation_callback_t confirmation = co_await delta()->bot.co_guild_emoji_create(guild.value()->id, emoji);
         co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
             confirmation.is_error() ? "Error: could not add emoji: " + confirmation.get_error().human_readable : "Successfully added " + confirmation.get<dpp::emoji>().get_mention(),
             {false, dpp::loglevel::ll_debug});
