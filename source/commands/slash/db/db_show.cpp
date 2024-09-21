@@ -10,6 +10,12 @@
 #include <dpp/cluster.h>
 #include <dpp/dispatcher.h>
 
+namespace mln {
+    static constexpr const char* to_string(const bool condition) {
+        return condition ? "True" : "False";
+    }
+}
+
 const std::unordered_map<mln::db_command_type, std::tuple<
     mln::db_init_type_flag,
     std::function<dpp::task<void>(const mln::db_show&, const dpp::slashcommand_t&, const mln::db_cmd_data_t&)>>>
@@ -105,11 +111,11 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
                     }
                     else {
                         temp_records.emplace_back("name: [" + temp_name + "], description: [" +
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
                     }
                     break;
                 case 3:
@@ -129,11 +135,11 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("{ name: ["+ temp_name +"], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("{ name: ["+ temp_name +"], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
                     }
                     else {
                         temp_records.emplace_back("{ name: [" + temp_name + "], description: [" + 
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "] , nsfw : [" + mln::utility::to_string(temp_nsfw) + "] }");
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "] , nsfw : [" + mln::to_string(temp_nsfw) + "] }");
                     }
                     break;
                 }
