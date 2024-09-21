@@ -144,7 +144,7 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/ready/base_ready.cpp
             source/commands/guild/create/base_guild_create.cpp
             source/commands/slash/db/base_db_command.cpp
-            "source/commands/slash/db/db_config.cpp"
+            source/commands/slash/db/db_config.cpp
             source/commands/slash/db/db_insert.cpp
             source/commands/slash/db/db_select.cpp
             source/commands/slash/db/db_show.cpp
