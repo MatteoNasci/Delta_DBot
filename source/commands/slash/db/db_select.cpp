@@ -283,7 +283,7 @@ dpp::task<void> mln::db_select::help(const dpp::slashcommand_t& event_data, cons
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db select` set of commands is used to retrieve data from the database. By supplying a name, the bot will attempt to find a record with the same name and display the content. If the supplied name is not present in the database, an error will occur.
 
-This is the main set of commands used to retrieve and display records inserted into the database.
+This is the main set of commands used to retrieve and display records inserted into the database. Records tagged with nsfw = True can only be displayed in age-restricted channels.
 
 **Types of select:**
 

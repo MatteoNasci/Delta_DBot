@@ -105,11 +105,11 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + std::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
                     }
                     else {
-                        temp_records.emplace_back("name: [" + temp_name + "], description: [" + 
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + std::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("name: [" + temp_name + "], description: [" +
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
                     }
                     break;
                 case 3:
@@ -129,11 +129,11 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("{ name: ["+ temp_name +"], nsfw: [" + std::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("{ name: ["+ temp_name +"], nsfw: [" + mln::utility::to_string(temp_nsfw) + "] }");
                     }
                     else {
                         temp_records.emplace_back("{ name: [" + temp_name + "], description: [" + 
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "] , nsfw : [" + std::to_string(temp_nsfw) + "] }");
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "] , nsfw : [" + mln::utility::to_string(temp_nsfw) + "] }");
                     }
                     break;
                 }
@@ -242,7 +242,7 @@ You can use `/db show` to locate a specific record and then use its name (the `r
   *Parameters:* none.  
   Displays a paginated list of all current (at the time this command was invoked) records in the database, formatted as:
 
-  `{ owner: [record owner], name: [record ID], description: [record description] }`.
+  `{ owner: [record owner], name: [record ID], description: [record description], nsfw: [True/False] }`.
 
   The description field is omitted if not available.
 
@@ -250,7 +250,7 @@ You can use `/db show` to locate a specific record and then use its name (the `r
   *Parameters:* user[user ID, required].  
   Displays a paginated list of all current (at the time this command was invoked) records in the database related to the specified user, formatted as:
 
-  `{ name: [record ID], description: [record description] }`.
+  `{ name: [record ID], description: [record description], nsfw: [True/False] }`.
 
   The description field is omitted if not available.)"""));
 

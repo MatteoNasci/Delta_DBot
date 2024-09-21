@@ -28,6 +28,7 @@ bool run_app(/*const bool register_bot_cmds*/);
 //TODO utility maybe replace regex? It's slow but it is not a necessity for it to be fast
 //TODO make static stuff constepr where possible
 //TODO put file logging outside bot_delta class
+//TODO remove secrets from files, maybe use env vars
 
 int main(int argc, char** argv){
    

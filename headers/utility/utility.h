@@ -33,6 +33,8 @@ namespace mln {
 			uint64_t time_limit_seconds, text_limit;
 		};
 
+		static constexpr const char* to_string(const bool condition);
+
 		static const database_callbacks_t& get_any_results_callback();
 		static database_callbacks_t get_any_results_callback(bool* found);
 		

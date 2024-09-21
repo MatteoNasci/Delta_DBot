@@ -21,6 +21,10 @@ void mln::utility::any_results_da_callback(void* d, int, mln::db_column_data_t&&
 bool mln::utility::any_results_td_callback(void*, int) {
     return false;
 }
+constexpr const char* mln::utility::to_string(const bool condition)
+{
+    return condition ? "True" : "False";
+}
 const mln::database_callbacks_t& mln::utility::get_any_results_callback() {
     static const mln::database_callbacks_t callbacks{nullptr, mln::utility::any_results_da_callback, mln::utility::any_results_td_callback, nullptr, nullptr, nullptr};
     
