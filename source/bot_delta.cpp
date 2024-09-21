@@ -106,7 +106,7 @@ void mln::bot_delta::log_to_file(const dpp::log_t& log)
 }
 
 void mln::bot_delta::init(){
-    log_file = std::freopen("log.txt", "a", stderr);
+    log_file = std::unique_ptr<FILE, file_closer_t>{ std::freopen("log.txt", "a", stderr) };
     if (!log_file) {
         throw std::exception("Failed to open log file!");
     }
@@ -210,10 +210,7 @@ bool mln::bot_delta::close() {
         running = false;
     }
 
-    if (log_file) {
-        std::fclose(log_file);
-        log_file = nullptr;
-    }
+    log_file.reset(nullptr);
 
     mln::caches::cleanup();
 
@@ -279,4 +276,9 @@ mln::db_result_t mln::bot_delta::print_main_db() const {
     bot.log(dpp::ll_debug, "Printing over.");
 
     return res;
+}
+
+void mln::bot_delta::file_closer_t::operator()(FILE* f) const
+{
+    fclose(f);
 }

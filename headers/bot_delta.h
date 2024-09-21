@@ -71,7 +71,11 @@ namespace mln {
 		guild_create_runner guild_creates;
 
 		std::atomic_bool running;
-		FILE* log_file;
+
+		struct file_closer_t {
+			void operator()(FILE* f) const;
+		};
+		std::unique_ptr<FILE, file_closer_t> log_file;
 	private:
 		void init();
 		void setup_db();
