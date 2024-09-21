@@ -2,6 +2,7 @@
 #include "utility/caches.h"
 
 #include <cstring>
+#include <format>
 
 bool run_app(/*const bool register_bot_cmds*/);
 
@@ -82,6 +83,10 @@ bool run_app() {
                 delta.print_main_db();
             } else if (c == 'd') {
                 delta.bot.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
+            }
+            else if (c == 'c') {
+                delta.bot.log(dpp::loglevel::ll_debug, std::format("Total cache requests: [{}], total cache misses: [{}], cache miss rate: [{}].", 
+                    mln::caches::get_total_cache_requests(), mln::caches::get_total_cache_misses(), mln::caches::get_cache_misses_rate()));
             }
         }      
 

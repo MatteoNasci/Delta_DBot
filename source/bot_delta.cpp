@@ -112,7 +112,7 @@ void mln::bot_delta::init(){
     }
     bot.on_log(mln::bot_delta::logger);
 
-    bot.log(dpp::loglevel::ll_debug, "Starting new bot session...");
+    bot.log(dpp::loglevel::ll_critical, "Starting new bot session...");
     bot.log(dpp::loglevel::ll_debug, is_dev_id_valid ? "Dev id found!" : "Dev id not found!");
 
     mln::bot_delta::setup_db();
