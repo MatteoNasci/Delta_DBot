@@ -7,8 +7,8 @@
 namespace mln {
     class avatar final : public base_slashcommand {
     public:
-        avatar(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        avatar(dpp::cluster& cluster);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

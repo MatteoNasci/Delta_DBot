@@ -2,6 +2,8 @@
 #ifndef H_MLN_DB_DB_RESULT_H
 #define H_MLN_DB_DB_RESULT_H
 
+#include <string>
+
 namespace mln {
 	enum class db_result {
 		/*The SQLITE_OK result code means that the operation was successful and that there were no errors. Most other result codes indicate an error.*/
@@ -255,6 +257,11 @@ namespace mln {
 		io_err_data = 8202,
 		/*The SQLITE_IOERR_CORRUPTFS error code is an extended error code for SQLITE_IOERR used only by a VFS to indicate that a seek or read failure was due to the request not falling within the file's boundary rather than an ordinary device failure. This often indicates a corrupt filesystem.*/
 		io_err_corrupt_fs = 8458,
+	};
+
+	struct db_result_t {
+		db_result type;
+		std::string err_text;
 	};
 }
 

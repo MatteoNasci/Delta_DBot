@@ -19,8 +19,11 @@ namespace mln {
 		self = 12,
 		guild = 13,
 		policy = 14,
+		nsfw = 15,
 		enum_count
 	};
+
+	extern const char* get_cmd_type_text(const db_command_type type);
 }
 
 #endif //H_MLN_DB_DB_COMMAND_TYPE_H

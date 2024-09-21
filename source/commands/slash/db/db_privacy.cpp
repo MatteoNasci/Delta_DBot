@@ -1,10 +1,11 @@
 #include "commands/slash/db/db_privacy.h"
 #include "utility/utility.h"
+#include "utility/response.h"
 
-mln::db_privacy::db_privacy(bot_delta* const delta) : base_db_command(delta) {
+mln::db_privacy::db_privacy(dpp::cluster& cluster) : base_db_command{ cluster } {
 }
-//TODO remove bot_delta.h as much as possible, remove how many classes have its pointer as well
-dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking)
+
+dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const
 {
     static const dpp::message s_info = dpp::message{ "**Privacy Policy**" }
         .set_flags(dpp::m_ephemeral)
@@ -50,7 +51,7 @@ You have the right to request the deletion of your information. If you wish to r
 Please note that even after using these commands, some data may be retained for a period of time, such as:
 
 - **Guild ID**: The unique identifier of the server (guild) where the bot is used. After following the steps for the admin to remove the records related to the server, this information might still remain saved in the database temporarily. A future update will include a command to remove this information as well.
-- **Issue Text**: Text sent to the bot via the `/report_issue` command will be stored for some time, alongside the User ID that supplied the Issue Text.
+- **Issue Text**: Text sent to the bot via the `/report_issue` command will be stored for some time.
 - **Message Content**: When creating a record, the bot saves a copy of the Discord message content in a dedicated channel and stores a link to that message in the database. The bot will attempt to delete these stored messages when the associated record is deleted. However, this may not always succeed due to the bot no longer having permission to modify the stored message or channel, or for other reasons beyond the bot's control. Users will be notified if one or more messages could not be deleted.
 
 **5. Data Security**
@@ -69,10 +70,12 @@ If you have any questions or concerns about this Privacy Policy or our data prac
 
 By using our bot, you consent to the collection, use, and storage of your data as described in this Privacy Policy.)"""));
 
-    event_data.reply(dpp::message{ s_info });
+    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
+        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db privacy text!");
+    }
     co_return;
 }
 
-mln::db_init_type_flag mln::db_privacy::get_requested_initialization_type(db_command_type cmd){
-	return db_init_type_flag::cmd_data;
+mln::db_init_type_flag mln::db_privacy::get_requested_initialization_type(const db_command_type cmd) const {
+	return db_init_type_flag::none;
 }

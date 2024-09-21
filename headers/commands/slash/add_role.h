@@ -7,8 +7,8 @@
 namespace mln {
     class add_role final : public base_slashcommand {
     public:
-        add_role(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        add_role(dpp::cluster& cluster);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

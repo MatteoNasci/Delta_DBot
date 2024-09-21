@@ -9,16 +9,11 @@
 
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
-#include <dpp/appcommand.h>
-#include <dpp/coro/async.h>
-
-#include <optional>
 
 namespace mln {
-	class bot_delta;
-	class base_db_command : public base_action<dpp::task<void>, const dpp::slashcommand_t&, const db_cmd_data_t&, db_command_type, std::optional<dpp::async<dpp::confirmation_callback_t>>&> {
+	class base_db_command : public base_action<dpp::task<void>, const dpp::slashcommand_t&, const db_cmd_data_t&, const db_command_type> {
 	protected:
-		base_db_command(bot_delta* const delta);
+		base_db_command(dpp::cluster& cluster);
 	public:
 		base_db_command() = delete;
 
@@ -30,7 +25,7 @@ namespace mln {
 
 		base_db_command& operator=(base_db_command&& rhs) = default;
 
-		virtual db_init_type_flag get_requested_initialization_type(db_command_type cmd) = 0;
+		virtual db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const = 0;
 	};
 }
 

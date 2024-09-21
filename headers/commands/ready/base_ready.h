@@ -7,28 +7,21 @@
 #include <dpp/dispatcher.h>
 #include <dpp/coro/task.h>
 
-#include <memory>
-
 namespace mln {
 	class base_ready : public base_action<dpp::task<void>, const dpp::ready_t&> {
 	protected:
-		base_ready(bot_delta* const delta);
+		base_ready(dpp::cluster& cluster);
 	public:
-		/**
-		 * @brief base_ready is non-copyable
-		 */
-		base_ready(const base_ready&) = delete;
 
-		base_ready(base_ready&&);
+		base_ready() = delete;
 
-		/**
-		 * @brief base_ready is non-copyable
-		 */
-		base_ready& operator=(const base_ready&) = delete;
+		base_ready(const base_ready&) = default;
 
-		base_ready& operator=(base_ready&&);
+		base_ready(base_ready&&) = default;
 
-		virtual bool execute_command() = 0;
+		base_ready& operator=(const base_ready&) = default;
+
+		base_ready& operator=(base_ready&&) = default;
 	};
 }
 

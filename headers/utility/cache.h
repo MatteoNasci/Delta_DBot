@@ -37,7 +37,7 @@ namespace mln {
 		using get_return = typename std::conditional<use_unique_over_shared_ptr, T_value, std::shared_ptr<const T_value>>::type;
 
 		std::unordered_map<T_key, std::tuple<ptr_type, size_t>, T_hash> mapped_storage;
-		std::multimap<size_t, T_key> mapped_frequencies;//TODO the multimap is the bottleneck of this class, maybe using a priority queue would be better? Or I could use a std::map<size_t, std::unordered_set<T_key>> which will mantaint the size_t ordering
+		std::multimap<size_t, T_key> mapped_frequencies;
 		mutable std::shared_mutex storage_mutex;
 
 	public:

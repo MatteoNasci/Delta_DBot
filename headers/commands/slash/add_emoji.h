@@ -7,8 +7,8 @@
 namespace mln {
     class add_emoji final : public base_slashcommand {
     public:
-        add_emoji(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        add_emoji(dpp::cluster& cluster);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

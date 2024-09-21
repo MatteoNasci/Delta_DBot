@@ -1,11 +1,13 @@
 #include "utility/perms.h"
 #include "utility/caches.h"
 #include "utility/utility.h"
+#include "utility/response.h"
+#include "utility/reply_log_data.h"
 
 #include <dpp/cluster.h>
+#include <dpp/dispatcher.h>
 
 //https://discord.com/developers/docs/topics/permissions#permission-overwrites
-//TODO I could probably remove the dpp::guild requirement, I only need the guild_id and the guild owner_id
 std::optional<dpp::permission> mln::perms::get_base_permission(const dpp::guild& guild, const dpp::guild_member& member, const dpp::interaction_create_t* const event_data) {
 	//If the member is the server owner, return all permissions
 	if (member.user_id == guild.owner_id) {
@@ -149,8 +151,25 @@ dpp::task<std::optional<dpp::permission>> mln::perms::get_computed_permission_ta
 	if (!base_perm.has_value()) {
 		co_return std::nullopt;
 	}
-	
+
 	co_return mln::perms::get_overwrite_permission(base_perm.value(), channel, member, event_data);
+}
+dpp::task<std::optional<dpp::permission>> mln::perms::get_computed_permission_full(const dpp::guild& guild, const dpp::channel& channel, const dpp::guild_member& member, const reply_log_data_t& reply_log_data) {
+	std::optional<dpp::permission> perms = mln::perms::get_computed_permission(guild, channel, member, reply_log_data.event_data);
+	if (!perms.has_value()) {
+		perms = co_await mln::perms::get_computed_permission_task(guild, channel, member, reply_log_data.event_data);
+		if (!perms.has_value()) {
+			if (reply_log_data.event_data && reply_log_data.cluster) {
+				const std::string err_text = std::format("Failed to retrieve perms data! guild_channel_member_id: [{}, {}, {}].", 
+					static_cast<uint64_t>(guild.id), static_cast<uint64_t>(channel.id), static_cast<uint64_t>(member.user_id));
+				mln::utility::conf_callback_is_error(
+					co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
+					*reply_log_data.cluster, reply_log_data.event_data, err_text);
+			}
+		}
+	}
+	
+	co_return perms;
 }
 
 bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissions, const std::vector<dpp::permissions>& permissions_to_check) {
@@ -165,7 +184,7 @@ bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissio
 
 	return true;
 }
-bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissions, dpp::permissions permission_to_check) {
+bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissions, const dpp::permissions permission_to_check) {
 	for (const dpp::permission& perm : permissions) {
 		if (!perm.can(permission_to_check)) {
 			return false;
@@ -174,7 +193,7 @@ bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissio
 
 	return true;
 }
-bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissions, uint64_t permission_to_check) {
+bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissions, const uint64_t permission_to_check) {
 	for (const dpp::permission& perm : permissions) {
 		if (!perm.can(static_cast<dpp::permissions>(permission_to_check))) {
 			return false;
@@ -183,7 +202,7 @@ bool mln::perms::check_permissions(const std::vector<dpp::permission>& permissio
 
 	return true;
 }
-bool mln::perms::check_permissions(dpp::permission permission, const std::vector<dpp::permissions>& permissions_to_check) {
+bool mln::perms::check_permissions(const dpp::permission permission, const std::vector<dpp::permissions>& permissions_to_check) {
 	for (const dpp::permissions& flag_to_check : permissions_to_check) {
 		if (!permission.can(flag_to_check)) {
 			return false;
@@ -192,14 +211,14 @@ bool mln::perms::check_permissions(dpp::permission permission, const std::vector
 
 	return true;
 }
-bool mln::perms::check_permissions(dpp::permission permission, dpp::permissions permission_to_check) {
+bool mln::perms::check_permissions(const dpp::permission permission, const dpp::permissions permission_to_check) {
 	return permission.can(permission_to_check);
 }
-bool mln::perms::check_permissions(dpp::permission permission, uint64_t permission_to_check) {
+bool mln::perms::check_permissions(const dpp::permission permission, const uint64_t permission_to_check) {
 	return permission.can(static_cast<dpp::permissions>(permission_to_check));
 }
 
-dpp::task<dpp::permission> mln::perms::get_additional_perms_required(const dpp::message& msg, dpp::cluster& bot, uint64_t guild_id) {
+dpp::task<dpp::permission> mln::perms::get_additional_perms_required(const dpp::message& msg, dpp::cluster& bot, const uint64_t guild_id) {
 	dpp::permission result{0};
 	if (msg.tts) {
 		result.add(dpp::permissions::p_send_tts_messages);

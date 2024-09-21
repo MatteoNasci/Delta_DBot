@@ -7,26 +7,21 @@
 #include <dpp/dispatcher.h>
 #include <dpp/coro/task.h>
 
-#include <memory>
-
 namespace mln {
 	class base_guild_create : public base_action<dpp::task<void>, const dpp::guild_create_t&> {
 	protected:
-		base_guild_create(bot_delta* const delta);
+		base_guild_create(dpp::cluster& cluster);
 	public:
-		/**
-		 * @brief base_guild_create is non-copyable
-		 */
-		base_guild_create(const base_guild_create&) = delete;
 
-		base_guild_create(base_guild_create&&);
+		base_guild_create() = delete;
 
-		/**
-		 * @brief base_guild_create is non-copyable
-		 */
-		base_guild_create& operator=(const base_guild_create&) = delete;
+		base_guild_create(const base_guild_create&) = default;
 
-		base_guild_create& operator=(base_guild_create&&);
+		base_guild_create(base_guild_create&&) = default;
+
+		base_guild_create& operator=(const base_guild_create&) = default;
+
+		base_guild_create& operator=(base_guild_create&&) = default;
 	};
 }
 

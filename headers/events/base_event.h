@@ -4,15 +4,22 @@
 
 #include <utility>
 
+namespace dpp {
+	class cluster;
+}
+
 namespace mln {
-	class bot_delta;
+	class database_handler;
+
 	template<typename T_container>
 	class base_event {
 	protected:
 		T_container actions;
-
+	private:
+		dpp::cluster& cluster;
+		database_handler& db;
 	public:
-		base_event() : actions() {};
+		base_event(dpp::cluster& in_cluster, database_handler& in_db) : actions{}, cluster{ in_cluster }, db{ in_db } {};
 
 		/**
 		 * @brief base_event is non-copyable
@@ -31,8 +38,10 @@ namespace mln {
 			return *this;
 		}
 
-		virtual void attach_event(bot_delta* const delta) = 0;
+		virtual void attach_event() = 0;
 		const T_container& get_actions() const { return actions; }
+		dpp::cluster& bot() { return cluster; }
+		database_handler& database() { return db; }
 	};
 }
 

@@ -7,8 +7,8 @@
 namespace mln {
     class bot_info final : public base_slashcommand {
     public:
-        bot_info(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        bot_info(dpp::cluster& cluster);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

@@ -9,9 +9,9 @@ namespace mln {
 	private:
 
 	public:
-		db_privacy(bot_delta* const delta);
-		dpp::task<void> command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) override;
-		db_init_type_flag get_requested_initialization_type(db_command_type cmd) override;
+		db_privacy(dpp::cluster& cluster);
+		dpp::task<void> command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const override;
+		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const override;
 
 	private:
 	};

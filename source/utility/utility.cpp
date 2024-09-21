@@ -1,12 +1,15 @@
 #include "utility/utility.h"
 #include "utility/constants.h"
+#include "utility/json_err.h"
 
 #include <dpp/colors.h>
 #include <dpp/channel.h>
 #include <dpp/cache.h>
 #include <dpp/unicode_emoji.h>
+#include <dpp/cluster.h>
 
 #include <regex>
+#include <format>
 
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id);
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id, std::string& out_name);
@@ -30,48 +33,6 @@ mln::database_callbacks_t mln::utility::get_any_results_callback(bool* found) {
     return copy;
 }
 
-dpp::task<void> mln::utility::co_conclude_thinking_response(dpp::async<dpp::confirmation_callback_t>& thinking, const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& to_respond, const std::tuple<bool, dpp::loglevel>& log_always) {
-    dpp::confirmation_callback_t confirmation = co_await thinking;
-    bool logged = false;
-    if (confirmation.is_error()) {
-        bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed thinking confirmation : " + confirmation.get_error().human_readable);
-        logged = true;
-    }
-
-    confirmation = co_await event_data.co_edit_response(to_respond);
-    if (confirmation.is_error()) {
-        bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed edit response confirmation : " + confirmation.get_error().human_readable);
-        logged = true;
-    }
-
-    if (std::get<0>(log_always) && !logged) {
-        bot.log(std::get<1>(log_always), to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ".");
-    }
-}
-dpp::task<void> mln::utility::co_conclude_thinking_response(std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& to_respond, const std::tuple<bool, dpp::loglevel>& log_always, bool default_reply_behaviour) {
-    bool logged = false;
-    const bool valid_thinking = thinking.has_value();
-    if (valid_thinking) {
-        dpp::confirmation_callback_t confirmation = co_await thinking.value();
-        thinking = std::nullopt;
-        if (confirmation.is_error()) {
-            bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed thinking confirmation : " + confirmation.get_error().human_readable);
-            logged = true;
-        }
-    }
-
-    dpp::confirmation_callback_t confirmation = (!default_reply_behaviour || valid_thinking) ? co_await event_data.co_edit_response(to_respond) : co_await event_data.co_reply(to_respond);
-
-    if (confirmation.is_error()) {
-        bot.log(dpp::loglevel::ll_error, to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ". Also failed edit response confirmation : " + confirmation.get_error().human_readable);
-        logged = true;
-    }
-
-    if (std::get<0>(log_always) && !logged) {
-        bot.log(std::get<1>(log_always), to_respond + " " + event_data.command.get_command_name() + ", from usr: " + std::to_string(event_data.command.usr.id) + " in guild " + std::to_string(event_data.command.guild_id) + " in channel " + std::to_string(event_data.command.channel_id) + ".");
-    }
-}
-
 bool mln::utility::extract_message_url_data(const std::string& msg_url, uint64_t& out_guild_id, uint64_t& out_channel_id, uint64_t& out_message_id) {
     static const std::regex url_regex(R"(https://discord.com/channels/(\d+)/(\d+)/(\d+))");
     std::smatch match;
@@ -85,6 +46,14 @@ bool mln::utility::extract_message_url_data(const std::string& msg_url, uint64_t
     }
 
     return valid_results;
+}
+std::string mln::utility::get_current_date_time()
+{
+    time_t now = std::time(0);
+    struct tm tstruct = *std::localtime(&now);
+    char buf[80];
+    std::strftime(buf, sizeof(buf), "%d-%m-%Y %X", &tstruct);
+    return std::string{ buf };
 }
 bool mln::utility::extract_generic_attachment_url_data(const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id) {
     bool result = mln::utility::extract_attachment_url_data(attachment_url, out_guild_id, out_channel_id);
@@ -172,19 +141,19 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
                 .set_style(dpp::component_style::cos_primary))
     );
 
-    if (data.bot == nullptr || data.token.empty()) {
+    if (data.bot.me.id == 0 || data.token.empty()) {
         std::cerr << "Error while executing paginated embed job, no cluster or token found!\n";
         co_return;
     }
-    dpp::cluster& bot = *(data.bot);
+
     if (data.channel_id == 0 || data.guild_id == 0) {
-        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, no guild_id or channel_id found!");
+        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, no guild_id or channel_id found!");
         co_return;
     }
 
     if (data.time_limit_seconds == 0) {
-        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the time_limit_seconds cannot be == 0!");
-        bot.interaction_response_edit(data.token,
+        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the time_limit_seconds cannot be == 0!");
+        data.bot.interaction_response_edit(data.token,
             dpp::message{"Error while executing paginated embed job, the time_limit_seconds cannot be == 0!"}
             .set_guild_id(data.guild_id)
             .set_channel_id(data.channel_id));
@@ -192,15 +161,15 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     }
 
     if (!text_ptr || text_ptr->size() == 0) {
-        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is either invalid or empty!");
-        bot.interaction_response_edit(data.token,
+        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is either invalid or empty!");
+        data.bot.interaction_response_edit(data.token,
             dpp::message{"Error while executing paginated embed job, the given text list is either invalid or empty!"}
             .set_guild_id(data.guild_id)
             .set_channel_id(data.channel_id));
         co_return;
     }
 
-    dpp::async<dpp::confirmation_callback_t> processing = bot.co_interaction_response_edit(data.token,
+    dpp::async<dpp::confirmation_callback_t> processing = data.bot.co_interaction_response_edit(data.token,
         dpp::message{"Processing the data, please wait..."}
         .set_guild_id(data.guild_id)
         .set_channel_id(data.channel_id));
@@ -216,7 +185,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     //Fill the msgs array with all the msgs required to display all the input text
     for (const std::string& input : input_strings) {
         if (input.size() == 0) {
-            bot.log(dpp::loglevel::ll_warning, "Found empty string while creating paginated embeds!");
+            data.bot.log(dpp::loglevel::ll_warning, "Found empty string while creating paginated embeds!");
             continue;
         }
 
@@ -224,7 +193,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
         const size_t new_string_size = input.size() + 3;
 
         if (new_string_size > max_desc_size) {
-            bot.log(dpp::loglevel::ll_warning, "Found string that exceeds the max char limits while creating paginated embeds!");
+            data.bot.log(dpp::loglevel::ll_warning, "Found string that exceeds the max char limits while creating paginated embeds!");
             continue;
         }
 
@@ -251,8 +220,8 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
 
     //If only 1 msg present and embeds is empty (for example when all input strings are empty), return an error
     if (msgs.size() == 1 && msgs[current_msgs_index].embeds.size() == 0) {
-        bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is filled with empty strings!");
-        bot.interaction_response_edit(data.token,
+        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is filled with empty strings!");
+        data.bot.interaction_response_edit(data.token,
             dpp::message{"Error while executing paginated embed job, the given text list is empty! Internal error."}
             .set_guild_id(data.guild_id)
             .set_channel_id(data.channel_id));
@@ -283,7 +252,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
 
     //If only one message, skip pagination and just display the message
     if (msgs.size() == 1) {
-        bot.interaction_response_edit(data.token, msgs[0]);
+        data.bot.interaction_response_edit(data.token, msgs[0]);
         co_return;
     }
 
@@ -296,7 +265,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
         if (current_msgs_index != next_msgs_index) {
             current_msgs_index = next_msgs_index;
 
-            co_await bot.co_interaction_response_edit(data.token, msgs[current_msgs_index]);
+            co_await data.bot.co_interaction_response_edit(data.token, msgs[current_msgs_index]);
         }
 
         if (button_data.command.id != 0) {
@@ -305,8 +274,8 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
         }
 
         const auto& result = co_await dpp::when_any{
-            bot.co_sleep(data.time_limit_seconds),
-            bot.on_button_click.when([&button_ids](const dpp::button_click_t& event_data) {
+            data.bot.co_sleep(data.time_limit_seconds),
+            data.bot.on_button_click.when([&button_ids](const dpp::button_click_t& event_data) {
                 for (const std::string s : button_ids) {
                     if (s == event_data.custom_id) {
                         return true;
@@ -317,20 +286,20 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
 
         //If the timer run out return an error
         if (result.index() == 0) {
-            bot.interaction_response_edit(data.token, dpp::message{"Too much time has passed since the last interaction, the command execution has terminated"});
+            data.bot.interaction_response_edit(data.token, dpp::message{"Too much time has passed since the last interaction, the command execution has terminated"});
             co_return;
         }
 
         //If an exception occurred return an error
         if (result.is_exception()) {
-            bot.interaction_response_edit(data.token, dpp::message{"An unknown error occurred!"});
+            data.bot.interaction_response_edit(data.token, dpp::message{"An unknown error occurred!"});
             co_return;
         }
 
         //It was suggested to copy the event from documentation of ::when
         button_data = result.get<1>();
         if (button_data.cancelled) {
-            bot.interaction_response_edit(data.token, dpp::message{"The event was cancelled!"});
+            data.bot.interaction_response_edit(data.token, dpp::message{"The event was cancelled!"});
             co_return;
         }
 
@@ -347,7 +316,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
         } else if (button_data.custom_id == button_ids[3]) {
             next_msgs_index = msgs.size() - 1;
         } else {
-            bot.interaction_response_edit(data.token, dpp::message{"Invalid button id found, internal error!"});
+            data.bot.interaction_response_edit(data.token, dpp::message{"Invalid button id found, internal error!"});
             co_return;
         }
 
@@ -363,7 +332,7 @@ bool mln::utility::is_ascii(const char* const text) {
     return mln::utility::is_ascii(reinterpret_cast<const unsigned char* const>(text));
 }
 bool mln::utility::is_ascii(const unsigned char* const text) {
-    static const unsigned char bit_to_check = (1 << 8);
+    static const unsigned char bit_to_check = (1 << 7);
     for (size_t i = 0;;++i) {
         const unsigned char c = text[i];
         if (c == '\0') {
@@ -410,4 +379,169 @@ std::vector<dpp::snowflake> mln::utility::extract_emojis(const std::string& cont
     }
 
     return result;
+}
+
+bool mln::utility::conf_callback_is_error(const dpp::confirmation_callback_t& callback, const dpp::cluster& bot, const dpp::interaction_create_t* const event_data, const std::string& additional_msg)
+{
+    const bool is_error = callback.is_error();
+
+    if (is_error) {
+        const dpp::error_info err = callback.get_error();
+        if (additional_msg.empty()) {
+            bot.log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}].",
+                mln::get_json_err_text(err.code), err.human_readable));
+        }
+        else {
+            bot.log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}]. Additional msg: [{}].",
+                mln::get_json_err_text(err.code), err.human_readable, additional_msg));
+        }
+    }
+
+    if (event_data) {
+        mln::utility::create_event_log_error(*event_data, bot, additional_msg);
+    }
+
+    return is_error;
+}
+
+void mln::utility::create_event_log_error(const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& additional_msg)
+{
+    if (additional_msg.empty()) {
+        bot.log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}].", 
+            static_cast<uint64_t>(event_data.command.id), static_cast<uint64_t>(event_data.command.guild_id), static_cast<uint64_t>(event_data.command.channel_id),
+            static_cast<uint64_t>(event_data.command.usr.id), event_data.command.get_command_name()));
+        return;
+    }
+
+    bot.log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}], additional info: [{}].",
+        static_cast<uint64_t>(event_data.command.id), static_cast<uint64_t>(event_data.command.guild_id), static_cast<uint64_t>(event_data.command.channel_id),
+        static_cast<uint64_t>(event_data.command.usr.id), event_data.command.get_command_name(), additional_msg));
+}
+
+bool mln::utility::is_same_cmd(const dpp::slashcommand& first, const dpp::slashcommand& second)
+{
+    bool equal = first.default_member_permissions == second.default_member_permissions && 
+        first.dm_permission == second.dm_permission &&
+        first.nsfw == second.nsfw &&
+        first.type == second.type &&
+        first.options.size() == second.options.size() &&
+        first.name_localizations.size() == second.name_localizations.size() &&
+        first.description_localizations.size() == second.description_localizations.size() &&
+        first.name == second.name &&
+        first.description == second.description;
+    
+    if (equal) { 
+        for (const std::pair<std::string, std::string>& pair : first.description_localizations) {
+            const std::map<std::string, std::string>::const_iterator& it = second.description_localizations.find(pair.first);
+            if (it == second.description_localizations.end() || it->second != pair.second) {
+                equal = false;
+                break;
+            }
+        }
+
+        if (equal) {
+            for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
+                const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
+                if (it == second.name_localizations.end() || it->second != pair.second) {
+                    equal = false;
+                    break;
+                }
+            }
+
+            if (equal) {
+                for (size_t i = 0; i < first.options.size(); ++i) {
+                    if (!mln::utility::is_same_option(first.options[i], second.options[i])) {
+                        equal = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return equal;
+}
+
+bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::command_option& second)
+{
+    bool equal = first.autocomplete == second.autocomplete &&
+        first.required == second.required &&
+        first.type == second.type &&
+        first.channel_types.size() == second.channel_types.size() &&
+        first.choices.size() == second.choices.size() &&
+        first.description_localizations.size() == second.description_localizations.size() &&
+        first.name_localizations.size() == second.name_localizations.size() &&
+        first.options.size() == second.options.size() &&
+        first.min_value == second.min_value &&
+        first.max_value == second.max_value &&
+        first.name == second.name &&
+        first.description == second.description;
+
+    if (equal) {
+        for (size_t i = 0; i < first.channel_types.size(); ++i) {
+            if (first.channel_types[i] != second.channel_types[i]) {
+                equal = false;
+                break;
+            }
+        }
+
+        if (equal) {
+            for (const std::pair<std::string, std::string>& pair : first.description_localizations) {
+                const std::map<std::string, std::string>::const_iterator& it = second.description_localizations.find(pair.first);
+                if (it == second.description_localizations.end() || it->second != pair.second) {
+                    equal = false;
+                    break;
+                }
+            }
+
+            if (equal) {
+                for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
+                    const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
+                    if (it == second.name_localizations.end() || it->second != pair.second) {
+                        equal = false;
+                        break;
+                    }
+                }
+
+                if (equal) {
+                    for (size_t i = 0; i < first.choices.size(); ++i) {
+                        if (!mln::utility::is_same_choice(first.choices[i], second.choices[i])) {
+                            equal = false;
+                            break;
+                        }
+                    }
+
+                    if (equal) {
+                        for (size_t i = 0; i < first.options.size(); ++i) {
+                            if (!mln::utility::is_same_option(first.options[i], second.options[i])) {
+                                equal = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return equal;
+}
+
+bool mln::utility::is_same_choice(const dpp::command_option_choice& first, const dpp::command_option_choice& second)
+{
+    bool equal = first.value == second.value && 
+        first.name_localizations.size() == second.name_localizations.size() && 
+        first.name == second.name;
+
+    if (equal) {
+        for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
+            const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
+            if (it == second.name_localizations.end() || it->second != pair.second) {
+                equal = false;
+                break;
+            }
+        }
+    }
+
+    return equal;
 }

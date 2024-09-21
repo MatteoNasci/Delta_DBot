@@ -10,7 +10,8 @@
 namespace mln {
     class guild_create_runner final : public base_event<std::vector<std::unique_ptr<base_guild_create>>> {
     public:
-        void attach_event(bot_delta* const delta) override;
+        guild_create_runner(dpp::cluster& cluster, database_handler& db);
+        void attach_event() override;
     };
 }
 

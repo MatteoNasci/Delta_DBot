@@ -3,13 +3,13 @@
 #define H_MLN_DB_CACHES_H
 
 #include "utility/cache.h"
+#include "utility/reply_log_data.h"
 
 #include <dpp/guild.h>
 #include <dpp/channel.h>
 #include <dpp/user.h>
 #include <dpp/message.h>
 #include <dpp/dispatcher.h>
-#include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/role.h>
 
@@ -19,6 +19,10 @@
 #include <optional>
 #include <functional>
 #include <atomic>
+
+namespace dpp {
+	class cluster;
+}
 
 namespace mln {
 	class database_handler;
@@ -35,9 +39,17 @@ namespace mln {
 		static std::atomic_ullong s_cache_misses;
 		static std::atomic_ullong s_cache_requests;
 
+		static size_t s_saved_select_dump_channel;
+		static size_t s_saved_on_guild_member_update;
+		static size_t s_saved_on_channel_update;
+		static size_t s_saved_on_user_update;
+		static size_t s_saved_on_guild_update;
+		static size_t s_saved_on_guild_role_update;
+
 		static dpp::cluster* s_cluster;
 		static database_handler* s_db;
 	public:
+
 		caches() = delete;
 
 		static void init(dpp::cluster* cluster, database_handler* db);
@@ -52,39 +64,45 @@ namespace mln {
 		};
 
 		static cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> dump_channels_cache;
-		static std::optional<uint64_t> get_dump_channel_id(uint64_t guild_id);
+		static std::optional<uint64_t> get_dump_channel_id(const uint64_t guild_id);
 
-		static std::optional<dpp::message> get_message(uint64_t message_id, const dpp::interaction_create_t* const event_data);
+		static std::optional<dpp::message> get_message(const uint64_t message_id, const dpp::interaction_create_t* const event_data);
 		/**
 		 * @brief Requires view channel and read message history perms for the bot
 		*/
-		static dpp::task<std::optional<dpp::message>> get_message_task(uint64_t message_id, uint64_t channel_id);
+		static dpp::task<std::optional<dpp::message>> get_message_task(const uint64_t message_id, const uint64_t channel_id);
+		static dpp::task<std::optional<dpp::message>> get_message_full(const uint64_t message_id, const uint64_t channel_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 
 		static cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> show_all_cache;
-		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_all(uint64_t guild_id);
+		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_all(const uint64_t guild_id);
 
 		static cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, composite_tuple_hash> show_user_cache;
 		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_user(const std::tuple<uint64_t, uint64_t>& guild_user_ids);
 
 		static cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> guild_cache;
-		static std::optional<std::shared_ptr<const dpp::guild>> get_guild(uint64_t guild_id);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_task(uint64_t guild_id);
+		static std::optional<std::shared_ptr<const dpp::guild>> get_guild(const uint64_t guild_id);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_task(const uint64_t guild_id);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_full(const uint64_t guild_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 		
 		static cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> channel_cache;
-		static std::optional<std::shared_ptr<const dpp::channel>> get_channel(uint64_t channel_id, const dpp::interaction_create_t* event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_task(uint64_t channel_id);
+		static std::optional<std::shared_ptr<const dpp::channel>> get_channel(const uint64_t channel_id, const dpp::interaction_create_t* const event_data);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_task(const uint64_t channel_id);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_full(const uint64_t channel_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 
 		static cache<uint64_t, dpp::user_identified, false, 6000, 500, 0.7, true> user_cache;
-		static std::optional<std::shared_ptr<const dpp::user_identified>> get_user(uint64_t user_id, const dpp::interaction_create_t* event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_task(uint64_t user_id);
+		static std::optional<std::shared_ptr<const dpp::user_identified>> get_user(const uint64_t user_id, const dpp::interaction_create_t* const event_data);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_task(const uint64_t user_id);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_full(const uint64_t user_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 
 		static cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, composite_tuple_hash> member_cache;
-		static std::optional<std::shared_ptr<const dpp::guild_member>> get_member(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const dpp::interaction_create_t* event_data);
+		static std::optional<std::shared_ptr<const dpp::guild_member>> get_member(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const dpp::interaction_create_t* const event_data);
 		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_task(const std::tuple<uint64_t, uint64_t>& guild_user_ids);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_full(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 
 		static cache<uint64_t, dpp::role, false, 6000, 500, 0.7, true> role_cache;
-		static std::optional<std::shared_ptr<const dpp::role>> get_role(uint64_t role_id, const dpp::interaction_create_t* event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_task(uint64_t guild_id, uint64_t role_id, bool add_all_guild_roles = false);
+		static std::optional<std::shared_ptr<const dpp::role>> get_role(const uint64_t role_id, const dpp::interaction_create_t* const  event_data);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_task(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles = false);
+		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_full(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles = false, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
 	};
 }
 

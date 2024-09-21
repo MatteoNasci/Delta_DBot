@@ -1,9 +1,8 @@
 #include "commands/slash/db/db.h"
-#include "bot_delta.h"
 #include "utility/constants.h"
 #include "utility/utility.h"
 #include "utility/perms.h"
-#include "commands/slash/db/db_update_dump_channel.h"
+#include "commands/slash/db/db_config.h"
 #include "commands/slash/db/db_insert.h"
 #include "commands/slash/db/db_select.h"
 #include "commands/slash/db/db_show.h"
@@ -12,16 +11,20 @@
 #include "commands/slash/db/db_help.h"
 #include "commands/slash/db/db_privacy.h"
 #include "utility/caches.h"
+#include "utility/response.h"
+#include "utility/reply_log_data.h"
+#include "database/database_handler.h"
 
-#include <dpp/queues.h>
+#include <dpp/cluster.h>
+#include <dpp/dispatcher.h>
 
 #include <memory>
 
 typedef dpp::command_option cmd_opt;
 typedef dpp::command_option_range cmd_opt_r;
 
-mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("db", "Manage the database.", delta->bot.me.id)
+mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashcommand{ cluster,
+    std::move(dpp::slashcommand("db", "Manage the database.", cluster.me.id)
         //Minimum permission required for using the commands
         .set_default_permissions(dpp::permissions::p_use_application_commands)
         //Config command group
@@ -42,6 +45,7 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
                 .add_option(cmd_opt(dpp::co_string, "url", "Identifying url for the discord message/attachment", true)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_url()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_url())))
+                .add_option(cmd_opt(dpp::co_boolean, "nsfw", "Set this to True if the content inserted is nsfw", true))
                 .add_option(cmd_opt(dpp::co_string, "description", "Description for the record", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_description()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_description()))))
@@ -51,6 +55,7 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
                 .add_option(cmd_opt(dpp::co_attachment, "file", "The attachment to add to the record", true))
+                .add_option(cmd_opt(dpp::co_boolean, "nsfw", "Set this to True if the content inserted is nsfw", true))
                 .add_option(cmd_opt(dpp::co_string, "description", "Description for the record", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_description()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_description()))))
@@ -59,6 +64,7 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
                 .add_option(cmd_opt(dpp::co_string, "name", "Identifying name for the record", true)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
+                .add_option(cmd_opt(dpp::co_boolean, "nsfw", "Set this to True if the content inserted is nsfw", true))
                 .add_option(cmd_opt(dpp::co_string, "description", "Description for the record", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_description()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_description()))))
@@ -74,6 +80,12 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
                 .add_option(cmd_opt(dpp::co_string, "description", "Description for the record", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_description()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_description()))))
+            //Update nsfw command
+            .add_option(cmd_opt(dpp::co_sub_command, "nsfw", "Updates a database record's nsfw tag", false)
+                .add_option(cmd_opt(dpp::co_string, "name", "Identifying name for the record", true)
+                    .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
+                    .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
+                .add_option(cmd_opt(dpp::co_boolean, "nsfw", "Set this to True if the content updated is nsfw", true)))
             //Update help command
             .add_option(cmd_opt(dpp::co_sub_command, "help", "Gives detailed information about the update group command", false)))
         //Delete command group
@@ -117,20 +129,18 @@ mln::db::db(mln::bot_delta* const delta) : base_slashcommand(delta,
             .add_option(cmd_opt(dpp::co_sub_command, "generic", "Gives generic information about the db group command", false)))
         .add_option(cmd_opt(dpp::co_sub_command_group, "privacy", "Gives information about the db group command privacy policy", false)
             .add_option(cmd_opt(dpp::co_sub_command, "policy", "Gives information about the db group command privacy policy", false)))
-    )) {}
-//TODO I need to add encryption for user data, other security measures and inform user of data stored
-//TODO https://support-dev.discord.com/hc/en-us/articles/8562894815383-Discord-Developer-Terms-of-Service section 5, add /db privacy policy command to explain data usage/storage and deletion
-//TODO https://gdpr.eu/
-dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
+    ) }, database{ in_database } {}
+
+dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data) const{
     static const std::unique_ptr<mln::base_db_command> commands[]{
-        std::make_unique<mln::db_insert>(mln::db_insert{delta()}),
-        std::make_unique<mln::db_update_dump_channel>(mln::db_update_dump_channel{delta()}),
-        std::make_unique<mln::db_select>(mln::db_select{delta()}),
-        std::make_unique<mln::db_show>(mln::db_show{delta()}),
-        std::make_unique<mln::db_delete>(mln::db_delete{delta()}),
-        std::make_unique<mln::db_update>(mln::db_update{delta()}),
-        std::make_unique<mln::db_help>(mln::db_help{delta()}),
-        std::make_unique<mln::db_privacy>(mln::db_privacy{delta()}),
+        std::make_unique<mln::db_insert>(mln::db_insert{bot(), database}),
+        std::make_unique<mln::db_config>(mln::db_config{bot(), database}),
+        std::make_unique<mln::db_select>(mln::db_select{bot(), database}),
+        std::make_unique<mln::db_show>(mln::db_show{bot(), database}),
+        std::make_unique<mln::db_delete>(mln::db_delete{bot(), database}),
+        std::make_unique<mln::db_update>(mln::db_update{bot(), database}),
+        std::make_unique<mln::db_help>(mln::db_help{bot()}),
+        std::make_unique<mln::db_privacy>(mln::db_privacy{bot()}),
     };
     static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_insert_sub_commands{
         {"url", {commands[0], mln::db_command_type::url}},
@@ -140,6 +150,7 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
     };
     static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_update_sub_commands{
         {"description", {commands[5], mln::db_command_type::description}},
+        {"nsfw", {commands[5], mln::db_command_type::nsfw}},
         {"help", {commands[5], mln::db_command_type::help}},
     };
     static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_delete_sub_commands{
@@ -180,123 +191,98 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
     };
 
     //Return error if event_data or cmd_data are incorrect
-    dpp::command_interaction cmd_interaction = event_data.command.get_command_interaction();
-    if (event_data.command.id == 0 || event_data.command.guild_id == 0 || event_data.command.channel_id == 0 || cmd_interaction.options.size() == 0) {
-        event_data.reply(dpp::message{"Failed to proceed with db command, event data is incorrect!"}.set_flags(dpp::m_ephemeral));
+    const dpp::command_interaction cmd_interaction = event_data.command.get_command_interaction();
+    if (event_data.command.id == 0 || event_data.command.guild_id == 0 || event_data.command.channel_id == 0 || cmd_interaction.options.size() == 0) {  
+        
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, event_data, "Failed to proceed with db command, event data is incorrect!"), bot(), &event_data);
         co_return;
     }
 
     //Get the mapper for the primary cmds, return error if not found
-    dpp::command_data_option primary_cmd = cmd_interaction.options[0];
+    const dpp::command_data_option primary_cmd = cmd_interaction.options[0];
     const auto& it = s_allowed_primary_sub_commands.find(primary_cmd.name);
     if (it == s_allowed_primary_sub_commands.end()) {
-        event_data.reply(dpp::message{"Couldn't find primary sub_command " + primary_cmd.name}.set_flags(dpp::m_ephemeral));
+
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, event_data, std::format("Couldn't find primary sub command [{}].", primary_cmd.name)), bot(), &event_data);
         co_return;
     }
 
     //Return error if primary_cmd is incorrect
     if (primary_cmd.options.size() == 0) {
-        event_data.reply(dpp::message{"Failed to proceed with db command, event data is incorrect!"}.set_flags(dpp::m_ephemeral));
+
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, event_data, "Failed to proceed with db command, event data is incorrect!"), bot(), &event_data);
         co_return;
     }
 
     //Get the sub_command handler, return an error if not found
     const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>>& mapper = it->second;
-    dpp::command_data_option sub_command = primary_cmd.options[0];
+    const dpp::command_data_option sub_command = primary_cmd.options[0];
     const auto& sub_it = mapper.find(sub_command.name);
     if (sub_it == mapper.end()) {
-        event_data.reply(dpp::message{"Couldn't find " + primary_cmd.name + "'s sub_command " + sub_command.name}.set_flags(dpp::m_ephemeral));
+
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, event_data, 
+            std::format("Couldn't find [{}]'s sub command [{}].", primary_cmd.name, sub_command.name)), bot(), &event_data);
         co_return;
     }
 
     //Data to be given to the selected command function
     db_cmd_data_t cmd_data{nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0};
-    std::optional<dpp::async<dpp::confirmation_callback_t>> thinking{std::nullopt};
-    db_command_type cmd_type = std::get<1>(sub_it->second);
+    const db_command_type cmd_type = std::get<1>(sub_it->second);
 
-    db_init_type_flag init_requested = std::get<0>(sub_it->second)->get_requested_initialization_type(cmd_type);
+    const db_init_type_flag init_requested = std::get<0>(sub_it->second)->get_requested_initialization_type(cmd_type);
 
     //If the command requests thinking, start thinking
     const bool is_thinking = (init_requested & db_init_type_flag::thinking) != db_init_type_flag::none;
     if (is_thinking) {
-        thinking = event_data.co_thinking(true);
+        if (mln::utility::conf_callback_is_error(co_await event_data.co_thinking(true), bot())) {
+            const std::string err_text = "Failed thinking confirmation, command aborted!";
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, err_text), bot(), &event_data, err_text);
+            co_return;
+        }
     }
 
+    const mln::reply_log_data_t reply_data{ &event_data, &bot(), !is_thinking };
     //If the command requests cmd_data, retrieve it
     if ((init_requested & db_init_type_flag::cmd_data) != db_init_type_flag::none) {
 
         //Prepare most common data for commands
         //Retrieve guild data
-        std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(event_data.command.guild_id);
+        const std::optional<std::shared_ptr<const dpp::guild>> guild = co_await mln::caches::get_guild_full(event_data.command.guild_id, reply_data);
         if (!guild.has_value()) {
-            guild = co_await mln::caches::get_guild_task(event_data.command.guild_id);
-            if (!guild.has_value()) {
-                //Error can't find guild
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve guild data! guild_id: "
-                    + std::to_string(event_data.command.guild_id));
-                co_return;
-            }
+            co_return;
         }
         cmd_data.cmd_guild = guild.value();
 
         //Retrieve channel data
-        std::optional<std::shared_ptr<const dpp::channel>> channel = mln::caches::get_channel(event_data.command.channel_id, &event_data);
+        const std::optional<std::shared_ptr<const dpp::channel>> channel = co_await mln::caches::get_channel_full(event_data.command.channel_id, reply_data);
         if (!channel.has_value()) {
-            channel = co_await mln::caches::get_channel_task(event_data.command.channel_id);
-            if (!channel.has_value()) {
-                //Error can't find channel
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve channel data! channel_id: "
-                    + std::to_string(event_data.command.channel_id));
-                co_return;
-            }
+            co_return;
         }
         cmd_data.cmd_channel = channel.value();
 
         //Retrieve command user and bot information
-        std::optional<std::shared_ptr<const dpp::guild_member>> user = mln::caches::get_member({cmd_data.cmd_guild->id, event_data.command.usr.id}, &event_data);
+        const std::optional<std::shared_ptr<const dpp::guild_member>> user = co_await mln::caches::get_member_full({cmd_data.cmd_guild->id, event_data.command.usr.id}, reply_data);
         if (!user.has_value()) {
-            user = co_await mln::caches::get_member_task({cmd_data.cmd_guild->id, event_data.command.usr.id});
-            if (!user.has_value()) {
-                //Error can't find user
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve command user data! user_id: "
-                    + std::to_string(event_data.command.usr.id));
-                co_return;
-            }
+            co_return;
         }
         cmd_data.cmd_usr = user.value();
 
-        std::optional<std::shared_ptr<const dpp::guild_member>> bot = mln::caches::get_member({cmd_data.cmd_guild->id, event_data.command.application_id}, &event_data);
-        if (!bot.has_value()) {
-            bot = co_await mln::caches::get_member_task({cmd_data.cmd_guild->id, event_data.command.application_id});
-            if (!bot.has_value()) {
-                //Error can't find bot
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve command bot data! bot id: "
-                    + std::to_string(event_data.command.application_id));
-                co_return;
-            }
+        const std::optional<std::shared_ptr<const dpp::guild_member>> bot_opt = co_await mln::caches::get_member_full({cmd_data.cmd_guild->id, event_data.command.application_id}, reply_data);
+        if (!bot_opt.has_value()) {
+            co_return;
         }
-        cmd_data.cmd_bot = bot.value();
+        cmd_data.cmd_bot = bot_opt.value();
 
         //Retrieve user and bot perms, then return an error if the user and the bot don't have the required permissions
-        std::optional<dpp::permission> user_perm = mln::perms::get_computed_permission(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_usr), &event_data);
+        const std::optional<dpp::permission> user_perm = co_await mln::perms::get_computed_permission_full(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_usr), reply_data);
         if (!user_perm.has_value()) {
-            user_perm = co_await mln::perms::get_computed_permission_task(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_usr), &event_data);
-            if (!user_perm.has_value()) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve user permission data! user_id: "
-                    + std::to_string(cmd_data.cmd_usr->user_id));
-                co_return;
-            }
+            co_return;
         }
         cmd_data.cmd_usr_perm = user_perm.value();
 
-        std::optional<dpp::permission> bot_perm = mln::perms::get_computed_permission(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_bot), &event_data);
+        const std::optional<dpp::permission> bot_perm = co_await mln::perms::get_computed_permission_full(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_bot), reply_data);
         if (!bot_perm.has_value()) {
-            bot_perm = co_await mln::perms::get_computed_permission_task(*(cmd_data.cmd_guild), *(cmd_data.cmd_channel), *(cmd_data.cmd_bot), &event_data);
-            if (!bot_perm.has_value()) {
-                co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve bot permission data! bot id: "
-                    + std::to_string(cmd_data.cmd_bot->user_id));
-                co_return;
-            }
+            co_return;
         }
         cmd_data.cmd_bot_perm = bot_perm.value();
     }
@@ -308,8 +294,10 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
         uint64_t dump_channel_id{event_data.command.channel_id};
         const std::optional<uint64_t> opt_channel = mln::caches::get_dump_channel_id(event_data.command.guild_id);
         if (!opt_channel.has_value()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Failed to retrieve dump channel, either an internal error occurred or the guild from which this command was called is not registered in the database! Contact the bot developer.");
+
+            const std::string err_text = "Failed to retrieve dump channel, either an internal error occurred or the guild from which this command was called is not registered in the database!";
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(!is_thinking, event_data, err_text), bot(), &event_data, err_text);
+
             co_return;
         }
 
@@ -321,32 +309,22 @@ dpp::task<void> mln::db::command(const dpp::slashcommand_t& event_data){
         if (dump_channel_id == event_data.command.channel_id && cmd_data.cmd_channel) {
             cmd_data.dump_channel = cmd_data.cmd_channel;
         } else {
-            std::optional<std::shared_ptr<const dpp::channel>> dump_channel_opt = mln::caches::get_channel(dump_channel_id, &event_data);
+            const std::optional<std::shared_ptr<const dpp::channel>> dump_channel_opt = co_await mln::caches::get_channel_full(dump_channel_id, reply_data);
             if (!dump_channel_opt.has_value()) {
-                dump_channel_opt = co_await mln::caches::get_channel_task(dump_channel_id);
-                if (!dump_channel_opt.has_value()) {
-                    co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve dump channel data! dump channel id: "
-                        + std::to_string(dump_channel_id));
-                    co_return;
-                }
+                co_return;
             }
             cmd_data.dump_channel = dump_channel_opt.value();
         }
 
         //If the cmd bot and cmd guild data has been filled, get the dump channel bot perms
         if (cmd_data.cmd_bot && cmd_data.cmd_guild) {
-            std::optional<dpp::permission> bot_dump_channel_perm = mln::perms::get_computed_permission(*(cmd_data.cmd_guild), *(cmd_data.dump_channel), *(cmd_data.cmd_bot), &event_data);
+            const std::optional<dpp::permission> bot_dump_channel_perm = co_await mln::perms::get_computed_permission_full(*(cmd_data.cmd_guild), *(cmd_data.dump_channel), *(cmd_data.cmd_bot), reply_data);
             if (!bot_dump_channel_perm.has_value()) {
-                bot_dump_channel_perm = co_await mln::perms::get_computed_permission_task(*(cmd_data.cmd_guild), *(cmd_data.dump_channel), *(cmd_data.cmd_bot), &event_data);
-                if (!bot_dump_channel_perm.has_value()) {
-                    co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve bot permission data! bot id: "
-                        + std::to_string(cmd_data.cmd_bot->user_id));
-                    co_return;
-                }
+                co_return;
             }
             cmd_data.dump_channel_bot_perm = bot_dump_channel_perm.value();
         }
     }
 
-    co_await std::get<0>(sub_it->second)->command(event_data, cmd_data, cmd_type, thinking);
+    co_await std::get<0>(sub_it->second)->command(event_data, cmd_data, cmd_type);
 }

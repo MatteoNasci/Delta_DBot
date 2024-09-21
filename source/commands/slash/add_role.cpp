@@ -1,120 +1,88 @@
 #include "commands/slash/add_role.h"
-#include "bot_delta.h"
 #include "utility/utility.h"
 #include "utility/perms.h"
 #include "utility/caches.h"
+#include "utility/response.h"
+#include "utility/json_err.h"
+#include "utility/reply_log_data.h"
 
-mln::add_role::add_role(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("add_role", "Give user a role", delta->bot.me.id)
+#include <dpp/cluster.h>
+#include <dpp/dispatcher.h>
+
+mln::add_role::add_role(dpp::cluster& cluster) : base_slashcommand{ cluster,
+    std::move(dpp::slashcommand("add_role", "Give user a role", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to give role to", true))
         .add_option(dpp::command_option(dpp::co_role, "role", "Role to give", true))
-    )) {}
+    ) } {}
 
-dpp::task<void> mln::add_role::command(const dpp::slashcommand_t& event_data){
-    dpp::async<dpp::confirmation_callback_t> thinking = event_data.co_thinking(true);
+dpp::task<void> mln::add_role::command(const dpp::slashcommand_t& event_data) const {
+    mln::utility::conf_callback_is_error(co_await event_data.co_thinking(true), bot());
 
+    const reply_log_data_t reply_log_data{ &event_data, &bot(), false };
     //Retrieve guild data
-    std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(event_data.command.guild_id);
+    const std::optional<std::shared_ptr<const dpp::guild>> guild = co_await mln::caches::get_guild_full(event_data.command.guild_id, reply_log_data);
     if (!guild.has_value()) {
-        guild = co_await mln::caches::get_guild_task(event_data.command.guild_id);
-        if (!guild.has_value()) {
-            //Error can't find guild
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve guild data! guild_id: "
-                + std::to_string(event_data.command.guild_id));
-            co_return;
-        }
+        co_return;
     }
 
     //Retrieve channel data
-    std::optional<std::shared_ptr<const dpp::channel>> channel = mln::caches::get_channel(event_data.command.channel_id, &event_data);
+    const std::optional<std::shared_ptr<const dpp::channel>> channel = co_await mln::caches::get_channel_full(event_data.command.channel_id, reply_log_data);
     if (!channel.has_value()) {
-        channel = co_await mln::caches::get_channel_task(event_data.command.channel_id);
-        if (!channel.has_value()) {
-            //Error can't find channel
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve channel data! channel_id: "
-                + std::to_string(event_data.command.channel_id));
-            co_return;
-        }
+        co_return;
     }
 
     //Retrieve command user and bot information
-    std::optional<std::shared_ptr<const dpp::guild_member>> user = mln::caches::get_member({guild.value()->id, event_data.command.usr.id}, &event_data);
+    const std::optional<std::shared_ptr<const dpp::guild_member>> user = co_await mln::caches::get_member_full({guild.value()->id, event_data.command.usr.id}, reply_log_data);
     if (!user.has_value()) {
-        user = co_await mln::caches::get_member_task({guild.value()->id, event_data.command.usr.id});
-        if (!user.has_value()) {
-            //Error can't find user
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve command user data! user_id: "
-                + std::to_string(event_data.command.usr.id));
-            co_return;
-        }
+        co_return;
     }
 
-    std::optional<std::shared_ptr<const dpp::guild_member>> bot = mln::caches::get_member({guild.value()->id, event_data.command.application_id}, &event_data);
-    if (!bot.has_value()) {
-        bot = co_await mln::caches::get_member_task({guild.value()->id, event_data.command.application_id});
-        if (!bot.has_value()) {
-            //Error can't find bot
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve command bot data! bot id: "
-                + std::to_string(event_data.command.application_id));
-            co_return;
-        }
+    const std::optional<std::shared_ptr<const dpp::guild_member>> bot_opt = co_await mln::caches::get_member_full({guild.value()->id, event_data.command.application_id}, reply_log_data);
+    if (!bot_opt.has_value()) {
+        co_return;
     }
 
     //Retrieve user and bot perms, then return an error if the user and the bot don't have the required permissions
-    std::optional<dpp::permission> user_perm = mln::perms::get_computed_permission(*(guild.value()), *(channel.value()), *(user.value()), &event_data);
+    const std::optional<dpp::permission> user_perm = co_await mln::perms::get_computed_permission_full(*(guild.value()), *(channel.value()), *(user.value()), reply_log_data);
     if (!user_perm.has_value()) {
-        user_perm = co_await mln::perms::get_computed_permission_task(*(guild.value()), *(channel.value()), *(user.value()), &event_data);
-        if (!user_perm.has_value()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve user permission data! user_id: "
-                + std::to_string(user.value()->user_id));
-            co_return;
-        }
+        co_return;
     }
 
-    std::optional<dpp::permission> bot_perm = mln::perms::get_computed_permission(*(guild.value()), *(channel.value()), *(bot.value()), &event_data);
+    const std::optional<dpp::permission> bot_perm = co_await mln::perms::get_computed_permission_full(*(guild.value()), *(channel.value()), *(bot_opt.value()), reply_log_data);
     if (!bot_perm.has_value()) {
-        bot_perm = co_await mln::perms::get_computed_permission_task(*(guild.value()), *(channel.value()), *(bot.value()), &event_data);
-        if (!bot_perm.has_value()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve bot permission data! bot id: "
-                + std::to_string(bot.value()->user_id));
-            co_return;
-        }
+        co_return;
     }
 
     //Check the most basic permission
     if (!mln::perms::check_permissions({user_perm.value(), bot_perm.value()}, dpp::permissions::p_manage_roles)) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-            "Failed command, either the user or the bot do not have the slashcommand required permission!", {true, dpp::loglevel::ll_debug});
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, "Failed command, either the user or the bot do not have the slashcommand required permission!"), bot());
         co_return;
     }
-
-    //TODO check if the user/bot actually can give the selected role to the target (more checks needed probably)
 
     const dpp::snowflake user_id = std::get<dpp::snowflake>(event_data.get_parameter("user"));
     const dpp::snowflake role_id = std::get<dpp::snowflake>(event_data.get_parameter("role"));
 
     //Retrieve command target information
-    std::optional<std::shared_ptr<const dpp::guild_member>> target = mln::caches::get_member({guild.value()->id, user_id}, &event_data);
+    const std::optional<std::shared_ptr<const dpp::guild_member>> target = co_await mln::caches::get_member_full({guild.value()->id, user_id}, reply_log_data);
     if (!target.has_value()) {
-        target = co_await mln::caches::get_member_task({guild.value()->id, event_data.command.usr.id});
-        if (!target.has_value()) {
-            //Error can't find user
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed to retrieve command user data! user_id: "
-                + std::to_string(user_id));
-            co_return;
-        }
+        co_return;
     }
 
-    const dpp::confirmation_callback_t editing_user = co_await delta()->bot.co_guild_edit_member(dpp::guild_member{*target.value()}.add_role(role_id));
+    const dpp::confirmation_callback_t editing_user = co_await bot().co_guild_edit_member(dpp::guild_member{*target.value()}.add_role(role_id));
 
-    dpp::message msg{};
     if (editing_user.is_error()) {
-        msg.set_content("Failed to add role " + dpp::role::get_mention(role_id) + " to " + dpp::user::get_mention(user_id) +". Error: " + editing_user.get_error().human_readable);
-    }else {
-        msg.set_content("Role " + dpp::role::get_mention(role_id) + " added to " + dpp::user::get_mention(user_id));
+        const dpp::error_info err = editing_user.get_error();
+        const std::string err_text = std::format("Failed to add role [{}] to [{}]!", dpp::role::get_mention(role_id), dpp::user::get_mention(target.value()->user_id));
+
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, err_text), bot(), &event_data, 
+            std::format("{} Error: [{}], details: [{}].", err_text, mln::get_json_err_text(err.code), err.human_readable));
+        co_return;
     }
 
-    co_await thinking;
-    event_data.edit_response(msg);
+    if (mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, 
+        std::format("Role [{}] added to [{}]", dpp::role::get_mention(role_id), dpp::user::get_mention(target.value()->user_id))), bot())) {
+        mln::utility::create_event_log_error(event_data, bot(), "Failed add_emoji command conclusion reply!");
+    }
+    co_return;
 }

@@ -7,13 +7,18 @@
 
 #include <string>
 #include <unordered_map>
-#include <memory>
+#include <atomic>
 
-class mln::bot_delta;
 namespace mln {
     class cmd_runner final : public base_event<std::unordered_map<std::string, std::unique_ptr<base_slashcommand>>> {
+    private:
+        size_t event_id;
+        std::atomic_bool initialized;
+        std::unordered_map<size_t, std::unique_ptr<base_slashcommand>> id_to_cmd_map;
     public:
-        void attach_event(bot_delta* const delta) override;
+        cmd_runner(dpp::cluster& cluster, database_handler& db);
+        void attach_event() override;
+        void add_command_ids(const dpp::slashcommand_map& map);
     };
 }
 

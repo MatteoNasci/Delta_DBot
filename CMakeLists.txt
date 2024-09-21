@@ -28,16 +28,20 @@ set(sqlite_dlls_path "${sqlite_path}/bin")
 set(sqlite_libs_path "${sqlite_path}/lib")
 set(sqlite_headers_path "${sqlite_path}/include")
 
-set(dpp_path "${libs_path}/DPP/out/install/x64-MSVC-Release-Coro")
-set(dpp_headers_path "${libs_path}/DPP/include/")
-set(dpp_cmake_path "${dpp_path}/lib/cmake/dpp")
-set(dpp_dlls_path "${dpp_path}/bin")
-set(dpp_libs_path "${dpp_path}/lib/dpp-10.0")
+set(dpp_path "${libs_path}/DPP/out/build/x64-MSVC-Release-Coro")
+set(dpp_headers_path "${libs_path}/DPP/include")
+set(dpp_dlls_path "${dpp_path}/library")
+set(dpp_libs_path "${dpp_path}/library")
+
+#set(sodium_path "${libs_path}/DPP/win32")
+#set(sodium_headers_path "${sodium_path}/include")
+#set(sodium_libs_path "${sodium_path}/lib")
 
 set(SQLITE_NAME sqlite3)
 find_library(SQLITE_LIB
   NAMES ${SQLITE_NAME}
   PATHS  "${sqlite_libs_path}/"
+  NO_DEFAULT_PATH
   PATH_SUFFIXES lib
 )
 # If the library was found, print a message and link it
@@ -47,9 +51,24 @@ else()
   message(FATAL_ERROR "Could not find ${SQLITE_NAME}")
 endif()
 
+#set(SODIUM_NAME libsodium)
+#find_library(SODIUM_LIB
+#  NAMES ${SODIUM_NAME}
+#  PATHS  "${sodium_libs_path}/"
+#  NO_DEFAULT_PATH
+#  PATH_SUFFIXES lib
+#)
+# If the library was found, print a message and link it
+#if(SODIUM_LIB)
+#  message(STATUS "Found ${SODIUM_NAME}: ${SODIUM_LIB}")
+#else()
+#  message(FATAL_ERROR "Could not find ${SODIUM_NAME}")
+#endif()
+
 find_file(SQLITE_DLLS
   NAMES sqlite3.dll
   PATHS "${sqlite_dlls_path}/"
+  NO_DEFAULT_PATH
 )
 if(SQLITE_DLLS)
   message(STATUS "Found ${SQLITE_NAME} dlls: ${SQLITE_DLLS}")
@@ -62,6 +81,7 @@ set(DPP_NAME dpp)
 find_library(DPP_LIB
   NAMES ${DPP_NAME}
   PATHS  "${dpp_libs_path}/"
+  NO_DEFAULT_PATH
   PATH_SUFFIXES lib
 )
 # If the library was found, print a message and link it
@@ -75,6 +95,7 @@ set(DPP_DLLS_NAMES dpp.dll opus.dll zlib1.dll libsodium.dll libssl-1_1-x64.dll l
 find_path(DPP_DLLS_PATH
   NAMES ${DPP_DLLS_NAMES}
   PATHS "${dpp_dlls_path}/"
+  NO_DEFAULT_PATH
 )
 if(DPP_DLLS_PATH)
   message(STATUS "Found ${DPP_NAME} dlls path: ${DPP_DLLS_PATH}")
@@ -86,6 +107,7 @@ foreach(DPP_DLL_NAME ${DPP_DLLS_NAMES})
   find_file(DPP_DLL_NAME_FOUND
     NAMES ${DPP_DLL_NAME}
     PATHS "${DPP_DLLS_PATH}"
+    NO_DEFAULT_PATH
   )
   if(DPP_DLL_NAME_FOUND)
     set(DPP_DLLS_LIST ${DPP_DLLS_LIST} ${DPP_DLL_NAME_FOUND})
@@ -122,7 +144,7 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/ready/base_ready.cpp
             source/commands/guild/create/base_guild_create.cpp
             source/commands/slash/db/base_db_command.cpp
-            source/commands/slash/db/db_update_dump_channel.cpp
+            "source/commands/slash/db/db_config.cpp"
             source/commands/slash/db/db_insert.cpp
             source/commands/slash/db/db_select.cpp
             source/commands/slash/db/db_show.cpp
@@ -132,12 +154,19 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/db/db_update.cpp
             source/commands/slash/db/db_help.cpp
             source/commands/slash/db/db_privacy.cpp
-            source/commands/slash/changelog.cpp)
+            source/commands/slash/changelog.cpp
+            source/utility/json_err.cpp
+            source/utility/http_err.cpp
+            source/utility/response.cpp
+            source/security/crypt.cpp
+            source/utility/reply_log_data.cpp
+            source/commands/slash/db/db_command_type.cpp)
 
 add_executable(deploy_delta ${botsrc})
 
 target_link_libraries(deploy_delta PRIVATE ${DPP_LIB})
 target_link_libraries(deploy_delta PRIVATE ${SQLITE_LIB})
+#target_link_libraries(deploy_delta PRIVATE ${SODIUM_LIB})
 
 target_compile_definitions(deploy_delta PRIVATE DPP_CORO)
 
@@ -154,11 +183,22 @@ else()
   message(FATAL_ERROR "Could not find include directory for ${DPP_NAME}")
 endif()
 
+#find_path(SODIUM_INCLUDES
+#  NAMES sodium/core.h
+#  PATHS "${sodium_headers_path}/"
+#)
+#if(SODIUM_INCLUDES)
+#  target_include_directories(deploy_delta PRIVATE ${SODIUM_INCLUDES})
+#  message(STATUS "Found ${SODIUM_NAME} includes: ${SODIUM_INCLUDES}")
+#else()
+#  message(FATAL_ERROR "Could not find include directory for ${SODIUM_NAME}")
+#endif()
+
 find_path(SQLITE_INCLUDE_DIR
   NAMES sqlite3.h
   PATHS "${sqlite_headers_path}/"
 )
-if(DPP_INCLUDE_DIR)
+if(SQLITE_INCLUDE_DIR)
   target_include_directories(deploy_delta PRIVATE ${SQLITE_INCLUDE_DIR})
   message(STATUS "Found ${SQLITE_NAME} includes: ${SQLITE_INCLUDE_DIR}")
 else()

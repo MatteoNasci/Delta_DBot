@@ -1,95 +1,107 @@
 #include "commands/slash/db/db_delete.h"
-#include "bot_delta.h"
 #include "utility/utility.h"
 #include "utility/perms.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "database/database_handler.h"
+#include "utility/response.h"
+#include "utility/json_err.h"
 
 #include <dpp/unicode_emoji.h>
+#include <dpp/cluster.h>
 
 #include <unordered_set>
+#include <format>
 
 static const uint64_t s_confirmation_button_timeout{ 60 };
 
-mln::db_delete::db_delete(bot_delta* const delta) : base_db_command(delta), data{.valid_stmt = true} {
+const std::unordered_map<mln::db_command_type, std::tuple<
+    mln::db_init_type_flag, 
+    std::function<dpp::task<void>(const mln::db_delete&, const dpp::slashcommand_t&, const dpp::interaction_create_t&, const mln::db_cmd_data_t&)>, 
+    std::string>> 
+    mln::db_delete::s_mapped_commands_info{
+
+    {mln::db_command_type::user, {mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking, &mln::db_delete::user, "Are you sure you want to delete ALL records related to the given user on this server? This action cannot be reversed."}},
+    {mln::db_command_type::self, {mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking, &mln::db_delete::self, "Are you sure you want to delete ALL records related to your account from the entire database? All your records on all servers will be deleted. This action cannot be reversed."}},
+    {mln::db_command_type::single, {mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking, &mln::db_delete::single, "Are you sure you want to delete the record identified by the given name on this server? This action cannot be reversed."}},
+    {mln::db_command_type::guild, {mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking, &mln::db_delete::guild, "Are you sure you want to delete ALL records related to this server? This action cannot be reversed."}},
+    {mln::db_command_type::help, {mln::db_init_type_flag::none, &mln::db_delete::help, ""}},
+};
+
+mln::db_delete::db_delete(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
     //Delete a specific record by name, works only if used by record owner or by admin
-    mln::db_result res1 = delta->db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING url;", data.saved_single);
-    if (res1 != mln::db_result::ok) {
-        delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
+    const mln::db_result_t res1 = db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING url;", data.saved_single);
+    if (res1.type != mln::db_result::ok) {
+        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res1.type), res1.err_text));
         data.valid_stmt = false;
     } else {
-        mln::db_result res11 = delta->db.get_bind_parameter_index(data.saved_single, 0, ":GGG", data.saved_param_single_guild);
-        mln::db_result res12 = delta->db.get_bind_parameter_index(data.saved_single, 0, ":NNN", data.saved_param_single_name);
-        mln::db_result res13 = delta->db.get_bind_parameter_index(data.saved_single, 0, ":UUU", data.saved_param_single_user);
-        if (res11 != mln::db_result::ok || res12 != mln::db_result::ok || res13 != mln::db_result::ok) {
-            delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt param indexes!");
+        const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_single, 0, ":GGG", data.saved_param_single_guild);
+        const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_single, 0, ":NNN", data.saved_param_single_name);
+        const mln::db_result_t res13 = db.get_bind_parameter_index(data.saved_single, 0, ":UUU", data.saved_param_single_user);
+        if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok) {
+            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].", 
+                mln::database_handler::get_name_from_result(res11.type), res11.err_text,
+                mln::database_handler::get_name_from_result(res12.type), res12.err_text,
+                mln::database_handler::get_name_from_result(res13.type), res13.err_text));
             data.valid_stmt = false;
         }
     }
 
     //Delete all records of a specified user in the guild, works only if used by record owner or by admin
-    res1 = delta->db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND user_id = :UUU RETURNING url;", data.saved_user);
-    if (res1 != mln::db_result::ok) {
-        delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
+    const mln::db_result_t res2 = db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND user_id = :UUU RETURNING url;", data.saved_user);
+    if (res2.type != mln::db_result::ok) {
+        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res2.type), res2.err_text));
         data.valid_stmt = false;
     } else {
-        mln::db_result res11 = delta->db.get_bind_parameter_index(data.saved_user, 0, ":GGG", data.saved_param_user_guild);
-        mln::db_result res12 = delta->db.get_bind_parameter_index(data.saved_user, 0, ":UUU", data.saved_param_user_user);
-        if (res11 != mln::db_result::ok || res12 != mln::db_result::ok) {
-            delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt param indexes!");
+        const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_user, 0, ":GGG", data.saved_param_user_guild);
+        const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_user, 0, ":UUU", data.saved_param_user_user);
+        if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
+            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt param indexes! guild_param: [{}, {}], user_param: [{}, {}].", 
+                mln::database_handler::get_name_from_result(res11.type), res11.err_text, 
+                mln::database_handler::get_name_from_result(res12.type), res12.err_text));
             data.valid_stmt = false;
         }
     }
 
     //Delete all record of the guild, works only if used by admin
-    res1 = delta->db.save_statement("DELETE FROM storage WHERE guild_id = ?1 RETURNING url, user_id;", data.saved_guild);
-    if (res1 != mln::db_result::ok) {
-        delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
+    const mln::db_result_t res3 = db.save_statement("DELETE FROM storage WHERE guild_id = ?1 RETURNING url, user_id;", data.saved_guild);
+    if (res3.type != mln::db_result::ok) {
+        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete guild stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res3.type), res3.err_text));
         data.valid_stmt = false;
     }
 
     //Delete all records of a user (regardless of the server the records are saved in), works only for the command user
-    res1 = delta->db.save_statement("DELETE FROM storage WHERE user_id = ?1 RETURNING url;", data.saved_self);
-    if (res1 != mln::db_result::ok) {
-        delta->bot.log(dpp::loglevel::ll_error, "Failed to save delete stmt! " + mln::database_handler::get_name_from_result(res1) + ", " + delta->db.get_last_err_msg());
+    const mln::db_result_t res4 = db.save_statement("DELETE FROM storage WHERE user_id = ?1 RETURNING url;", data.saved_self);
+    if (res4.type != mln::db_result::ok) {
+        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete self stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res4.type), res4.err_text));
         data.valid_stmt = false;
     }
 }
 
-dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
-    static const std::unordered_map<mln::db_command_type, 
-        std::tuple<std::function<dpp::task<void>(mln::db_delete*, const dpp::slashcommand_t&, const dpp::interaction_create_t&, const db_cmd_data_t&, std::optional<dpp::async<dpp::confirmation_callback_t>>&)>, std::string>
-    > s_allowed_subcommands{
-        {db_command_type::user, {&mln::db_delete::user, "Are you sure you want to delete ALL records related to the given user on this server? This action cannot be reversed."}},
-        {db_command_type::self, {&mln::db_delete::self, "Are you sure you want to delete ALL records related to your account from the entire database? All your records on all servers will be deleted. This action cannot be reversed."}},
-        {db_command_type::single, {&mln::db_delete::single, "Are you sure you want to delete the record identified by the given name on this server? This action cannot be reversed."}},
-        {db_command_type::guild, {&mln::db_delete::guild, "Are you sure you want to delete ALL records related to this server? This action cannot be reversed."}},
-        {db_command_type::help, {&mln::db_delete::help, ""}},
-    };
-
+dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const {
     //Find the command variant and execute it. If no valid command variant found return an error
-    const auto it_func = s_allowed_subcommands.find(type);
-    if (it_func == s_allowed_subcommands.end()) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-            "Failed command, the given sub_command is not supported!");
+    const bool is_first_reply = (mln::db_delete::get_requested_initialization_type(type) & mln::db_init_type_flag::thinking) == mln::db_init_type_flag::none;
+    const auto it_func = s_mapped_commands_info.find(type);
+    if (it_func == s_mapped_commands_info.end()) {
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data, 
+            "Failed command, the given sub_command is not supported!"), bot(), &event_data, std::format("Failed command, the given sub_command [{}] is not supported for /db delete!", mln::get_cmd_type_text(type)));
         co_return;
     }
 
     //If the query statement was not saved correctly, return an error
     if (!data.valid_stmt) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "Failed database operation, the database was not initialized correctly!");
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data, 
+            "Failed database operation, the database was not initialized correctly!"), bot(), &event_data, std::format("Failed database /db delete operation [{}], the database was not initialized correctly!", mln::get_cmd_type_text(type)));
         co_return;
     }
 
     dpp::button_click_t button_data{};
-    std::optional<dpp::async<dpp::confirmation_callback_t>> new_thinking{std::nullopt};
-    if (!std::get<1>(it_func->second).empty()) {
+    if (!std::get<2>(it_func->second).empty()) {
 
-        const std::string confirmation_button_id = std::to_string(event_data.command.id) + "y";
-        const std::string refuse_button_id = std::to_string(event_data.command.id) + "n";
+        const std::string confirmation_button_id = std::format("{}{}", static_cast<uint64_t>(event_data.command.id), 'y');
+        const std::string refuse_button_id = std::format("{}{}", static_cast<uint64_t>(event_data.command.id), 'n');
 
-        dpp::message conf_msg{ std::get<1>(it_func->second) };
+        dpp::message conf_msg{ std::get<2>(it_func->second) };
         conf_msg.set_flags(dpp::m_ephemeral).add_component(
                 dpp::component{}.set_type(dpp::component_type::cot_action_row)
                 .add_component(
@@ -107,83 +119,77 @@ dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, c
                     .set_style(dpp::component_style::cos_success)
                     .set_id(confirmation_button_id)));
 
-        if (thinking.has_value()) {
-            co_await thinking.value();
-            thinking = std::nullopt;
+
+        if (mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data, conf_msg), bot())) {
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, "Failed to create confirmation prompt!"), bot(), &event_data, "Failed to respond with button confirmation prompt in delete command.");
+            co_return;
         }
-        event_data.edit_response(conf_msg);
 
         const auto& result = co_await dpp::when_any{
-            delta()->bot.co_sleep(s_confirmation_button_timeout),
-            delta()->bot.on_button_click.when([&confirmation_button_id, &refuse_button_id](const dpp::button_click_t& event_data) {
-                return event_data.custom_id == confirmation_button_id || event_data.custom_id == refuse_button_id;
-                }) };
+        bot().co_sleep(s_confirmation_button_timeout),
+        bot().on_button_click.when([&confirmation_button_id, &refuse_button_id](const dpp::button_click_t& event_data) {
+            return event_data.custom_id == confirmation_button_id || event_data.custom_id == refuse_button_id;
+            }) };
 
         //If the timer run out return an error
         if (result.index() == 0) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, 
-                "Too much time has passed since the last interaction, the command execution has terminated", {true, dpp::loglevel::ll_error}, false);
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
+                "Too much time has passed since the last interaction, the command execution has terminated"), bot());
             co_return;
         }
 
         //If an exception occurred return an error
         if (result.is_exception()) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "An unknown error occurred!", { true, dpp::loglevel::ll_error }, false);
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
+                "An unknown error occurred!"), bot(), &event_data, "An exception was returned by ::when_any while attempting to get delete confirmation.");
             co_return;
         }
 
         //It was suggested to copy the event from documentation of ::when
         button_data = result.get<1>();
-        if (button_data.cancelled) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot, "The button event was cancelled!", { true, dpp::loglevel::ll_error }, false);
-            co_return;
-        }
-
-        //co_await button_data.co_reply(dpp::message{"Button event received"}.set_flags(dpp::m_ephemeral));
-        new_thinking = button_data.co_thinking(true);
+        dpp::async<dpp::confirmation_callback_t> thinking = button_data.co_thinking(true);
 
         if (button_data.custom_id == confirmation_button_id) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Proceeding with command execution...", { false, dpp::loglevel::ll_debug }, false);
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
+                "Proceeding with command execution..."), bot());
         }
         else if (button_data.custom_id == refuse_button_id) {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Command interrupted!", { false, dpp::loglevel::ll_debug }, false);
-            co_await mln::utility::co_conclude_thinking_response(new_thinking, button_data, delta()->bot,
-                "The command has been interrupted.", { false, dpp::loglevel::ll_debug });
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
+                "Command interrupted!"), bot());
+            mln::utility::conf_callback_is_error(co_await thinking, bot());
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, button_data,
+                "The command has been interrupted."), bot());
             co_return;
         }
         else {
-            co_await mln::utility::co_conclude_thinking_response(thinking, event_data, delta()->bot,
-                "Command interrupted!", { false, dpp::loglevel::ll_debug }, false);
-            co_await mln::utility::co_conclude_thinking_response(new_thinking, button_data, delta()->bot,
-                "Invalid button id found, internal error!");
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
+                "Command interrupted!"), bot(), &event_data, "Command interrupted!");
+            mln::utility::conf_callback_is_error(co_await thinking, bot());
+            mln::utility::conf_callback_is_error(co_await mln::response::make_response(true, button_data,
+                "Invalid button id found, internal error!"), bot(), &button_data, 
+                std::format("Invalid button id found while waiting for delete confirmation! Found: [{}], expected: [{}] or [{}].",
+                    button_data.custom_id, confirmation_button_id, refuse_button_id));
+
             co_return;
         }
+        
+        mln::utility::conf_callback_is_error(co_await thinking, bot());
     }
 
-    co_await std::get<0>(it_func->second)(this, event_data,
-        (button_data.command.id == 0 ? static_cast<dpp::interaction_create_t>(event_data) : static_cast<dpp::interaction_create_t>(button_data)), cmd_data, 
-        new_thinking.has_value() ? new_thinking : thinking);
+    co_await std::get<1>(it_func->second)(*(this), event_data,
+        (button_data.command.id == 0 ? static_cast<dpp::interaction_create_t>(event_data) : static_cast<dpp::interaction_create_t>(button_data)), cmd_data);
 }
 
-mln::db_init_type_flag mln::db_delete::get_requested_initialization_type(db_command_type cmd) {
-    static const std::unordered_map<db_command_type, db_init_type_flag> s_mapped_initialization_types{
-        {db_command_type::user, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
-        {db_command_type::self, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
-        {db_command_type::single, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
-        {db_command_type::guild, db_init_type_flag::cmd_data | db_init_type_flag::thinking},
-        {db_command_type::help, db_init_type_flag::none},
-    };
+mln::db_init_type_flag mln::db_delete::get_requested_initialization_type(const db_command_type cmd) const {
 
-    const auto it = s_mapped_initialization_types.find(cmd);
-    if (it == s_mapped_initialization_types.end()) {
+    const auto it = s_mapped_commands_info.find(cmd);
+    if (it == s_mapped_commands_info.end()) {
         return mln::db_init_type_flag::all;
     }
-    return it->second;
+    return std::get<0>(it->second);
 }
 
-dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data) const {
     const dpp::command_value user_param = event_data.get_parameter("owner");
     dpp::snowflake target = cmd_data.cmd_usr->user_id;
     if (std::holds_alternative<dpp::snowflake>(user_param)) {
@@ -191,76 +197,87 @@ dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, co
     }
 
     if (target != cmd_data.cmd_usr->user_id && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to delete the given user record, admin permission required to delete records owned by someone else!");
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to delete the given user record, admin permission required to delete records owned by someone else!"), bot());
         co_return;
     }
 
     const std::string name = std::get<std::string>(event_data.get_parameter("name"));
 
-    mln::db_result res1 = delta()->db.bind_parameter(data.saved_single, 0, data.saved_param_single_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
-    mln::db_result res2 = delta()->db.bind_parameter(data.saved_single, 0, data.saved_param_single_user, static_cast<int64_t>(target));
-    mln::db_result res3 = delta()->db.bind_parameter(data.saved_single, 0, data.saved_param_single_name, name, mln::db_text_encoding::utf8);
-    if (res1 != mln::db_result::ok || res2 != mln::db_result::ok || res3 != mln::db_result::ok) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to bind query parameters, internal error! " + delta()->db.get_last_err_msg());
+    const mln::db_result_t res1 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    const mln::db_result_t res2 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_user, static_cast<int64_t>(target));
+    const mln::db_result_t res3 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_name, name, mln::db_text_encoding::utf8);
+    if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to bind query parameters, internal database error!"), bot(), &event_data, 
+            std::format("Failed to bind query parameters, internal database error! guild_param: [{}, {}], user_param: [{}, {}], name_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res1.type), res1.err_text,
+                mln::database_handler::get_name_from_result(res2.type), res2.err_text,
+                mln::database_handler::get_name_from_result(res3.type), res3.err_text));
         co_return;
     }
 
-    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_single, target);
+    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_single, target);
 }
-dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data) const {
     const dpp::command_value user_param = event_data.get_parameter("user");
-    dpp::snowflake target = std::get<dpp::snowflake>(user_param);
+    const dpp::snowflake target = std::get<dpp::snowflake>(user_param);
     
     if (target != cmd_data.cmd_usr->user_id && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to delete the given user records, admin permission required to delete records owned by someone else!");
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to delete the given user records, admin permission required to delete records owned by someone else!"), bot());
         co_return;
     }
 
-    mln::db_result res1 = delta()->db.bind_parameter(data.saved_user, 0, data.saved_param_user_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
-    mln::db_result res2 = delta()->db.bind_parameter(data.saved_user, 0, data.saved_param_user_user, static_cast<int64_t>(target));
-    if (res1 != mln::db_result::ok || res2 != mln::db_result::ok) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to bind query parameters, internal error! " + delta()->db.get_last_err_msg());
+    const mln::db_result_t res1 = db.bind_parameter(data.saved_user, 0, data.saved_param_user_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    const mln::db_result_t res2 = db.bind_parameter(data.saved_user, 0, data.saved_param_user_user, static_cast<int64_t>(target));
+    if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok) {
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to bind query parameters, internal database error!"), bot(), &event_data, 
+            std::format("Failed to bind query parameters, internal database error! guild_param: [{}, {}], user_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res1.type), res1.err_text,
+                mln::database_handler::get_name_from_result(res2.type), res2.err_text));
         co_return;
     }
 
-    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_user, target);
+    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_user, target);
 }
-dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data) const {
     if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to delete the guild records, admin permission required!");
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to delete the guild records, admin permission required!"), bot());
         co_return;
     }
 
     if (cmd_data.cmd_guild->id != cmd_data.cmd_usr->guild_id) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to delete the guild records, mismatch found between the user guild id and the guild where the command was invoked!");
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to delete the guild records, mismatch found between the user guild id and the guild where the command was invoked!"), bot());
         co_return;
     }
 
-    mln::db_result res = delta()->db.bind_parameter(data.saved_guild, 0, 1, static_cast<int64_t>(cmd_data.cmd_guild->id));
-    if (res != mln::db_result::ok) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to bind query parameters, internal error! " + delta()->db.get_last_err_msg());
+    const mln::db_result_t res = db.bind_parameter(data.saved_guild, 0, 1, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    if (res.type != mln::db_result::ok) {
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to bind query parameters, internal database error!"), bot(), &event_data, 
+            std::format("Failed to bind query parameters, internal database error! guild_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res.type), res.err_text));
         co_return;
     }
 
-    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_guild, 0);
+    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_guild, 0);
 }
-dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
+dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data) const {
 
-    mln::db_result res = delta()->db.bind_parameter(data.saved_self, 0, 1, static_cast<int64_t>(cmd_data.cmd_usr->user_id));
-    if (res != mln::db_result::ok) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot,
-            "Failed to bind query parameters, internal error! " + delta()->db.get_last_err_msg());
+    const mln::db_result_t res = db.bind_parameter(data.saved_self, 0, 1, static_cast<int64_t>(cmd_data.cmd_usr->user_id));
+    if (res.type != mln::db_result::ok) {
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data,
+            "Failed to bind query parameters, internal database error!"), bot(), &event_data, 
+            std::format("Failed to bind query parameters, internal database error! user_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res.type), res.err_text));
         co_return;
     }
 
-    co_await mln::db_delete::exec(reply_data, cmd_data, thinking, data.saved_self, cmd_data.cmd_usr->user_id);
+    co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_self, cmd_data.cmd_usr->user_id);
 }
 struct db_delete_url_data_t {
     std::string url;
@@ -269,7 +286,7 @@ struct db_delete_url_data_t {
 struct db_delete_lists_data_t {
     std::vector<std::vector<dpp::snowflake>> lists;
 };
-dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking, size_t stmt, uint64_t target) {
+dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, const size_t stmt, const uint64_t target) const {
     //Extract all deleted urls and attempt to delete the original messages
     std::vector<db_delete_url_data_t> urls{};
     mln::database_callbacks_t calls{};
@@ -284,11 +301,18 @@ dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data
         urls[index].user = static_cast<uint64_t>(std::get<int64_t>(d.data));
         };
 
-    mln::db_result res = delta()->db.exec(stmt, calls);
-    if (mln::database_handler::is_exec_error(res) || urls.empty()) {
-        co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, (!mln::database_handler::is_exec_error(res) || res == mln::db_result::constraint_primary_key) && urls.empty() ?
+    const mln::db_result_t res = db.exec(stmt, calls);
+    if (mln::database_handler::is_exec_error(res.type) || urls.empty()) {
+        const bool is_user_error = (!mln::database_handler::is_exec_error(res.type) || res.type == mln::db_result::constraint_primary_key) && urls.empty();
+        const std::string err_text = is_user_error ? 
             "Failed while executing database query! Either no records found or you don't have the ownership over the records to delete!" :
-            "Failed while executing database query! Internal error! " + mln::database_handler::get_name_from_result(res));
+            "Failed while executing database query! Internal database error!";
+
+        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data, err_text), bot(), &event_data, 
+            std::format("{} Error: [{}], err_text: [{}]",
+            err_text,
+            mln::database_handler::get_name_from_result(res.type), res.err_text));
+
         co_return;
     }
 
@@ -303,7 +327,7 @@ dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data
         uint64_t url_guild{}, url_channel{}, url_message{};
         if (!mln::utility::extract_message_url_data(url.url, url_guild, url_channel, url_message) || url_channel == 0 || url_message == 0 || url_guild == 0) {
             ++malformed_urls;
-            delta()->bot.log(dpp::loglevel::ll_warning, "Failed to retrieve data from url for delete bulk messages.");
+            bot().log(dpp::loglevel::ll_warning, "Failed to retrieve data from url for delete messages.");
             continue;
         }
 
@@ -329,59 +353,37 @@ dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data
             }
         }
 
+        const reply_log_data_t reply_log_data{ &event_data, &bot(), false };
         const auto it3 = visited_guild_by_channel.find({ url_guild, url_channel });
         if (it3 == visited_guild_by_channel.end()) {
             visited_guild_by_channel.insert({ url_guild, url_channel });
 
             //Retrieve guild data
-            std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(url_guild);
+            const std::optional<std::shared_ptr<const dpp::guild>> guild = co_await mln::caches::get_guild_full(url_guild, reply_log_data);
             if (!guild.has_value()) {
-                guild = co_await mln::caches::get_guild_task(url_guild);
-                if (!guild.has_value()) {
-                    //Error can't find guild
-                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve guild data! guild_id: "
-                        + std::to_string(url_guild));
-                    co_return;
-                }
+                co_return;
             }
 
             //Retrieve channel data
-            std::optional<std::shared_ptr<const dpp::channel>> channel = mln::caches::get_channel(url_channel, &reply_data);
+            const std::optional<std::shared_ptr<const dpp::channel>> channel = co_await mln::caches::get_channel_full(url_channel, reply_log_data);
             if (!channel.has_value()) {
-                channel = co_await mln::caches::get_channel_task(url_channel);
-                if (!channel.has_value()) {
-                    //Error can't find channel
-                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve channel data! channel_id: "
-                        + std::to_string(url_channel));
-                    co_return;
-                }
+                co_return;
             }
 
             //Retrieve bot information
-            std::optional<std::shared_ptr<const dpp::guild_member>> bot = mln::caches::get_member({ url_guild, reply_data.command.application_id }, &reply_data);
-            if (!bot.has_value()) {
-                bot = co_await mln::caches::get_member_task({ url_guild, reply_data.command.application_id });
-                if (!bot.has_value()) {
-                    //Error can't find bot
-                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve command bot data! bot id: "
-                        + std::to_string(reply_data.command.application_id));
-                    co_return;
-                }
+            const std::optional<std::shared_ptr<const dpp::guild_member>> bot_opt = co_await mln::caches::get_member_full({ url_guild, reply_data.command.application_id }, reply_log_data);
+            if (!bot_opt.has_value()) {
+                co_return;
             }
 
-            std::optional<dpp::permission> bot_perm = mln::perms::get_computed_permission(*(guild.value()), *(channel.value()), *(bot.value()), &reply_data);
+            const std::optional<dpp::permission> bot_perm = co_await mln::perms::get_computed_permission_full(*(guild.value()), *(channel.value()), *(bot_opt.value()), reply_log_data);
             if (!bot_perm.has_value()) {
-                bot_perm = co_await mln::perms::get_computed_permission_task(*(guild.value()), *(channel.value()), *(bot.value()), &reply_data);
-                if (!bot_perm.has_value()) {
-                    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, "Failed to retrieve bot permission data! bot id: "
-                        + std::to_string(bot.value()->user_id));
-                    co_return;
-                }
+                co_return;
             }
 
             if (!mln::perms::check_permissions(bot_perm.value(), dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) {
                 ++failed_deletes;
-                delta()->bot.log(dpp::loglevel::ll_warning, "The bot doesn't have the permission to delete bulk a message! Guild: " + std::to_string(url_guild) + ", channel: " + std::to_string(url_channel));
+                bot().log(dpp::loglevel::ll_warning, std::format("The bot doesn't have the permission to delete bulk a message! Guild: [{}], channel: [{}].", url_guild, url_channel));
                 continue;
             }
         }
@@ -409,30 +411,54 @@ dpp::task<void> mln::db_delete::exec(const dpp::interaction_create_t& reply_data
                 continue;
             }
 
-            dpp::confirmation_callback_t result{};
             if (list.size() >= mln::constants::get_min_msg_bulk_delete()) {
-                result = co_await delta()->bot.co_message_delete_bulk(list, map_pair.first);
+                const dpp::confirmation_callback_t bulk_conf = co_await bot().co_message_delete_bulk(list, map_pair.first);
+                if (bulk_conf.is_error()) {
+                    const dpp::error_info err = bulk_conf.get_error();
+
+                    if (err.code == static_cast<std::underlying_type<mln::json_err>::type>(mln::json_err::message_too_old_bulk_delete)) {
+                        for (const dpp::snowflake& msg_to_delete : list) {
+                            if (mln::utility::conf_callback_is_error(co_await bot().co_message_delete(msg_to_delete, map_pair.first), bot(), nullptr,
+                                std::format("Failed to delete message [{}] from channel [{}]!", static_cast<uint64_t>(msg_to_delete), map_pair.first))) {
+
+                                ++failed_deletes;
+                            }
+                        }
+                    }
+                    else {
+                        mln::utility::create_event_log_error(event_data, bot(), std::format("Failed to delete bulk messages from channel: [{}]! Error: [{}], details: [{}].", 
+                            map_pair.first, mln::get_json_err_text(err.code), err.human_readable));
+
+                        failed_deletes += list.size();
+                    }
+                }
             }
             else {
-                result = co_await delta()->bot.co_message_delete(list[0], map_pair.first);
-            }
+                if (mln::utility::conf_callback_is_error(co_await bot().co_message_delete(list[0], map_pair.first), bot(), nullptr,
+                    std::format("Failed to delete message [{}] from channel [{}]!", static_cast<uint64_t>(list[0]), map_pair.first))) {
 
-            if (result.is_error()) {
-                ++failed_deletes;
-                delta()->bot.log(dpp::loglevel::ll_warning, "Failed to delete messages from channel: " + std::to_string(map_pair.first) + ", error: " + result.get_error().human_readable);
+                    ++failed_deletes;
+                }
             }
         }
     }
 
     const bool error = failed_deletes != 0 || malformed_urls != 0;
-    co_await mln::utility::co_conclude_thinking_response(thinking, reply_data, delta()->bot, error ?
-        "Command concluded with some errors, failed to remove all the stored messages related to the deleted records! malformed urls: " + std::to_string(malformed_urls) + ", failed dels: " + std::to_string(failed_deletes) + ", total urls: " + std::to_string(total_urls_to_delete) :
-        "Command executed!", { false, dpp::loglevel::ll_debug });
+    const std::string final_text = error ?
+        std::format("Command concluded with some errors, failed to remove all the stored messages related to the deleted records! Malformed urls: [{}], failed deletes: [{}], total deleted: [{}].", 
+            malformed_urls, failed_deletes, (total_urls_to_delete - malformed_urls - failed_deletes)) :
+        "Command executed!";
+
+    mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, reply_data, final_text), bot());
+    if (error) {
+        mln::utility::create_event_log_error(event_data, bot(), final_text);
+    }
+
     co_return;
 }
 
-dpp::task<void> mln::db_delete::help(const dpp::slashcommand_t&, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking) {
-    static const dpp::message s_info = dpp::message{"Information regarding the `/db delete` commands..."}
+dpp::task<void> mln::db_delete::help(const dpp::slashcommand_t&, const dpp::interaction_create_t& reply_data, const db_cmd_data_t& cmd_data) const {
+    static const dpp::message s_info = dpp::message{ "Information regarding the `/db delete` commands..." }
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db delete` set of commands is used to delete one or more records from the database. 
 
@@ -469,6 +495,8 @@ For all `/db delete` commands, confirmation is required before proceeding. Pleas
   Once the user confirms the delete command, the bot will proceed to delete ALL records owned by the command user in the entire database (including the local Discord server database and all other server databases).
   If no error occurs, the bot will also attempt to remove the associated stored messages (not guaranteed).)"""));
 
-    reply_data.reply(dpp::message{s_info});
+    if (mln::utility::conf_callback_is_error(co_await reply_data.co_reply(s_info), bot())) {
+        mln::utility::create_event_log_error(reply_data, bot(), "Failed to reply with the db delete help text!");
+    }
     co_return;
 }

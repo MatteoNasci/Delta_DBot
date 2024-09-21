@@ -1,15 +1,20 @@
 #include "commands/slash/ping.h"
-#include "bot_delta.h"
+#include "utility/utility.h"
+#include "utility/response.h"
 
-mln::ping::ping(mln::bot_delta* const delta) : base_slashcommand(delta,
-    std::move(dpp::slashcommand("ping", "Ping pong!", delta->bot.me.id)
-        .set_default_permissions(dpp::permissions::p_use_application_commands))) {}
+#include <dpp/cluster.h>
 
-dpp::task<void> mln::ping::command(const dpp::slashcommand_t& event_data){
-    if (event_data.from == nullptr) {
-        event_data.reply(dpp::message{"Failed to retrieve client attached to user!"}.set_flags(dpp::m_ephemeral));
-        co_return;
+#include <format>
+
+mln::ping::ping(dpp::cluster& cluster) : base_slashcommand{ cluster,
+    std::move(dpp::slashcommand("ping", "Ping pong!", cluster.me.id)
+        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
+
+dpp::task<void> mln::ping::command(const dpp::slashcommand_t& event_data) const {   
+    const double websocket_ping = event_data.from ? event_data.from->websocket_ping : 0.0;
+
+    if (mln::utility::conf_callback_is_error(
+        co_await mln::response::make_response(true, event_data, std::format("Websocket ping = {} seconds.\nRest ping = {} seconds.", websocket_ping, bot().rest_ping)), bot())) {
+        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the ping text!");
     }
-
-    event_data.reply(dpp::message{"Pong! Ping = " + std::to_string(event_data.from->websocket_ping) + " seconds."}.set_flags(dpp::m_ephemeral));
 }

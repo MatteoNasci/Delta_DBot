@@ -1,10 +1,10 @@
 #include "commands/slash/db/db_help.h"
 #include "utility/utility.h"
 
-mln::db_help::db_help(bot_delta* const delta) : base_db_command(delta) {
+mln::db_help::db_help(dpp::cluster& cluster) : base_db_command{ cluster } {
 }
 
-dpp::task<void> mln::db_help::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, db_command_type type, std::optional<dpp::async<dpp::confirmation_callback_t>>& thinking){
+dpp::task<void> mln::db_help::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const {
     static const dpp::message s_info = dpp::message{ "Information regarding the `/db` commands..." }
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db` commands are designed to interact with the bot's database. The primary function of the database is to store Discord messages and display their contents when requested.
@@ -22,10 +22,12 @@ The main database commands are:
 
 Each of these command sets has a `help` variant, providing in-depth information about the respective commands.)"""));
 
-    event_data.reply(dpp::message{ s_info });
+    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
+        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db help text!");
+    }
     co_return;
 }
 
-mln::db_init_type_flag mln::db_help::get_requested_initialization_type(db_command_type cmd){
+mln::db_init_type_flag mln::db_help::get_requested_initialization_type(const db_command_type cmd) const {
 	return db_init_type_flag::none;
 }

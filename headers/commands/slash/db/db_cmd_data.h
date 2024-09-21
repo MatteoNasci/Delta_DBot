@@ -2,9 +2,9 @@
 #ifndef H_MLN_DB_DB_CMD_DATA_H
 #define H_MLN_DB_DB_CMD_DATA_H
 
+#include <dpp/permissions.h>
 #include <dpp/guild.h>
 #include <dpp/channel.h>
-#include <dpp/permissions.h>
 
 #include <memory>
 

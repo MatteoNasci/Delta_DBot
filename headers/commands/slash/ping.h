@@ -7,8 +7,8 @@
 namespace mln {
     class ping final : public base_slashcommand {
     public:
-        ping(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        ping(dpp::cluster& cluster);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

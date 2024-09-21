@@ -9,22 +9,18 @@
 namespace mln {
 	class base_slashcommand : public base_command<dpp::slashcommand_t>{
 	protected:
-		base_slashcommand(bot_delta* const delta, dpp::slashcommand&& cmd);
+		base_slashcommand(dpp::cluster& cluster, dpp::slashcommand&& cmd);
 	public:
+
 		base_slashcommand() = delete;
-		/**
-		 * @brief base_slashcommand is non-copyable
-		 */
-		base_slashcommand(const base_slashcommand&) = delete;
 
-		base_slashcommand(base_slashcommand&&);
+		base_slashcommand(const base_slashcommand&) = default;
 
-		/**
-		 * @brief base_slashcommand is non-copyable
-		 */
-		base_slashcommand& operator=(const base_slashcommand&) = delete;
+		base_slashcommand(base_slashcommand&&) = default;
 
-		base_slashcommand& operator=(base_slashcommand&&);
+		base_slashcommand& operator=(const base_slashcommand&) = default;
+
+		base_slashcommand& operator=(base_slashcommand&&) = default;
 	};
 }
 

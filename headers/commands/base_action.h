@@ -2,20 +2,19 @@
 #ifndef H_MLN_DB_BASE_ACTION_H
 #define H_MLN_DB_BASE_ACTION_H
 
-#include <string>
+namespace dpp {
+	class cluster;
+}
 
 namespace mln {
-	class bot_delta;
-
 	template<typename T_return, typename... T_args>
 	class base_action {
 	private:
-		bot_delta* delta_ptr;
+		dpp::cluster& bot_cluster;
 	protected:
-		base_action(bot_delta* const in_delta) : delta_ptr(in_delta) {}
+		base_action(dpp::cluster& cluster) : bot_cluster{ cluster } {}
 
-		bot_delta* const delta() const { return delta_ptr; }
-
+		dpp::cluster& bot() const { return bot_cluster; }
 	public:
 
 		base_action() = delete;
@@ -28,7 +27,7 @@ namespace mln {
 
 		base_action& operator=(base_action&& rhs) = default;
 
-		virtual T_return command(T_args... args) = 0;
+		virtual T_return command(T_args... args) const = 0;
 	};
 }
 

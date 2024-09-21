@@ -5,10 +5,14 @@
 #include "commands/slash/base_slashcommand.h"
 
 namespace mln {
+    class database_handler;
+
     class db final : public base_slashcommand {
+    private:
+        database_handler& database;
     public:
-        db(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        db(dpp::cluster& cluster, database_handler& database);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

@@ -5,18 +5,17 @@
 #include "commands/slash/base_slashcommand.h"
 
 namespace mln {
-    class bot_delta;
+    class database_handler;
+
     class report final : public base_slashcommand {
     private:
+        database_handler& db;
         size_t saved_insert_rep_query;
-        int guild_param_index;
-        int user_param_index;
-        int rep_text_param_index;
         bool valid_saved_stmt;
 
     public:
-        report(bot_delta* const delta);
-        dpp::task<void> command(const dpp::slashcommand_t& event_data) override;
+        report(dpp::cluster& cluster, database_handler& db);
+        dpp::task<void> command(const dpp::slashcommand_t& event_data) const override;
     };
 }
 

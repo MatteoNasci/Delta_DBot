@@ -14,19 +14,21 @@
 #include <string>
 #include <optional>
 #include <memory>
+#include <atomic>
 
 namespace mln {
+
 	class bot_delta {
 	public:
 		dpp::cluster bot;
 		const dpp::snowflake dev_id;
 		const bool is_dev_id_valid;
-		bool registered_new_cmds;
 
 		database_handler db;
 
 	public:
 		bot_delta();
+
 		~bot_delta();
 		/**
 		 * @brief bot_delta is non-copyable
@@ -48,13 +50,14 @@ namespace mln {
 		 */
 		bot_delta& operator=(bot_delta&&) = delete;
 
-		std::string start(bool register_cmds);
+		std::string start();
 		bool close();
 
-		db_result print_main_db() const;
+		db_result_t print_main_db() const;
 
 		const cmd_runner& get_cmd_runner() const;
 		const cmd_ctx_runner& get_cmd_ctx_runner() const;
+		const bool is_bot_running() const;
 	private:
 		dpp::timer db_optimize_timer;
 
@@ -66,9 +69,15 @@ namespace mln {
 		cmd_ctx_runner ctxs;
 		ready_runner readys;
 		guild_create_runner guild_creates;
+
+		std::atomic_bool running;
+		FILE* log_file;
 	private:
 		void init();
 		void setup_db();
+
+		static void logger(const dpp::log_t& log);
+		static void log_to_file(const dpp::log_t& log);
 
 	public:
 		static void initialize_environment();
