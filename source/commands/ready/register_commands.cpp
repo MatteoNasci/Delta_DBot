@@ -81,41 +81,16 @@ dpp::task<void> mln::register_commands::command(const dpp::ready_t& event_data) 
         if (!mismatch) {
             bot().log(dpp::loglevel::ll_debug, "Found no mismatch between local commands and registered global command. Commands registration skipped!");
 
-            //mismatch can be false only if std::get<dpp::slashcommand_map>(get_commands_res.value) is valid
-            add_cmds_ids_to_runners(std::get<dpp::slashcommand_map>(get_commands_res.value));
-
             co_return;
         }
 
         bot().log(dpp::loglevel::ll_debug, "Found mismatch between local commands and registered global command. Proceeding with commands registration...");
 
-        if (!mln::utility::conf_callback_is_error(co_await bot().co_global_bulk_command_create(cmds), bot())) {
-            
+        if (!mln::utility::conf_callback_is_error(co_await bot().co_global_bulk_command_create(cmds), bot())) {          
             bot().log(dpp::ll_debug, "Updated global commands!");
-
-            const dpp::confirmation_callback_t get_new_commands_res = co_await bot().co_global_commands_get();
-            if (get_new_commands_res.is_error()) {
-
-                const dpp::error_info err = get_new_commands_res.get_error();
-                bot().log(dpp::loglevel::ll_error, std::format("Failed to get new registered commands from API! Error: [{}], details: [{}].",
-                    mln::get_json_err_text(err.code), err.human_readable));
-                co_return;
-            }
-            if (!std::holds_alternative<dpp::slashcommand_map>(get_new_commands_res.value)) {
-                bot().log(dpp::loglevel::ll_error, "Failed to get new registered commands from API! The confirmation_callback doesn't have a valid map.");
-                co_return;
-            }
-
-            add_cmds_ids_to_runners(std::get<dpp::slashcommand_map>(get_new_commands_res.value));
         }
         else {
             bot().log(dpp::loglevel::ll_error, "Failed to register new commands!");
         }
     }
-}
-
-void mln::register_commands::add_cmds_ids_to_runners(const dpp::slashcommand_map& map) const
-{
-    runner_cmd_ptr.add_command_ids(map);
-    runner_ctx_ptr.add_command_ids(map);
 }

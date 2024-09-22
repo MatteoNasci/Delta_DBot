@@ -14,11 +14,9 @@ namespace mln {
     private:
         size_t event_id;
         std::atomic_bool initialized;
-        std::unordered_map<size_t, std::unique_ptr<base_slashcommand>> id_to_cmd_map;
     public:
         cmd_runner(dpp::cluster& cluster, database_handler& db);
         void attach_event() override;
-        void add_command_ids(const dpp::slashcommand_map& map);
     };
 }
 

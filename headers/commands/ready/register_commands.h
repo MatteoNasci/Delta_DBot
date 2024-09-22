@@ -28,9 +28,6 @@ namespace mln {
         register_commands& operator=(const register_commands&) = default;
 
         register_commands& operator=(register_commands&&) = default;
-    private:
-
-        void add_cmds_ids_to_runners(const dpp::slashcommand_map& map) const;
     };
 }
 

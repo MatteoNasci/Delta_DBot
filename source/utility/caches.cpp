@@ -166,7 +166,7 @@ std::optional<uint64_t> mln::caches::get_dump_channel_id(const uint64_t guild_id
         return std::nullopt;
     }
 
-	++mln::caches::s_cache_requests;
+	mln::caches::s_cache_requests++;
 
     //Look in cache
 	std::optional<uint64_t> result = mln::caches::dump_channels_cache.get_element(guild_id);
@@ -174,7 +174,7 @@ std::optional<uint64_t> mln::caches::get_dump_channel_id(const uint64_t guild_id
 		return result;
 	}
 
-	++mln::caches::s_cache_misses;
+	mln::caches::s_cache_misses++;
 
     //Look in database
     const db_result_t res = s_db->bind_parameter(s_saved_select_dump_channel, 0, 1, static_cast<int64_t>(guild_id));
@@ -263,12 +263,12 @@ std::optional<std::shared_ptr<const std::vector<std::string>>> mln::caches::get_
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const std::vector<std::string>>> result = mln::caches::show_all_cache.get_element(guild_id);
     if (!result.has_value()) {
-        ++mln::caches::s_cache_misses;
+        mln::caches::s_cache_misses++;
     }
 
     return std::nullopt;
@@ -278,12 +278,12 @@ std::optional<std::shared_ptr<const std::vector<std::string>>> mln::caches::get_
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const std::vector<std::string>>> result = mln::caches::show_user_cache.get_element(guild_user_ids);
     if (!result.has_value()) {
-        ++mln::caches::s_cache_misses;
+        mln::caches::s_cache_misses++;
     }
 
     return std::nullopt;
@@ -293,7 +293,7 @@ std::optional<std::shared_ptr<const dpp::guild>> mln::caches::get_guild(const ui
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const dpp::guild>> result = mln::caches::guild_cache.get_element(guild_id);
@@ -301,7 +301,7 @@ std::optional<std::shared_ptr<const dpp::guild>> mln::caches::get_guild(const ui
         return result;
     }
 
-    ++mln::caches::s_cache_misses;
+    mln::caches::s_cache_misses++;
 
     return std::nullopt;
 }
@@ -341,7 +341,7 @@ std::optional<std::shared_ptr<const dpp::channel>> mln::caches::get_channel(cons
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const dpp::channel>> result = mln::caches::channel_cache.get_element(channel_id);
@@ -349,7 +349,7 @@ std::optional<std::shared_ptr<const dpp::channel>> mln::caches::get_channel(cons
         return result;
     }
 
-    ++mln::caches::s_cache_misses;
+    mln::caches::s_cache_misses++;
 
     //Look in resolved cache
     if (event_data != nullptr) {
@@ -402,7 +402,7 @@ std::optional<std::shared_ptr<const dpp::user_identified>> mln::caches::get_user
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const dpp::user_identified>> result = mln::caches::user_cache.get_element(user_id);
@@ -410,7 +410,7 @@ std::optional<std::shared_ptr<const dpp::user_identified>> mln::caches::get_user
         return result;
     }
 
-    ++mln::caches::s_cache_misses;
+    mln::caches::s_cache_misses++;
 
     //Look in resolved cache
     if (event_data != nullptr) {
@@ -464,7 +464,7 @@ std::optional<std::shared_ptr<const dpp::guild_member>> mln::caches::get_member(
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const dpp::guild_member>> result = mln::caches::member_cache.get_element(guild_user_ids);
@@ -472,7 +472,7 @@ std::optional<std::shared_ptr<const dpp::guild_member>> mln::caches::get_member(
         return result;
     }
 
-    ++mln::caches::s_cache_misses;
+    mln::caches::s_cache_misses++;
 
     //Look in resolved cache
     if (event_data != nullptr) {
@@ -525,7 +525,7 @@ std::optional<std::shared_ptr<const dpp::role>> mln::caches::get_role(const uint
         return std::nullopt;
     }
 
-    ++mln::caches::s_cache_requests;
+    mln::caches::s_cache_requests++;
 
     //Look in cache
     std::optional<std::shared_ptr<const dpp::role>> result = mln::caches::role_cache.get_element(role_id);
@@ -533,7 +533,7 @@ std::optional<std::shared_ptr<const dpp::role>> mln::caches::get_role(const uint
         return result;
     }
 
-    ++mln::caches::s_cache_misses;
+    mln::caches::s_cache_misses++;
 
     //Look in resolved cache
     if (event_data != nullptr) {
