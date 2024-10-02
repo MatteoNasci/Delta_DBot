@@ -19,6 +19,7 @@
 #include <dpp/snowflake.h>
 #include <dpp/user.h>
 
+#include <cstdint>
 #include <format>
 #include <functional>
 #include <memory>
@@ -91,7 +92,7 @@ dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
     const dpp::command_value& user_param = event_data.get_parameter("user");
     const dpp::command_value& role_param = event_data.get_parameter("role");
     const dpp::snowflake user_id = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : dpp::snowflake{ 0 };
-    const dpp::snowflake role_id = std::holds_alternative<dpp::snowflake>(role_param) ? std::get<dpp::snowflake>(user_param) : dpp::snowflake{ 0 };
+    const dpp::snowflake role_id = std::holds_alternative<dpp::snowflake>(role_param) ? std::get<dpp::snowflake>(role_param) : dpp::snowflake{ 0 };
 
     if (user_id == 0) {
         co_await mln::response::co_respond(lite_data, "Failed to retrieve user parameter!", true, "Failed to retrieve user parameter!");
@@ -118,7 +119,28 @@ dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
         co_return;
     }
 
-    co_await mln::response::co_respond(lite_data, std::format("Role [{}] added to [{}]", dpp::role::get_mention(role_id), dpp::user::get_mention(target.value()->user_id)), false, "Failed add_role command conclusion reply!");
+    if (!std::holds_alternative<dpp::guild_member>(editing_user.value)) {
+        static const std::string s_err_text = "Failed to confirm correct command execution!";
+
+        co_await mln::response::co_respond(lite_data, s_err_text, true, std::format("{} Role: [{}, {}], user: [{}, {}].", 
+            s_err_text, static_cast<uint64_t>(role_id), dpp::role::get_mention(role_id), static_cast<uint64_t>(target.value()->user_id), dpp::user::get_mention(target.value()->user_id)));
+        co_return;
+    }
+
+    bool role_added = false;
+    for (const dpp::snowflake& role : std::get<dpp::guild_member>(editing_user.value).get_roles()) {
+        if (role == role_id) {
+            role_added = true;
+            break;
+        }
+    }
+    if (role_added) {
+        co_await mln::response::co_respond(lite_data, std::format("Role [{}] added to [{}]", dpp::role::get_mention(role_id), dpp::user::get_mention(target.value()->user_id)), false, "Failed add_role command conclusion reply!");
+    }
+    else {
+        co_await mln::response::co_respond(lite_data, std::format("Failed to add role [{}, {}] to [{}, {}]!", 
+            static_cast<uint64_t>(role_id), dpp::role::get_mention(role_id), static_cast<uint64_t>(target.value()->user_id), dpp::user::get_mention(target.value()->user_id)), false, "Failed add_role command conclusion reply!");
+    }
     co_return;
 }
 
