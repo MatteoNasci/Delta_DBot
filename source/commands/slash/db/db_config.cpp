@@ -135,7 +135,7 @@ This set of commands is generally reserved for users with specific permissions.
 
 dpp::task<void> mln::db_config::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
 
-    if (!cmd_data.cmd_usr || !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
+    if (cmd_data.cmd_usr && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, admin permission is required to access this group command!", false, {});
         co_return;
     }
