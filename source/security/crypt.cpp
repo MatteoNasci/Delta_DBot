@@ -1,7 +1,7 @@
 #include "security/crypt.h"
 
 /*#include <sodium.h>*/
-#include <dpp/discordvoiceclient.h>
+//#include <dpp/discordvoiceclient.h>
 
 int mln::crypt::init()
 {

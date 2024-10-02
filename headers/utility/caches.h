@@ -3,28 +3,33 @@
 #define H_MLN_DB_CACHES_H
 
 #include "utility/cache.h"
-#include "utility/reply_log_data.h"
 
-#include <dpp/guild.h>
-#include <dpp/channel.h>
-#include <dpp/user.h>
-#include <dpp/message.h>
-#include <dpp/dispatcher.h>
 #include <dpp/coro/task.h>
-#include <dpp/role.h>
+#include <dpp/permissions.h>
+#include <dpp/snowflake.h>
 
-#include <string>
-#include <vector>
-#include <tuple>
-#include <optional>
-#include <functional>
 #include <atomic>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace dpp {
 	class cluster;
+	class role;
+	class user;
+	class guild_member;
+	class user_identified;
+	class guild;
+	class channel;
+	struct message;
 }
 
 namespace mln {
+	struct event_data_lite_t;
 	class database_handler;
 	/**
 	 * @brief Class that contains all caches used by the bot. 
@@ -57,7 +62,7 @@ namespace mln {
 		static bool is_initialized();
 		static unsigned long long get_total_cache_requests();
 		static unsigned long long get_total_cache_misses();
-		static double get_cache_misses_rate();
+		static long double get_cache_misses_rate();
 
 		struct composite_tuple_hash {
 			size_t operator()(const std::tuple<uint64_t, uint64_t>& key) const;
@@ -66,43 +71,41 @@ namespace mln {
 		static cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> dump_channels_cache;
 		static std::optional<uint64_t> get_dump_channel_id(const uint64_t guild_id);
 
-		static std::optional<dpp::message> get_message(const uint64_t message_id, const dpp::interaction_create_t* const event_data);
 		/**
 		 * @brief Requires view channel and read message history perms for the bot
 		*/
-		static dpp::task<std::optional<dpp::message>> get_message_task(const uint64_t message_id, const uint64_t channel_id);
-		static dpp::task<std::optional<dpp::message>> get_message_full(const uint64_t message_id, const uint64_t channel_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		static dpp::task<std::optional<dpp::message>> get_message_task(const uint64_t message_id, const uint64_t channel_id, const dpp::permission bot_permissions, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::message>* const resolved_map);
+		static std::optional<dpp::message> get_message(const uint64_t message_id, const uint64_t channel_id, const dpp::permission bot_permissions, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::message>* const resolved_map);
 
 		static cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> show_all_cache;
 		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_all(const uint64_t guild_id);
 
 		static cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, composite_tuple_hash> show_user_cache;
-		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_user(const std::tuple<uint64_t, uint64_t>& guild_user_ids);
+		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_user(const uint64_t guild_id, const uint64_t user_id);
 
 		static cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> guild_cache;
-		static std::optional<std::shared_ptr<const dpp::guild>> get_guild(const uint64_t guild_id);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_task(const uint64_t guild_id);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_full(const uint64_t guild_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		static dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> get_guild_task(const uint64_t guild_id, event_data_lite_t& lite_data);
+		static std::optional<std::shared_ptr<const dpp::guild>> get_guild(const uint64_t guild_id, event_data_lite_t& lite_data);
 		
 		static cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> channel_cache;
-		static std::optional<std::shared_ptr<const dpp::channel>> get_channel(const uint64_t channel_id, const dpp::interaction_create_t* const event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_task(const uint64_t channel_id);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_full(const uint64_t channel_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		static dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> get_channel_task(const uint64_t channel_id, event_data_lite_t& lite_data, const dpp::channel* const event_channel, const std::map<dpp::snowflake, dpp::channel>* const resolved_map);
+		static std::optional<std::shared_ptr<const dpp::channel>> get_channel(const uint64_t channel_id, event_data_lite_t& lite_data, const dpp::channel* const event_channel, const std::map<dpp::snowflake, dpp::channel>* const resolved_map);
+		
 
 		static cache<uint64_t, dpp::user_identified, false, 6000, 500, 0.7, true> user_cache;
-		static std::optional<std::shared_ptr<const dpp::user_identified>> get_user(const uint64_t user_id, const dpp::interaction_create_t* const event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_task(const uint64_t user_id);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_full(const uint64_t user_id, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		/**
+		*If a given user_identified is not filled properly, you can force an API call to retrieve the data by deleting the cache entry and calling get_user with invoking_user and resolved_map as nullptr.
+		*/
+		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_task(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map);
+		static std::optional<std::shared_ptr<const dpp::user_identified>> get_user(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map);
 
 		static cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, composite_tuple_hash> member_cache;
-		static std::optional<std::shared_ptr<const dpp::guild_member>> get_member(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const dpp::interaction_create_t* const event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_task(const std::tuple<uint64_t, uint64_t>& guild_user_ids);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_full(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_task(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map);
+		static std::optional<std::shared_ptr<const dpp::guild_member>> get_member(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map);
 
 		static cache<uint64_t, dpp::role, false, 6000, 500, 0.7, true> role_cache;
-		static std::optional<std::shared_ptr<const dpp::role>> get_role(const uint64_t role_id, const dpp::interaction_create_t* const  event_data);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_task(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles = false);
-		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_full(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles = false, const reply_log_data_t& reply_log_data = { nullptr, nullptr, false });
+		static dpp::task<std::optional<std::shared_ptr<const dpp::role>>> get_role_task(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::role>* const resolved_map);
+		static std::optional<std::shared_ptr<const dpp::role>> get_role(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::role>* const resolved_map);
 	};
 }
 

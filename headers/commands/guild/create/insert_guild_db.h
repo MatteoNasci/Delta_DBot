@@ -4,6 +4,16 @@
 
 #include "commands/guild/create/base_guild_create.h"
 
+#include <dpp/coro/task.h>
+
+#include <functional>
+#include <optional>
+
+namespace dpp {
+    class cluster;
+    struct guild_create_t;
+}
+
 namespace mln {
     class database_handler;
 
@@ -24,7 +34,9 @@ namespace mln {
 
         insert_guild_db& operator=(insert_guild_db&&) = default;
 
-        dpp::task<void> command(const dpp::guild_create_t& event_data) const override;
+        dpp::task<void> command(const dpp::guild_create_t& event_data) const override final;
+        std::optional<std::function<void()>> job(const dpp::guild_create_t& event_data) const override final;
+        bool use_job() const override final;
     };
 }
 

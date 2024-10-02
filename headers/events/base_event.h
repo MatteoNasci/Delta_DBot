@@ -2,14 +2,13 @@
 #ifndef H_MLN_DB_BASE_EVENT_H
 #define H_MLN_DB_BASE_EVENT_H
 
-#include <utility>
-
 namespace dpp {
 	class cluster;
 }
 
 namespace mln {
 	class database_handler;
+	class jobs_runner;
 
 	template<typename T_container>
 	class base_event {
@@ -18,8 +17,9 @@ namespace mln {
 	private:
 		dpp::cluster& cluster;
 		database_handler& db;
+		jobs_runner& j_runner;
 	public:
-		base_event(dpp::cluster& in_cluster, database_handler& in_db) : actions{}, cluster{ in_cluster }, db{ in_db } {};
+		base_event(dpp::cluster& in_cluster, database_handler& in_db, jobs_runner& in_j_runner) : actions{}, cluster{ in_cluster }, db{ in_db }, j_runner{ in_j_runner } {};
 
 		/**
 		 * @brief base_event is non-copyable
@@ -39,9 +39,11 @@ namespace mln {
 		}
 
 		virtual void attach_event() = 0;
+
 		const T_container& get_actions() const { return actions; }
 		dpp::cluster& bot() { return cluster; }
 		database_handler& database() { return db; }
+		jobs_runner& jobs_handler() { return j_runner; }
 	};
 }
 

@@ -2,21 +2,29 @@
 #ifndef H_MLN_DB_CMD_CTX_RUNNER_H
 #define H_MLN_DB_CMD_CTX_RUNNER_H
 
-#include "events/base_event.h"
 #include "commands/ctx/base_ctx_command.h"
+#include "events/base_event.h"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
-#include <memory>
+
+namespace dpp {
+    class cluster;
+}
 
 namespace mln {
+    class jobs_runner;
+    class database_handler;
+
     class cmd_ctx_runner final : public base_event<std::unordered_map<std::string, std::unique_ptr<base_ctx_command>>> {
     private:
         size_t event_id;
-        std::atomic_bool initialized;
+        bool initialized;
     public:
-        cmd_ctx_runner(dpp::cluster& cluster, database_handler& db);
-        void attach_event() override;
+        cmd_ctx_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner);
+        ~cmd_ctx_runner();
+        void attach_event() override final;
     };
 }
 

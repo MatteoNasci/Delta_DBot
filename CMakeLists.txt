@@ -159,18 +159,28 @@ set(botsrc  source/commands/slash/ping.cpp
             source/utility/http_err.cpp
             source/utility/response.cpp
             source/security/crypt.cpp
-            source/utility/reply_log_data.cpp
-            source/commands/slash/db/db_command_type.cpp)
+            source/commands/slash/db/db_command_type.cpp
+            source/threads/jobs_runner.cpp
+            source/utility/event_data_lite.cpp
+            source/utility/logs.cpp
+            source/utility/time.cpp)
 
 add_executable(deploy_delta ${botsrc})
+add_executable(deploy_delta_dev ${botsrc})
 
 target_link_libraries(deploy_delta PRIVATE ${DPP_LIB})
+target_link_libraries(deploy_delta_dev PRIVATE ${DPP_LIB})
 target_link_libraries(deploy_delta PRIVATE ${SQLITE_LIB})
+target_link_libraries(deploy_delta_dev PRIVATE ${SQLITE_LIB})
 #target_link_libraries(deploy_delta PRIVATE ${SODIUM_LIB})
+#target_link_libraries(deploy_delta_dev PRIVATE ${SODIUM_LIB})
 
 target_compile_definitions(deploy_delta PRIVATE DPP_CORO)
+target_compile_definitions(deploy_delta_dev PRIVATE DPP_CORO)
+target_compile_definitions(deploy_delta_dev PRIVATE MLN_DB_DEV_BUILD)
 
 target_include_directories(deploy_delta PRIVATE "${PROJECT_SOURCE_DIR}/headers/")
+target_include_directories(deploy_delta_dev PRIVATE "${PROJECT_SOURCE_DIR}/headers/")
 
 find_path(DPP_INCLUDES
   NAMES dpp/dpp.h
@@ -178,6 +188,7 @@ find_path(DPP_INCLUDES
 )
 if(DPP_INCLUDE_DIR)
   target_include_directories(deploy_delta PRIVATE ${DPP_INCLUDES})
+  target_include_directories(deploy_delta_dev PRIVATE ${DPP_INCLUDES})
   message(STATUS "Found ${DPP_NAME} includes: ${DPP_INCLUDES}")
 else()
   message(FATAL_ERROR "Could not find include directory for ${DPP_NAME}")
@@ -189,6 +200,7 @@ endif()
 #)
 #if(SODIUM_INCLUDES)
 #  target_include_directories(deploy_delta PRIVATE ${SODIUM_INCLUDES})
+#  target_include_directories(deploy_delta_dev PRIVATE ${SODIUM_INCLUDES})
 #  message(STATUS "Found ${SODIUM_NAME} includes: ${SODIUM_INCLUDES}")
 #else()
 #  message(FATAL_ERROR "Could not find include directory for ${SODIUM_NAME}")
@@ -200,6 +212,7 @@ find_path(SQLITE_INCLUDE_DIR
 )
 if(SQLITE_INCLUDE_DIR)
   target_include_directories(deploy_delta PRIVATE ${SQLITE_INCLUDE_DIR})
+  target_include_directories(deploy_delta_dev PRIVATE ${SQLITE_INCLUDE_DIR})
   message(STATUS "Found ${SQLITE_NAME} includes: ${SQLITE_INCLUDE_DIR}")
 else()
   message(FATAL_ERROR "Could not find include directory for ${SQLITE_NAME}")
@@ -219,6 +232,20 @@ set_target_properties(deploy_delta PROPERTIES
     SOVERSION ${ver_major}
 )
 
+# Loop over the DLLs and add a custom command to copy them to the output directory
+set(DLLS_TO_COPY ${DPP_DLLS_LIST} ${SQLITE_DLLS})
+foreach(DLL ${DLLS_TO_COPY})
+    add_custom_command(TARGET deploy_delta_dev POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${DLL}
+        $<TARGET_FILE_DIR:deploy_delta_dev>)
+endforeach()
+
+set_target_properties(deploy_delta_dev PROPERTIES
+    VERSION ${ver_major}.${ver_minor}.${ver_patch}.${ver_tweak}
+    SOVERSION ${ver_major}
+)
+
 file(READ ".secret.txt" sec)
 
 string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" matchToken ${sec})
@@ -230,12 +257,24 @@ else()
     message(WARNING "Discord bot Token not found in .secret.txt")
 endif()
 
+file(READ ".dev_secret.txt" sec)
+
+string(REGEX MATCH "DISCORD_BOT_TOKEN ([^\\s]+)" matchToken ${sec})
+if(matchToken)
+    set(TOKEN ${CMAKE_MATCH_1})
+    target_compile_definitions(deploy_delta_dev PRIVATE MLN_DB_DISCORD_BOT_TOKEN="${TOKEN}")
+    message(STATUS "Discord bot-dev Token found.")
+else()
+    message(WARNING "Discord bot-dev Token not found in .dev_secret.txt")
+endif()
+
 file(READ ".dev_id.txt" sec_id)
 
 string(REGEX MATCH "DEV_ID ([0-9]+)" matchDevId ${sec_id})
 if(matchDevId)
     set(DEV_USER_ID ${CMAKE_MATCH_1})
     target_compile_definitions(deploy_delta PRIVATE MLN_DB_DISCORD_DEV_ID=${DEV_USER_ID})
+    target_compile_definitions(deploy_delta_dev PRIVATE MLN_DB_DISCORD_DEV_ID=${DEV_USER_ID})
     message(STATUS "Discord dev id found.")
 else()
     message(WARNING "Discord dev id not found in .dev_id.txt")

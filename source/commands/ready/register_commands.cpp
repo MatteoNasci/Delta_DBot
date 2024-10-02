@@ -1,14 +1,30 @@
+#include "commands/ctx/base_ctx_command.h"
+#include "commands/ready/base_ready.h"
 #include "commands/ready/register_commands.h"
-#include "events/cmd_runner.h"
+#include "commands/slash/base_slashcommand.h"
 #include "events/cmd_ctx_runner.h"
-#include "utility/utility.h"
+#include "events/cmd_runner.h"
 #include "utility/json_err.h"
+#include "utility/utility.h"
 
-#include <dpp/once.h>
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/task.h>
+#include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
+#include <dpp/once.h>
+#include <dpp/restresults.h>
+#include <dpp/snowflake.h>
 
+#include <exception>
 #include <format>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
 mln::register_commands::register_commands(dpp::cluster& cluster, cmd_runner& in_runner_cmd_ptr, cmd_ctx_runner& in_runner_ctx_ptr) : base_ready{ cluster }, runner_cmd_ptr{ in_runner_cmd_ptr }, runner_ctx_ptr{ in_runner_ctx_ptr } {}
 
@@ -86,11 +102,26 @@ dpp::task<void> mln::register_commands::command(const dpp::ready_t& event_data) 
 
         bot().log(dpp::loglevel::ll_debug, "Found mismatch between local commands and registered global command. Proceeding with commands registration...");
 
-        if (!mln::utility::conf_callback_is_error(co_await bot().co_global_bulk_command_create(cmds), bot())) {          
+        const dpp::confirmation_callback_t register_res = co_await bot().co_global_bulk_command_create(cmds);
+        if (!register_res.is_error()) {
             bot().log(dpp::ll_debug, "Updated global commands!");
         }
         else {
-            bot().log(dpp::loglevel::ll_error, "Failed to register new commands!");
+            const dpp::error_info err = register_res.get_error();
+            bot().log(dpp::loglevel::ll_error, std::format("Failed to register new commands! Error: [{}], details: [{}].", mln::get_json_err_text(err.code), err.human_readable));
+            
+            throw std::exception("Failed to register new commands!");
         }
     }
+}
+
+std::optional<std::function<void()>> mln::register_commands::job(const dpp::ready_t& event_data) const
+{
+    bot().log(dpp::loglevel::ll_critical, "Failed to register commands! Usage of job command instead of task command.");
+    return std::nullopt;
+}
+
+bool mln::register_commands::use_job() const
+{
+    return false;
 }

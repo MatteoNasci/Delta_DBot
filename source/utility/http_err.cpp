@@ -1,5 +1,8 @@
 #include "utility/http_err.h"
 
+#include <dpp/queues.h>
+
+#include <type_traits>
 #include <unordered_map>
 
 const char* mln::get_http_err_text(const std::underlying_type<http_err>::type error)

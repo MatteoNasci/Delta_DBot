@@ -1,21 +1,31 @@
+#include "commands/slash/db/base_db_command.h"
+#include "commands/slash/db/db_cmd_data.h"
+#include "commands/slash/db/db_command_type.h"
+#include "commands/slash/db/db_init_type_flag.h"
 #include "commands/slash/db/db_update.h"
-#include "utility/utility.h"
-#include "utility/perms.h"
-#include "utility/caches.h"
+#include "database/database_callbacks.h"
 #include "database/database_handler.h"
+#include "database/db_result.h"
+#include "database/db_text_encoding.h"
+#include "utility/caches.h"
+#include "utility/event_data_lite.h"
+#include "utility/perms.h"
 #include "utility/response.h"
+#include "utility/utility.h"
 
+#include <dpp/appcommand.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/task.h>
+#include <dpp/dispatcher.h>
+#include <dpp/message.h>
+#include <dpp/misc-enum.h>
 
-const std::unordered_map<mln::db_command_type, std::tuple<
-    mln::db_init_type_flag,
-    std::function<dpp::task<void>(const mln::db_update&, const dpp::slashcommand_t&, const mln::db_cmd_data_t&)>>>
-    mln::db_update::s_mapped_commands_info{
-
-    {mln::db_command_type::description, {db_init_type_flag::cmd_data | db_init_type_flag::thinking, &mln::db_update::description}},
-    {mln::db_command_type::nsfw, {db_init_type_flag::cmd_data | db_init_type_flag::thinking, &mln::db_update::nsfw}},
-    {mln::db_command_type::help, {db_init_type_flag::none, &mln::db_update::help}},
-};
+#include <cstdint>
+#include <dpp/permissions.h>
+#include <dpp/snowflake.h>
+#include <format>
+#include <string>
+#include <variant>
 
 mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
 
@@ -63,50 +73,53 @@ mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base
     }
 }
 
-dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const {
+dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
 
-    //Find the command variant and execute it. If no valid command variant found return an error
-    const bool is_first_reply = (mln::db_update::get_requested_initialization_type(type) & mln::db_init_type_flag::thinking) == mln::db_init_type_flag::none;
-    const auto it_func = s_mapped_commands_info.find(type);
-    if (it_func == s_mapped_commands_info.end()) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed command, the given sub_command is not supported!"), bot(), &event_data,
+    switch (type) {
+    case mln::db_command_type::description:
+        co_await mln::db_update::description(event_data, cmd_data);
+        break;
+    case mln::db_command_type::nsfw:
+        co_await mln::db_update::nsfw(event_data, cmd_data);
+        break;
+    case mln::db_command_type::help:
+        co_await mln::db_update::help(cmd_data);
+        break;
+    default:
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, the given sub_command is not supported!", true,
             std::format("Failed command, the given sub_command [{}] is not supported for /db update!", mln::get_cmd_type_text(type)));
-        co_return;
+        break;
     }
-
-    //If the query statement was not saved correctly, return an error
-    if (!data.valid_stmt || !data_nsfw.valid_stmt) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed database operation, the database was not initialized correctly!"), bot(), &event_data,
-            "Failed database operation, the database was not initialized correctly!");
-        co_return;
-    }
-
-    co_await std::get<1>(it_func->second)(*this, event_data, cmd_data);
 }
 
 mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const db_command_type cmd) const {
-
-    const auto it = s_mapped_commands_info.find(cmd);
-    if (it == s_mapped_commands_info.end()) {
+    switch (cmd) {
+    case mln::db_command_type::description:
+    case mln::db_command_type::nsfw:
+        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+    case mln::db_command_type::help:
+        return db_init_type_flag::none;
+    default:
         return mln::db_init_type_flag::all;
     }
-    return std::get<0>(it->second);
 }
 
+bool mln::db_update::is_db_initialized() const
+{
+    return data.valid_stmt && data_nsfw.valid_stmt;
+}
 
-dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
     //Retrieve remaining data required for the database query
     std::string description;
-    const dpp::command_value desc_param = event_data.get_parameter("description");
+    const dpp::command_value& desc_param = event_data.get_parameter("description");
     const bool valid_description = std::holds_alternative<std::string>(desc_param);
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
         if (!mln::utility::is_ascii_printable(description)) {
-            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                "Failed to bind query parameters, given description is composed of invalid characters! Only ASCII printable characters are accepted [32,126]"), bot());
+            co_await mln::response::co_respond(cmd_data.data,
+                "Failed to bind query parameters, given description is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
             co_return;
         }
     }
@@ -121,53 +134,75 @@ dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_dat
 
     //Check if any error occurred in the binding process, in case return an error
     if (res.type != mln::db_result::ok) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, internal error!"), bot(), &event_data, 
-            std::format("Failed to bind query parameters, internal error! desc_param: [{}, {}].", 
-                mln::database_handler::get_name_from_result(res.type), res.err_text));
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
+            std::format("Failed to bind query parameters, internal error! desc_param: [{}, {}].", mln::database_handler::get_name_from_result(res.type), res.err_text));
         co_return;
     }
 
     co_await common(event_data, cmd_data, data);
 }
 
-dpp::task<void> mln::db_update::nsfw(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const
+dpp::task<void> mln::db_update::nsfw(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const
 {
     //Retrieve remaining data required for the database query
-    const bool nsfw = std::get<bool>(event_data.get_parameter("nsfw"));
+    const dpp::command_value& nsfw_param = event_data.get_parameter("nsfw");
+    if (!std::holds_alternative<bool>(nsfw_param)) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve nsfw tag parameter!", true, "Failed to retrieve nsfw tag parameter!");
+        co_return;
+    }
+
+    const bool nsfw = std::get<bool>(nsfw_param);
 
     const mln::db_result_t res = db.bind_parameter(data_nsfw.saved_stmt, 0, data.saved_param_to_update, static_cast<int>(nsfw));
 
     //Check if any error occurred in the binding process, in case return an error
     if (res.type != mln::db_result::ok) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, internal error!"), bot(), &event_data,
-            std::format("Failed to bind query parameters, internal error! nsfw_param: [{}, {}].", 
-                mln::database_handler::get_name_from_result(res.type), res.err_text));
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
+            std::format("Failed to bind query parameters, internal error! nsfw_param: [{}, {}].", mln::database_handler::get_name_from_result(res.type), res.err_text));
         co_return;
     }
 
     co_await common(event_data, cmd_data, data_nsfw);
 }
 
-dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const mln::db_update::data_t& stmt_data) const {
+dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const mln::db_update::data_t& stmt_data) const {
     //Retrieve remaining data required for the database query
-    const std::string name = std::get<std::string>(event_data.get_parameter("name"));
-    if (!mln::utility::is_ascii_printable(name)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]"), bot());
+    const dpp::command_value& name_param = event_data.get_parameter("name");
+    if (!std::holds_alternative<std::string>(name_param)) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve name parameter!", true, "Failed to retrieve name parameter!");
         co_return;
     }
 
+    const std::string name = std::get<std::string>(name_param);
+    if (name.empty()) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is empty! Only ASCII printable characters are accepted [32,126]", true,
+            "Failed to bind query parameters, given name is empty! Only ASCII printable characters are accepted [32,126]");
+        co_return;
+    }
+
+    if (!mln::utility::is_ascii_printable(name)) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", true,
+            "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]");
+        co_return;
+    }
+
+    const dpp::command_value& owner_param = event_data.get_parameter("owner");
+    const uint64_t target = std::holds_alternative<dpp::snowflake>(owner_param) ? static_cast<uint64_t>(std::get<dpp::snowflake>(owner_param)) : cmd_data.data.usr_id;
+    if (target != cmd_data.data.usr_id) {
+        if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
+            co_await mln::response::co_respond(cmd_data.data, "Failed to update the given record, admin permission required to update records owned by someone else!", false, {});
+            co_return;
+        }
+    }
+
     //Bind query parameters
-    const mln::db_result_t res1 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
-    const mln::db_result_t res2 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_user, static_cast<int64_t>(cmd_data.cmd_usr->user_id));
+    const mln::db_result_t res1 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
+    const mln::db_result_t res2 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_user, static_cast<int64_t>(target));
     const mln::db_result_t res3 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_name, name, mln::db_text_encoding::utf8);
 
     //Check if any error occurred in the binding process, in case return an error
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, internal error!"), bot(), &event_data,
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
             std::format("Failed to bind query parameters, internal error! guild_param: [{}, {}], user_param: [{}, {}], name_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res1.type), res1.err_text,
                 mln::database_handler::get_name_from_result(res2.type), res2.err_text,
@@ -186,11 +221,10 @@ dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, co
             "Failed while executing database query! The given name was not found in the database or you are not the owner of the record!" :
             "Failed while executing database query! Internal error!";
 
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            err_text), bot(), &event_data,
-            std::format("{} Error: [{}], details: [{}].",
-                err_text,
-                mln::database_handler::get_name_from_result(res.type), res.err_text));
+        co_await mln::response::co_respond(cmd_data.data, err_text, true, std::format("{} Error: [{}], details: [{}].",
+            err_text,
+            mln::database_handler::get_name_from_result(res.type), res.err_text));
+
         co_return;
     }
 
@@ -198,12 +232,10 @@ dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, co
     mln::caches::show_all_cache.remove_element(cmd_data.cmd_guild->id);
     mln::caches::show_user_cache.remove_element({ cmd_data.cmd_guild->id, cmd_data.cmd_usr->user_id });
 
-    if (mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, "Database operation successful!"), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed update command conclusion reply!");
-    }
+    co_await mln::response::co_respond(cmd_data.data, "Database operation successful!", false, "Failed update command conclusion reply!");
 }
 
-dpp::task<void> mln::db_update::help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_update::help(db_cmd_data_t& cmd_data) const {
     static const dpp::message s_info = dpp::message{ "Information regarding the `/db update` commands..." }
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db update` commands are designed to update information contained in records stored in the database related to the current Discord server.
@@ -212,18 +244,20 @@ The bot will assume that the command user owns the record being updated. If this
 
 Only ASCII printable characters are accepted as input for the `name` and `description` parameters.
 
+The optional owner parameter can be used by admins to update records owned by other people.
+
 **Types of update:**
 
 - **/db update description**  
-  *Parameters:* name[text, required], description[text, optional].  
+  *Parameters:* name[text, required], owner[user ID, optional], description[text, optional].  
   This command searches for a record in the database identified by the given name and owned by the command user. If the record exists, its description will be updated to the provided description text. If no description is provided, the record's description will be left blank.
+  The owner parameter allows the user to update a record owned by the given owner. Only admins can use this feature.
 
 - **/db update nsfw**  
-  *Parameters:* name[text, required], nsfw[boolean, required].  
-  This command searches for a record in the database identified by the given name and owned by the command user. If the record exists, its nsfw tag will be updated to the provided nsfw boolean value.)"""));
+  *Parameters:* name[text, required], owner[user ID, optional], nsfw[boolean, required].  
+  This command searches for a record in the database identified by the given name and owned by the command user. If the record exists, its nsfw tag will be updated to the provided nsfw boolean value.
+  The owner parameter allows the user to update a record owned by the given owner. Only admins can use this feature.)"""));
 
-    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db update help text!");
-    }
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db update help text!");
     co_return;
 }

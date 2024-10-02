@@ -1,14 +1,42 @@
-#include "utility/caches.h"
+#include "database/database_callbacks.h"
 #include "database/database_handler.h"
+#include "database/db_column_data.h"
+#include "database/db_result.h"
+#include "utility/cache.h"
+#include "utility/caches.h"
+#include "utility/event_data_lite.h"
+#include "utility/json_err.h"
+#include "utility/perms.h"
 #include "utility/response.h"
 #include "utility/utility.h"
-#include "utility/reply_log_data.h"
 
-#include <dpp/appcommand.h>
+#include <dpp/channel.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/guild.h>
+#include <dpp/message.h>
+#include <dpp/misc-enum.h>
+#include <dpp/permissions.h>
+#include <dpp/restresults.h>
+#include <dpp/role.h>
+#include <dpp/snowflake.h>
+#include <dpp/user.h>
 
+#include <atomic>
+#include <cstdint>
+#include <exception>
 #include <format>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 size_t mln::caches::s_saved_select_dump_channel{ 0 };
 
@@ -18,6 +46,21 @@ size_t mln::caches::s_saved_on_user_update{ 0 };
 size_t mln::caches::s_saved_on_guild_update{ 0 };
 size_t mln::caches::s_saved_on_guild_role_update{ 0 };
 
+std::atomic_ullong mln::caches::s_cache_misses{ 0 };
+std::atomic_ullong mln::caches::s_cache_requests{ 0 };
+dpp::cluster* mln::caches::s_cluster{ nullptr };
+mln::database_handler* mln::caches::s_db{ nullptr };
+
+mln::cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> mln::caches::dump_channels_cache{};
+mln::cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> mln::caches::show_all_cache{};
+mln::cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::show_user_cache{};
+mln::cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> mln::caches::guild_cache{};
+mln::cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> mln::caches::channel_cache{};
+mln::cache<uint64_t, dpp::user_identified, false, 6000, 500, 0.7, true> mln::caches::user_cache{};
+mln::cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::member_cache{};
+mln::cache<uint64_t, dpp::role, false, 6000, 500, 0.7, true> mln::caches::role_cache{};
+
+
 size_t mln::caches::composite_tuple_hash::operator()(const std::tuple<uint64_t, uint64_t>& key) const {
 
 	std::size_t h1 = std::hash<uint64_t>{}(std::get<0>(key));
@@ -26,25 +69,25 @@ size_t mln::caches::composite_tuple_hash::operator()(const std::tuple<uint64_t, 
 	// Combine the hash values
 	return h1 ^ (h2 << 1);
 }
+
 unsigned long long mln::caches::get_total_cache_requests() {
-	return mln::caches::s_cache_requests;
+	return mln::caches::s_cache_requests.load(std::memory_order_relaxed);
 }
 unsigned long long mln::caches::get_total_cache_misses() {
-	return mln::caches::s_cache_misses;
+	return mln::caches::s_cache_misses.load(std::memory_order_relaxed);
 }
-double mln::caches::get_cache_misses_rate() {
-    if (mln::caches::s_cache_requests == 0) {
+long double mln::caches::get_cache_misses_rate() {
+    const unsigned long long requests = mln::caches::s_cache_requests.load(std::memory_order_relaxed);
+    const long double misses = static_cast<long double>(mln::caches::s_cache_misses.load(std::memory_order_relaxed));
+    if (requests == 0) [[unlikely]] {
         return 0.0;
     }
-    return static_cast<double>(mln::caches::s_cache_misses) / mln::caches::s_cache_requests;
+    return misses / static_cast<long double>(requests);
 }
 void mln::caches::cleanup() {
-    if (!mln::caches::is_initialized()) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
         return;
     }
-
-    s_db->delete_statement(s_saved_select_dump_channel);
-    mln::caches::s_saved_select_dump_channel = 0;
 
     mln::caches::s_cluster->on_guild_member_update.detach(mln::caches::s_saved_on_guild_member_update);
     mln::caches::s_cluster->on_channel_update.detach(mln::caches::s_saved_on_channel_update);
@@ -57,10 +100,13 @@ void mln::caches::cleanup() {
     mln::caches::s_saved_on_guild_update = 0;
     mln::caches::s_saved_on_guild_role_update = 0;
 
+    s_db->delete_statement(s_saved_select_dump_channel);
+    mln::caches::s_saved_select_dump_channel = 0;
+
     mln::caches::s_cluster = nullptr;
     mln::caches::s_db = nullptr;
-    s_cache_misses = 0;
-    s_cache_requests = 0;
+    mln::caches::s_cache_misses.store(0, std::memory_order_relaxed);
+    mln::caches::s_cache_requests.store(0, std::memory_order_relaxed);
 
     mln::caches::dump_channels_cache.clear();
     mln::caches::show_all_cache.clear();
@@ -75,110 +121,121 @@ bool mln::caches::is_initialized() {
     return mln::caches::s_cluster != nullptr && mln::caches::s_db != nullptr;
 }
 void mln::caches::init(dpp::cluster* cluster, database_handler* db) {
-    if (is_initialized()) {
+    if (mln::caches::is_initialized()) [[unlikely]] {
         mln::caches::cleanup();
     }
 
     mln::caches::s_cluster = cluster;
     mln::caches::s_db = db;
-    s_cache_misses = 0;
-    s_cache_requests = 0;
+    mln::caches::s_cache_misses.store(0, std::memory_order_relaxed);
+    mln::caches::s_cache_requests.store(0, std::memory_order_relaxed);
 
-    if (!is_initialized()) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
         throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
     }
 
     //Note that some of the info in the events will not be filled if the cache policy of the cluster is ::cp_none (dpp does dpp::find_X for some stuff, which will be empty)
-    s_saved_on_guild_member_update = s_cluster->on_guild_member_update([](const dpp::guild_member_update_t& event_data) { 
+    s_saved_on_guild_member_update = s_cluster->on_guild_member_update([](const dpp::guild_member_update_t& event_data) {
+        if (!mln::caches::is_initialized()) [[unlikely]] {
+            throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
+        }
+
         const bool success = mln::caches::member_cache.update_element(std::make_tuple(event_data.updated.guild_id, event_data.updated.user_id), 
             event_data.updated).has_value();
 
         s_cluster->log(dpp::loglevel::ll_debug, success ? 
-            "Updated guild member " + std::to_string(event_data.updated.user_id) + " from guild " + std::to_string(event_data.updated.guild_id) :
-            "Not updated guild member " + std::to_string(event_data.updated.user_id) + " from guild " + std::to_string(event_data.updated.guild_id));
+            std::format("Updated guild member [{}] from guild [{}].", static_cast<uint64_t>(event_data.updated.user_id), static_cast<uint64_t>(event_data.updated.guild_id)) :
+            std::format("Not updated guild member [{}] from guild [{}].", static_cast<uint64_t>(event_data.updated.user_id), static_cast<uint64_t>(event_data.updated.guild_id)));
         });
 
     s_saved_on_channel_update = s_cluster->on_channel_update([](const dpp::channel_update_t& event_data) { 
-        if (event_data.updated != nullptr) {
+        if (event_data.updated != nullptr) [[likely]] {
+            if (!mln::caches::is_initialized()) [[unlikely]] {
+                throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
+            }
+
             const dpp::channel& channel = *event_data.updated;
-            const bool success = mln::caches::channel_cache.update_element(event_data.updated->id, channel).has_value();
+            const bool success = mln::caches::channel_cache.update_element(channel.id, channel).has_value();
 
             s_cluster->log(dpp::loglevel::ll_debug, success ?
-                "Updated channel " + std::to_string(channel.id) + " from guild " + std::to_string(channel.guild_id) :
-                "Not updated channel " + std::to_string(channel.id) + " from guild " + std::to_string(channel.guild_id));
+                std::format("Updated channel [{}] from guild [{}].", static_cast<uint64_t>(channel.id), static_cast<uint64_t>(channel.guild_id)) :
+                std::format("Not updated channel [{}] from guild [{}].", static_cast<uint64_t>(channel.id), static_cast<uint64_t>(channel.guild_id)));
         }
         });
 
     s_saved_on_user_update = s_cluster->on_user_update([](const dpp::user_update_t& event_data) { 
+        if (!mln::caches::is_initialized()) [[unlikely]] {
+            throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
+        }
+
         const bool success = mln::caches::user_cache.update_element(event_data.updated.id, event_data.updated).has_value();
 
         s_cluster->log(dpp::loglevel::ll_debug, success ?
-            "Updated user " + std::to_string(event_data.updated.id) :
-            "Not updated user " + std::to_string(event_data.updated.id));
+            std::format("Updated user [{}].", static_cast<uint64_t>(event_data.updated.id)) :
+            std::format("Not updated user [{}].", static_cast<uint64_t>(event_data.updated.id)));
         });
 
     s_saved_on_guild_update = s_cluster->on_guild_update([](const dpp::guild_update_t& event_data) { 
-        if (event_data.updated != nullptr) {
+        if (event_data.updated != nullptr) [[likely]] {
+            if (!mln::caches::is_initialized()) [[unlikely]] {
+                throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
+            }
+
             const dpp::guild& guild = *event_data.updated;
-            const bool success = mln::caches::guild_cache.update_element(event_data.updated->id, guild).has_value();
+            const bool success = mln::caches::guild_cache.update_element(guild.id, guild).has_value();
 
             s_cluster->log(dpp::loglevel::ll_debug, success ?
-                "Updated guild " + std::to_string(guild.id) :
-                "Not updated guild " + std::to_string(guild.id));
+                std::format("Updated guild [{}].", static_cast<uint64_t>(guild.id)) :
+                std::format("Not updated guild [{}].", static_cast<uint64_t>(guild.id)));
         }
         });
 
     s_saved_on_guild_role_update = s_cluster->on_guild_role_update([](const dpp::guild_role_update_t& event_data) { 
-        if (event_data.updated != nullptr) {
+        if (event_data.updated != nullptr) [[likely]] {
+            if (!mln::caches::is_initialized()) [[unlikely]] {
+                throw std::exception("Failed to initialize caches, either the cluster or the database are not valid references!");
+            }
+
             const dpp::role& role = *event_data.updated;
-            const bool success = mln::caches::role_cache.update_element(event_data.updated->id, role).has_value();
+            const bool success = mln::caches::role_cache.update_element(role.id, role).has_value();
 
             s_cluster->log(dpp::loglevel::ll_debug, success ?
-                "Updated role " + std::to_string(role.id) :
-                "Not updated role " + std::to_string(role.id));
+                std::format("Updated role [{}] from guild [{}].", static_cast<uint64_t>(role.id), static_cast<uint64_t>(role.guild_id)) :
+                std::format("Not updated role [{}] from guild [{}].", static_cast<uint64_t>(role.id), static_cast<uint64_t>(role.guild_id)));
         }
         });
 
     const mln::db_result_t res = s_db->save_statement("SELECT dedicated_channel_id FROM guild_profile WHERE guild_id = ?1;", s_saved_select_dump_channel);
-    if (res.type != mln::db_result::ok) {
+    if (res.type != mln::db_result::ok) [[unlikely]] {
         const std::string err_msg = std::format("An error occurred while saving the select dump channel stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
     }
 }
 
-std::atomic_ullong mln::caches::s_cache_misses{0};
-std::atomic_ullong mln::caches::s_cache_requests{0};
-dpp::cluster* mln::caches::s_cluster{nullptr};
-mln::database_handler* mln::caches::s_db{nullptr};
-
-mln::cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> mln::caches::dump_channels_cache{};
-mln::cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> mln::caches::show_all_cache{};
-mln::cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::show_user_cache{};
-mln::cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> mln::caches::guild_cache{};
-mln::cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> mln::caches::channel_cache{};
-mln::cache<uint64_t, dpp::user_identified, false, 6000, 500, 0.7, true> mln::caches::user_cache{};
-mln::cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::member_cache{};
-mln::cache<uint64_t, dpp::role, false, 6000, 500, 0.7, true> mln::caches::role_cache{};
 
 std::optional<uint64_t> mln::caches::get_dump_channel_id(const uint64_t guild_id) {
-    if (guild_id == 0) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (guild_id == 0) [[unlikely]] {
         return std::nullopt;
     }
 
-	mln::caches::s_cache_requests++;
+	mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
 
     //Look in cache
 	std::optional<uint64_t> result = mln::caches::dump_channels_cache.get_element(guild_id);
-	if (result.has_value()) {
+	if (result.has_value()) [[likely]] {
 		return result;
 	}
 
-	mln::caches::s_cache_misses++;
+	mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
     //Look in database
     const db_result_t res = s_db->bind_parameter(s_saved_select_dump_channel, 0, 1, static_cast<int64_t>(guild_id));
-    if (res.type != mln::db_result::ok) {
+    if (res.type != mln::db_result::ok) [[unlikely]] {
         s_cluster->log(dpp::loglevel::ll_error, std::format("Failed to bind query parameters for select dump channel! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res.type), res.err_text));
         return std::nullopt;
@@ -194,370 +251,680 @@ std::optional<uint64_t> mln::caches::get_dump_channel_id(const uint64_t guild_id
     };
 
     const db_result_t exec_res = s_db->exec(s_saved_select_dump_channel, calls);
-    if (mln::database_handler::is_exec_error(exec_res.type)) {
+    if (mln::database_handler::is_exec_error(exec_res.type)) [[unlikely]] {
         s_cluster->log(dpp::loglevel::ll_error, std::format("Failed to execute query for select dump channel! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(exec_res.type), exec_res.err_text));
     }
 
     //If value found in database, store it in cache and return it
-    if (result.has_value()) {
+    if (result.has_value()) [[likely]] {
         return mln::caches::dump_channels_cache.add_element(guild_id, result.value());
     }   
 
 	return std::nullopt;
 }
-std::optional<dpp::message> mln::caches::get_message(const uint64_t message_id, const dpp::interaction_create_t* const event_data) {
-    if (message_id == 0) {
+
+
+dpp::task<std::optional<dpp::message>> mln::caches::get_message_task(const uint64_t message_id, const uint64_t channel_id, const dpp::permission bot_permissions, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::message>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (message_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Invalid msg/channel id!", message_id, channel_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (!mln::perms::check_permissions(bot_permissions, dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Missing permissions!", message_id, channel_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, false, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::message>::const_iterator it = resolved_map->find(message_id);
+        if (it != resolved_map->end()) {
+            co_return it->second;
+        }
+    }
+
+    if (channel_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Invalid channel id!", message_id, channel_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    const dpp::confirmation_callback_t result = co_await lite_data.creator->co_message_get(message_id, channel_id);
+    if (result.is_error()) [[unlikely]] {
+        const dpp::error_info err = result.get_error();
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Error: [{}], details: [{}].", message_id, channel_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::message>(result.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Failed to retrieve message from Discord.", message_id, channel_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    co_return std::get<dpp::message>(result.value);
+}
+std::optional<dpp::message> mln::caches::get_message(const uint64_t message_id, const uint64_t channel_id, const dpp::permission bot_permissions, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::message>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    dpp::cluster& bot = lite_data.creator ? *lite_data.creator : *mln::caches::s_cluster;
+
+    if (message_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Invalid msg/channel id!", message_id, channel_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
         return std::nullopt;
     }
 
-    //Look in resolved cache
-    if (event_data != nullptr) {
-        if (event_data->command.msg.id == message_id) {
-            return event_data->command.msg;
-        } else {
+    if (!mln::perms::check_permissions(bot_permissions, dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Missing permissions!", message_id, channel_id);
 
-            const auto it = event_data->command.resolved.messages.find(message_id);
-            if (it != event_data->command.resolved.messages.end()) {
-                return it->second;
-            }
+        mln::response::respond(lite_data, err_text, false, err_text);
+
+        return std::nullopt;
+    }
+
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::message>::const_iterator it = resolved_map->find(message_id);
+        if (it != resolved_map->end()) {
+            return it->second;
         }
     }
 
-    return std::nullopt;
-}
+    if (channel_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Invalid channel id!", message_id, channel_id);
 
-dpp::task<std::optional<dpp::message>> mln::caches::get_message_task(const uint64_t message_id, const uint64_t channel_id) {
-    if (message_id == 0) {
-        co_return std::nullopt;
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
     }
 
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_message_get(message_id, channel_id);
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve msg from message_id " + std::to_string(message_id) +
-            " from channel_id " + std::to_string(channel_id) + "! Error: " + result.get_error().human_readable);
-        co_return std::nullopt;
+    dpp::confirmation_callback_t result;
+    lite_data.creator->message_get(message_id, channel_id, [&result](const dpp::confirmation_callback_t& conf) { result = conf; });
+    if (result.is_error()) [[unlikely]] {
+        const dpp::error_info err = result.get_error();
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Error: [{}], details: [{}].", message_id, channel_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
     }
 
-    co_return std::move(result.get<dpp::message>());
-}
-dpp::task<std::optional<dpp::message>> mln::caches::get_message_full(const uint64_t message_id, const uint64_t channel_id, const reply_log_data_t& reply_log_data) {
-    std::optional<dpp::message> msg = mln::caches::get_message(message_id, reply_log_data.event_data);
-    if (!msg.has_value()) {
-        msg = co_await mln::caches::get_message_task(message_id, channel_id);
-        if (!msg.has_value()) {
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve message data! channel_message_id: [{}, {}].", channel_id, message_id);
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
-        }
+    if (!std::holds_alternative<dpp::message>(result.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve msg with id [{}] from channel [{}]! Failed to retrieve message from Discord.", message_id, channel_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
     }
 
-    co_return msg;
+    return std::get<dpp::message>(result.value);
 }
+
 
 std::optional<std::shared_ptr<const std::vector<std::string>>> mln::caches::get_show_all(const uint64_t guild_id) {
-    if (guild_id == 0) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+    
+    if (guild_id == 0) [[unlikely]] {
         return std::nullopt;
     }
 
-    mln::caches::s_cache_requests++;
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
 
     //Look in cache
     std::optional<std::shared_ptr<const std::vector<std::string>>> result = mln::caches::show_all_cache.get_element(guild_id);
+    if (!result.has_value()) [[unlikely]] {
+        mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    return std::nullopt;
+}
+std::optional<std::shared_ptr<const std::vector<std::string>>> mln::caches::get_show_user(const uint64_t guild_id, const uint64_t user_id) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+    
+    if (guild_id == 0 || user_id == 0) [[unlikely]] {
+        return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const std::vector<std::string>>> result = mln::caches::show_user_cache.get_element({guild_id, user_id});
     if (!result.has_value()) {
-        mln::caches::s_cache_misses++;
+        mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
     }
 
     return std::nullopt;
 }
-std::optional<std::shared_ptr<const std::vector<std::string>>> mln::caches::get_show_user(const std::tuple<uint64_t, uint64_t>& guild_user_ids) {
-    if (std::get<0>(guild_user_ids) == 0 || std::get<1>(guild_user_ids) == 0) {
-        return std::nullopt;
+
+
+dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> mln::caches::get_guild_task(const uint64_t guild_id, event_data_lite_t& lite_data) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
     }
+    
+    if (guild_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve guild! Invalid guild id!";
 
-    mln::caches::s_cache_requests++;
+        co_await mln::response::co_respond(lite_data, s_err_text, true, s_err_text);
 
-    //Look in cache
-    std::optional<std::shared_ptr<const std::vector<std::string>>> result = mln::caches::show_user_cache.get_element(guild_user_ids);
-    if (!result.has_value()) {
-        mln::caches::s_cache_misses++;
-    }
-
-    return std::nullopt;
-}
-std::optional<std::shared_ptr<const dpp::guild>> mln::caches::get_guild(const uint64_t guild_id) {
-    if (guild_id == 0) {
-        return std::nullopt;
-    }
-
-    mln::caches::s_cache_requests++;
-
-    //Look in cache
-    std::optional<std::shared_ptr<const dpp::guild>> result = mln::caches::guild_cache.get_element(guild_id);
-    if (result.has_value()) {
-        return result;
-    }
-
-    mln::caches::s_cache_misses++;
-
-    return std::nullopt;
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> mln::caches::get_guild_task(const uint64_t guild_id) {
-    if (guild_id == 0) {
         co_return std::nullopt;
     }
 
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_guild_get(guild_id);
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve guild from guild_id " + std::to_string(guild_id) + 
-            "! Error: " + result.get_error().human_readable);
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::guild>> result_opt = mln::caches::guild_cache.get_element(guild_id);
+    if (result_opt.has_value()) {
+        co_return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    const dpp::confirmation_callback_t confirmation = co_await s_cluster->co_guild_get(guild_id);
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve guild! Guild id: [{}], error: [{}], details: [{}].", 
+            static_cast<uint64_t>(guild_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+    
+    if (!std::holds_alternative<dpp::guild>(confirmation.value)) {
+        const std::string err_text = std::format("Failed to retrieve guild from Discord! Guild id: [{}].", static_cast<uint64_t>(guild_id));
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
         co_return std::nullopt;
     }
 
-    co_return mln::caches::guild_cache.add_element(guild_id, std::move(result.get<dpp::guild>()));
+    co_return mln::caches::guild_cache.add_element(guild_id, std::get<dpp::guild>(confirmation.value));
 }
-dpp::task<std::optional<std::shared_ptr<const dpp::guild>>> mln::caches::get_guild_full(const uint64_t guild_id, const reply_log_data_t& reply_log_data) {
-    std::optional<std::shared_ptr<const dpp::guild>> guild = mln::caches::get_guild(guild_id);
-    if (!guild.has_value()) {
-        guild = co_await mln::caches::get_guild_task(guild_id);
-        if (!guild.has_value()) {
-            //Error can't find guild
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve guild data! guild_id: [{}].", guild_id);
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
-        }
+std::optional<std::shared_ptr<const dpp::guild>> mln::caches::get_guild(const uint64_t guild_id, event_data_lite_t& lite_data) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
     }
 
-    co_return guild;
-}
-std::optional<std::shared_ptr<const dpp::channel>> mln::caches::get_channel(const uint64_t channel_id, const dpp::interaction_create_t* const event_data) {
-    if (channel_id == 0) {
+    if (guild_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve guild! Invalid guild id!";
+
+        mln::response::respond(lite_data, s_err_text, true, s_err_text);
+
         return std::nullopt;
     }
 
-    mln::caches::s_cache_requests++;
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
 
     //Look in cache
-    std::optional<std::shared_ptr<const dpp::channel>> result = mln::caches::channel_cache.get_element(channel_id);
-    if (result.has_value()) {
-        return result;
+    std::optional<std::shared_ptr<const dpp::guild>> result_opt = mln::caches::guild_cache.get_element(guild_id);
+    if (result_opt.has_value()) {
+        return result_opt;
     }
 
-    mln::caches::s_cache_misses++;
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    dpp::confirmation_callback_t confirmation;
+    lite_data.creator->guild_get(guild_id, [&confirmation](const dpp::confirmation_callback_t& conf) { confirmation = conf; });
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve guild! Guild id: [{}], error: [{}], details: [{}].",
+            static_cast<uint64_t>(guild_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::guild>(confirmation.value)) {
+        const std::string err_text = std::format("Failed to retrieve guild from Discord! Guild id: [{}].", static_cast<uint64_t>(guild_id));
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    return mln::caches::guild_cache.add_element(guild_id, std::get<dpp::guild>(confirmation.value));
+}
+
+
+dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> mln::caches::get_channel_task(const uint64_t channel_id, event_data_lite_t& lite_data, const dpp::channel* const event_channel, const std::map<dpp::snowflake, dpp::channel>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+    
+    if (channel_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve channel! Invalid channel id!";
+
+        co_await mln::response::co_respond(lite_data, s_err_text, true, s_err_text);
+
+        co_return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::channel>> result_opt = mln::caches::channel_cache.get_element(channel_id);
+    if (result_opt.has_value()) {
+        co_return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
     //Look in resolved cache
-    if (event_data != nullptr) {
-        if (event_data->command.channel.id == channel_id) {
-            return mln::caches::channel_cache.add_element(channel_id, event_data->command.channel);
-        } else {
-
-            const auto it = event_data->command.resolved.channels.find(channel_id);
-            if (it != event_data->command.resolved.channels.end()) {
-                return mln::caches::channel_cache.add_element(channel_id, it->second);
-            }
+    if (event_channel) {
+        if (event_channel->id == channel_id) {
+            co_return mln::caches::channel_cache.add_element(channel_id, *event_channel);
         }
     }
 
-    return std::nullopt;
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> mln::caches::get_channel_task(const uint64_t channel_id) {
-    if (channel_id == 0) {
-        co_return std::nullopt;
-    }
-
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_channel_get(channel_id);
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve channel from channel_id " + std::to_string(channel_id) +
-            "! Error: " + result.get_error().human_readable);
-        co_return std::nullopt;
-    }
-
-    co_return mln::caches::channel_cache.add_element(channel_id, std::move(result.get<dpp::channel>()));
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::channel>>> mln::caches::get_channel_full(const uint64_t channel_id, const reply_log_data_t& reply_log_data) {
-    std::optional<std::shared_ptr<const dpp::channel>> channel = mln::caches::get_channel(channel_id, reply_log_data.event_data);
-    if (!channel.has_value()) {
-        channel = co_await mln::caches::get_channel_task(channel_id);
-        if (!channel.has_value()) {
-            //Error can't find channel
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve channel data! channel_id: [{}].", channel_id);
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::channel>::const_iterator it = resolved_map->find(channel_id);
+        if (it != resolved_map->end()) {
+            co_return mln::caches::channel_cache.add_element(channel_id, it->second);
         }
     }
 
-    co_return channel;
+    const dpp::confirmation_callback_t confirmation = co_await s_cluster->co_channel_get(channel_id);
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve channel! channel id: [{}], error: [{}], details: [{}].",
+            static_cast<uint64_t>(channel_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::channel>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve channel from Discord! channel id: [{}].", static_cast<uint64_t>(channel_id));
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    co_return mln::caches::channel_cache.add_element(channel_id, std::get<dpp::channel>(confirmation.value));
 }
-std::optional<std::shared_ptr<const dpp::user_identified>> mln::caches::get_user(const uint64_t user_id, const dpp::interaction_create_t* const  event_data) {
-    if (user_id == 0) {
+std::optional<std::shared_ptr<const dpp::channel>> mln::caches::get_channel(const uint64_t channel_id, event_data_lite_t& lite_data, const dpp::channel* const event_channel, const std::map<dpp::snowflake, dpp::channel>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (channel_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve channel! Invalid channel id!";
+
+        mln::response::respond(lite_data, s_err_text, true, s_err_text);
+
         return std::nullopt;
     }
 
-    mln::caches::s_cache_requests++;
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
 
     //Look in cache
-    std::optional<std::shared_ptr<const dpp::user_identified>> result = mln::caches::user_cache.get_element(user_id);
-    if (result.has_value()) {
-        return result;
+    std::optional<std::shared_ptr<const dpp::channel>> result_opt = mln::caches::channel_cache.get_element(channel_id);
+    if (result_opt.has_value()) {
+        return result_opt;
     }
 
-    mln::caches::s_cache_misses++;
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
     //Look in resolved cache
-    if (event_data != nullptr) {
-        if (event_data->command.usr.id == user_id) {
-            return mln::caches::user_cache.add_element(user_id, event_data->command.usr);
-        } else {
-
-            const auto it = event_data->command.resolved.users.find(user_id);
-            if (it != event_data->command.resolved.users.end()) {
-                return mln::caches::user_cache.add_element(user_id, it->second);
-            }
+    if (event_channel) {
+        if (event_channel->id == channel_id) {
+            return mln::caches::channel_cache.add_element(channel_id, *event_channel);
         }
     }
 
-    return std::nullopt;
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> mln::caches::get_user_task(const uint64_t user_id) {
-    if (user_id == 0) {
-        co_return std::nullopt;
-    }
-
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_user_get(user_id);
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve user from user_id " + std::to_string(user_id) +
-            "! Error: " + result.get_error().human_readable);
-        co_return std::nullopt;
-    }
-
-    co_return mln::caches::user_cache.add_element(user_id, result.get<dpp::user_identified>());
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> mln::caches::get_user_full(const uint64_t user_id, const reply_log_data_t& reply_log_data) {
-    std::optional<std::shared_ptr<const dpp::user_identified>> user = mln::caches::get_user(user_id, reply_log_data.event_data);
-    if (!user.has_value()) {
-        user = co_await mln::caches::get_user_task(user_id);
-        if (!user.has_value()) {
-            //Error can't find user
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve user data! user_id: [{}].", user_id);
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::channel>::const_iterator it = resolved_map->find(channel_id);
+        if (it != resolved_map->end()) {
+            return mln::caches::channel_cache.add_element(channel_id, it->second);
         }
     }
 
-    co_return user;
-}
-std::optional<std::shared_ptr<const dpp::guild_member>> mln::caches::get_member(const std::tuple<uint64_t, uint64_t>& guild_user_ids,
-    const dpp::interaction_create_t* event_data) {
-    if (std::get<0>(guild_user_ids) == 0 || std::get<1>(guild_user_ids) == 0) {
+    dpp::confirmation_callback_t confirmation;
+    lite_data.creator->channel_get(channel_id, [&confirmation](const dpp::confirmation_callback_t& conf) { confirmation = conf; });
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve channel! channel id: [{}], error: [{}], details: [{}].",
+            static_cast<uint64_t>(channel_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
         return std::nullopt;
     }
 
-    mln::caches::s_cache_requests++;
+    if (!std::holds_alternative<dpp::channel>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve channel from Discord! channel id: [{}].", static_cast<uint64_t>(channel_id));
 
-    //Look in cache
-    std::optional<std::shared_ptr<const dpp::guild_member>> result = mln::caches::member_cache.get_element(guild_user_ids);
-    if (result.has_value()) {
-        return result;
-    }
+        mln::response::respond(lite_data, err_text, true, err_text);
 
-    mln::caches::s_cache_misses++;
-
-    //Look in resolved cache
-    if (event_data != nullptr) {
-        if (event_data->command.member.guild_id == std::get<0>(guild_user_ids) && event_data->command.member.user_id == std::get<1>(guild_user_ids)) {
-            return mln::caches::member_cache.add_element(guild_user_ids, event_data->command.member);
-        } else {
-
-            const auto it = event_data->command.resolved.members.find(std::get<1>(guild_user_ids));
-            if (it != event_data->command.resolved.members.end()) {
-                return mln::caches::member_cache.add_element(guild_user_ids, it->second);
-            }
-        }
-    }
-
-    return std::nullopt;
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> mln::caches::get_member_task(const std::tuple<uint64_t, uint64_t>& guild_user_ids) {
-    if (std::get<0>(guild_user_ids) == 0 || std::get<1>(guild_user_ids) == 0) {
-        co_return std::nullopt;
-    }
-
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_guild_get_member(std::get<0>(guild_user_ids), std::get<1>(guild_user_ids));
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve member from guild_id " + std::to_string(std::get<0>(guild_user_ids)) +
-            " from user_id " + std::to_string(std::get<1>(guild_user_ids)) + "! Error: " + result.get_error().human_readable);
-        co_return std::nullopt;
-    }
-
-    co_return mln::caches::member_cache.add_element(guild_user_ids, std::move(result.get<dpp::guild_member>()));
-}
-dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> mln::caches::get_member_full(const std::tuple<uint64_t, uint64_t>& guild_user_ids, const reply_log_data_t& reply_log_data) {
-    std::optional<std::shared_ptr<const dpp::guild_member>> member = mln::caches::get_member(guild_user_ids, reply_log_data.event_data);
-    if (!member.has_value()) {
-        member = co_await mln::caches::get_member_task(guild_user_ids);
-        if (!member.has_value()) {
-            //Error can't find member
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve member data! guild_user_id: [{}, {}].", std::get<0>(guild_user_ids), std::get<1>(guild_user_ids));
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
-        }
-    }
-
-    co_return member;
-}
-std::optional<std::shared_ptr<const dpp::role>> mln::caches::get_role(const uint64_t role_id, const dpp::interaction_create_t* const  event_data) {
-    if (role_id == 0) {
         return std::nullopt;
     }
 
-    mln::caches::s_cache_requests++;
+    return mln::caches::channel_cache.add_element(channel_id, std::get<dpp::channel>(confirmation.value));
+}
 
-    //Look in cache
-    std::optional<std::shared_ptr<const dpp::role>> result = mln::caches::role_cache.get_element(role_id);
-    if (result.has_value()) {
-        return result;
+
+dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> mln::caches::get_user_task(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
     }
 
-    mln::caches::s_cache_misses++;
+    if (user_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve user! Invalid user id!";
+
+        co_await mln::response::co_respond(lite_data, s_err_text, true, s_err_text);
+
+        co_return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::user_identified>> result_opt = mln::caches::user_cache.get_element(user_id);
+    if (result_opt.has_value()) {
+        co_return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
     //Look in resolved cache
-    if (event_data != nullptr) {
-        const auto it = event_data->command.resolved.roles.find(role_id);
-        if (it != event_data->command.resolved.roles.end()) {     
-            return mln::caches::role_cache.add_element(role_id, it->second);
+    if (invoking_usr) {
+        if (invoking_usr->id == user_id) {
+            co_return mln::caches::user_cache.add_element(user_id, *invoking_usr);
         }
     }
 
-    return std::nullopt;
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::user>::const_iterator it = resolved_map->find(user_id);
+        if (it != resolved_map->end()) {
+            co_return mln::caches::user_cache.add_element(user_id, it->second);
+        }
+    }
+
+    const dpp::confirmation_callback_t confirmation = co_await s_cluster->co_user_get(user_id);
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve user! user id: [{}], error: [{}], details: [{}].",
+            static_cast<uint64_t>(user_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::user_identified>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve user from Discord! user id: [{}].", static_cast<uint64_t>(user_id));
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    co_return mln::caches::user_cache.add_element(user_id, std::get<dpp::user_identified>(confirmation.value));
 }
-dpp::task<std::optional<std::shared_ptr<const dpp::role>>> mln::caches::get_role_task(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles) {
-    if (role_id == 0 || guild_id == 0) {
+std::optional<std::shared_ptr<const dpp::user_identified>> mln::caches::get_user(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (user_id == 0) [[unlikely]] {
+        static const std::string s_err_text = "Failed to retrieve user! Invalid user id!";
+
+        mln::response::respond(lite_data, s_err_text, true, s_err_text);
+
+        return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::user_identified>> result_opt = mln::caches::user_cache.get_element(user_id);
+    if (result_opt.has_value()) {
+        return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in resolved cache
+    if (invoking_usr) {
+        if (invoking_usr->id == user_id) {
+            return mln::caches::user_cache.add_element(user_id, *invoking_usr);
+        }
+    }
+
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::user>::const_iterator it = resolved_map->find(user_id);
+        if (it != resolved_map->end()) {
+            return mln::caches::user_cache.add_element(user_id, it->second);
+        }
+    }
+
+    dpp::confirmation_callback_t confirmation;
+    lite_data.creator->user_get(user_id, [&confirmation](const dpp::confirmation_callback_t& conf) { confirmation = conf; });
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve user! user id: [{}], error: [{}], details: [{}].",
+            static_cast<uint64_t>(user_id), mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::user_identified>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve user from Discord! user id: [{}].", static_cast<uint64_t>(user_id));
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    return mln::caches::user_cache.add_element(user_id, std::get<dpp::user_identified>(confirmation.value));
+}
+
+
+dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> mln::caches::get_member_task(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (guild_id == 0 || user_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve guild member with id [{}] from guild [{}]! Invalid guild/user id!", user_id, guild_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
         co_return std::nullopt;
     }
 
-    const dpp::confirmation_callback_t result = co_await s_cluster->co_roles_get(guild_id);
-    if (result.is_error()) {
-        s_cluster->log(dpp::loglevel::ll_error, "Failed to retrieve role from guild_id " + std::to_string(guild_id) +
-            " from role_id " + std::to_string(role_id) + "! Error: " + result.get_error().human_readable);
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    const std::tuple<uint64_t, uint64_t> guild_user_ids{ guild_id, user_id };
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::guild_member>> result_opt = mln::caches::member_cache.get_element(guild_user_ids);
+    if (result_opt.has_value()) {
+        co_return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in resolved cache
+    if (invoking_usr) {
+        if (invoking_usr->user_id == user_id) {
+            co_return mln::caches::member_cache.add_element(guild_user_ids, *invoking_usr);
+        }
+    }
+
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::guild_member>::const_iterator it = resolved_map->find(user_id);
+        if (it != resolved_map->end()) {
+            co_return mln::caches::member_cache.add_element(guild_user_ids, it->second);
+        }
+    }
+
+    const dpp::confirmation_callback_t confirmation = co_await s_cluster->co_guild_get_member(std::get<0>(guild_user_ids), std::get<1>(guild_user_ids));
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve guild member! guild id: [{}], user id: [{}], error: [{}], details: [{}].",
+            guild_id, user_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
         co_return std::nullopt;
     }
 
-    dpp::role_map map = result.get<dpp::role_map>();
+    if (!std::holds_alternative<dpp::guild_member>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve guild member from Discord! guild id: [{}], user id: [{}].", guild_id, user_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    co_return mln::caches::member_cache.add_element(guild_user_ids, std::get<dpp::guild_member>(confirmation.value));
+}
+std::optional<std::shared_ptr<const dpp::guild_member>> mln::caches::get_member(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (guild_id == 0 || user_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve guild member with id [{}] from guild [{}]! Invalid guild/user id!", user_id, guild_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    const std::tuple<uint64_t, uint64_t> guild_user_ids{ guild_id, user_id };
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::guild_member>> result_opt = mln::caches::member_cache.get_element(guild_user_ids);
+    if (result_opt.has_value()) {
+        return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in resolved cache
+    if (invoking_usr) {
+        if (invoking_usr->user_id == user_id) {
+            return mln::caches::member_cache.add_element(guild_user_ids, *invoking_usr);
+        }
+    }
+
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::guild_member>::const_iterator it = resolved_map->find(user_id);
+        if (it != resolved_map->end()) {
+            return mln::caches::member_cache.add_element(guild_user_ids, it->second);
+        }
+    }
+
+    dpp::confirmation_callback_t confirmation;
+    lite_data.creator->guild_get_member(std::get<0>(guild_user_ids), std::get<1>(guild_user_ids), [&confirmation](const dpp::confirmation_callback_t& conf) { confirmation = conf; });
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve guild member! guild id: [{}], user id: [{}], error: [{}], details: [{}].",
+            guild_id, user_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::guild_member>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve guild member from Discord! guild id: [{}], user id: [{}].", guild_id, user_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    return mln::caches::member_cache.add_element(guild_user_ids, std::get<dpp::guild_member>(confirmation.value));
+}
+
+
+dpp::task<std::optional<std::shared_ptr<const dpp::role>>> mln::caches::get_role_task(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::role>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (guild_id == 0 || role_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve role with id [{}] from guild [{}]! Invalid role/guild id!", role_id, guild_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::role>> result_opt = mln::caches::role_cache.get_element(role_id);
+    if (result_opt.has_value()) {
+        co_return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in resolved cache
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::role>::const_iterator it = resolved_map->find(role_id);
+        if (it != resolved_map->end()) {
+            co_return mln::caches::role_cache.add_element(role_id, it->second);
+        }
+    }
+
+    const dpp::confirmation_callback_t confirmation = co_await s_cluster->co_roles_get(guild_id);
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve role! guild id: [{}], role id: [{}], error: [{}], details: [{}].",
+            guild_id, role_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::role_map>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve role from Discord! guild id: [{}], role id: [{}].", guild_id, role_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
+        co_return std::nullopt;
+    }
+
+    //co_return mln::caches::role_cache.add_element(role_id, std::get<dpp::role>(confirmation.value));
+
+    dpp::role_map map = confirmation.get<dpp::role_map>();
     //Add all the roles found if requested, otherwise add only the requested role
     if (add_all_guild_roles) {
         for (const std::pair<dpp::snowflake, dpp::role>& role_pair : map) {
@@ -567,27 +934,86 @@ dpp::task<std::optional<std::shared_ptr<const dpp::role>>> mln::caches::get_role
         co_return mln::caches::role_cache.get_element(role_id);
     }
 
-    const auto it = map.find(role_id);
+    const std::unordered_map<dpp::snowflake, dpp::role>::const_iterator it = map.find(role_id);
     if (it == map.end()) {
+        const std::string err_text = std::format("Failed to retrieve role from Discord! Missing role from discord answer! guild id: [{}], role id: [{}].", guild_id, role_id);
+
+        co_await mln::response::co_respond(lite_data, err_text, true, err_text);
+
         co_return std::nullopt;
     }
 
-    co_return mln::caches::role_cache.add_element(role_id, it->second);;
+    co_return mln::caches::role_cache.add_element(role_id, it->second);
 }
-dpp::task<std::optional<std::shared_ptr<const dpp::role>>> mln::caches::get_role_full(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles, const reply_log_data_t& reply_log_data) {
-    std::optional<std::shared_ptr<const dpp::role>> role = mln::caches::get_role(role_id, reply_log_data.event_data);
-    if (!role.has_value()) {
-        role = co_await mln::caches::get_role_task(guild_id, role_id, add_all_guild_roles);
-        if (!role.has_value()) {
-            //Error can't find role
-            if (reply_log_data.event_data && reply_log_data.cluster) {
-                const std::string err_text = std::format("Failed to retrieve role data! guild_role_id: [{}, {}].", guild_id, role_id);
-                mln::utility::conf_callback_is_error(
-                    co_await mln::response::make_response(reply_log_data.is_first_response, *reply_log_data.event_data, err_text),
-                    *reply_log_data.cluster, reply_log_data.event_data, err_text);
-            }
+std::optional<std::shared_ptr<const dpp::role>> mln::caches::get_role(const uint64_t guild_id, const uint64_t role_id, const bool add_all_guild_roles, event_data_lite_t& lite_data, const std::map<dpp::snowflake, dpp::role>* const resolved_map) {
+    if (!mln::caches::is_initialized()) [[unlikely]] {
+        throw std::exception("The caches were used before their initialization!");
+    }
+
+    if (guild_id == 0 || role_id == 0) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve role with id [{}] from guild [{}]! Invalid role/guild id!", role_id, guild_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    mln::caches::s_cache_requests.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in cache
+    std::optional<std::shared_ptr<const dpp::role>> result_opt = mln::caches::role_cache.get_element(role_id);
+    if (result_opt.has_value()) {
+        return result_opt;
+    }
+
+    mln::caches::s_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
+    //Look in resolved cache
+    if (resolved_map) {
+        const std::map<dpp::snowflake, dpp::role>::const_iterator it = resolved_map->find(role_id);
+        if (it != resolved_map->end()) {
+            return mln::caches::role_cache.add_element(role_id, it->second);
         }
     }
 
-    co_return role;
+    dpp::confirmation_callback_t confirmation;
+    lite_data.creator->roles_get(guild_id, [&confirmation](const dpp::confirmation_callback_t& conf) { confirmation = conf; });
+    if (confirmation.is_error()) [[unlikely]] {
+        const dpp::error_info err = confirmation.get_error();
+        const std::string err_text = std::format("Failed to retrieve role! guild id: [{}], role id: [{}], error: [{}], details: [{}].",
+            guild_id, role_id, mln::get_json_err_text(err.code), err.human_readable);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    if (!std::holds_alternative<dpp::role_map>(confirmation.value)) [[unlikely]] {
+        const std::string err_text = std::format("Failed to retrieve role from Discord! guild id: [{}], role id: [{}].", guild_id, role_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    dpp::role_map map = confirmation.get<dpp::role_map>();
+    //Add all the roles found if requested, otherwise add only the requested role
+    if (add_all_guild_roles) {
+        for (const std::pair<dpp::snowflake, dpp::role>& role_pair : map) {
+            mln::caches::role_cache.add_element(role_pair.first, role_pair.second);
+        }
+
+        return mln::caches::role_cache.get_element(role_id);
+    }
+
+    const std::unordered_map<dpp::snowflake, dpp::role>::const_iterator it = map.find(role_id);
+    if (it == map.end()) {
+        const std::string err_text = std::format("Failed to retrieve role from Discord! Missing role from discord answer! guild id: [{}], role id: [{}].", guild_id, role_id);
+
+        mln::response::respond(lite_data, err_text, true, err_text);
+
+        return std::nullopt;
+    }
+
+    return mln::caches::role_cache.add_element(role_id, it->second);
 }

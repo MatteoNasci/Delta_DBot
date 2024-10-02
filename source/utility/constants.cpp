@@ -1,8 +1,16 @@
-#include "utility/constants.h"
 #include "bot_delta.h"
+#include "utility/constants.h"
 
 size_t mln::constants::get_min_characters_reply_msg() {
 	return 1;
+}
+size_t mln::constants::get_min_nickname_length()
+{
+	return 1;
+}
+size_t mln::constants::get_max_nickname_length()
+{
+	return 32;
 }
 size_t mln::constants::get_max_characters_reply_msg(){
 	return 2000;

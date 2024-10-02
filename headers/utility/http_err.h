@@ -4,6 +4,7 @@
 
 #include <dpp/queues.h>
 
+#include <cstdint>
 #include <type_traits>
 
 namespace mln {

@@ -5,13 +5,18 @@
 #include "commands/base_action.h"
 #include "commands/slash/db/db_command_type.h"
 #include "commands/slash/db/db_init_type_flag.h"
-#include "commands/slash/db/db_cmd_data.h"
 
 #include <dpp/coro/task.h>
-#include <dpp/dispatcher.h>
+
+namespace dpp {
+	class cluster;
+	struct slashcommand_t;
+}
 
 namespace mln {
-	class base_db_command : public base_action<dpp::task<void>, const dpp::slashcommand_t&, const db_cmd_data_t&, const db_command_type> {
+	struct db_cmd_data_t;
+
+	class base_db_command : public base_action<dpp::task<void>, void, const dpp::slashcommand_t&, db_cmd_data_t&, const db_command_type> {
 	protected:
 		base_db_command(dpp::cluster& cluster);
 	public:
@@ -26,6 +31,9 @@ namespace mln {
 		base_db_command& operator=(base_db_command&& rhs) = default;
 
 		virtual db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const = 0;
+		virtual bool is_db_initialized() const = 0;
+		bool use_job() const override final;
+		void job(const dpp::slashcommand_t&, db_cmd_data_t&, const db_command_type) const override final;
 	};
 }
 

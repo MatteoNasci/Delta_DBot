@@ -4,9 +4,15 @@
 
 #include "commands/ready/base_ready.h"
 
-#include <dpp/coro/async.h>
-#include <dpp/appcommand.h>
-#include <dpp/restresults.h>
+#include <dpp/coro/task.h>
+
+#include <functional>
+#include <optional>
+
+namespace dpp {
+    class cluster;
+    struct ready_t;
+}
 
 namespace mln {
     class cmd_ctx_runner;
@@ -19,7 +25,9 @@ namespace mln {
         cmd_ctx_runner& runner_ctx_ptr;
     public:
         register_commands(dpp::cluster& cluster, cmd_runner& runner_cmd_ptr, cmd_ctx_runner& runner_ctx_ptr);
-        dpp::task<void> command(const dpp::ready_t& event_data) const override;
+        dpp::task<void> command(const dpp::ready_t& event_data) const override final;
+        std::optional<std::function<void()>> job(const dpp::ready_t& event_data) const override final;
+        bool use_job() const override final;
 
         register_commands(const register_commands&) = default;
 

@@ -1,11 +1,19 @@
+#include "commands/base_action.h"
+#include "commands/slash/db/base_db_command.h"
+#include "commands/slash/db/db_cmd_data.h"
+#include "commands/slash/db/db_command_type.h"
+#include "commands/slash/db/db_init_type_flag.h"
 #include "commands/slash/db/db_privacy.h"
-#include "utility/utility.h"
 #include "utility/response.h"
+
+#include <dpp/coro/task.h>
+#include <dpp/dispatcher.h>
+#include <dpp/message.h>
 
 mln::db_privacy::db_privacy(dpp::cluster& cluster) : base_db_command{ cluster } {
 }
 
-dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const
+dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type) const
 {
     static const dpp::message s_info = dpp::message{ "**Privacy Policy**" }
         .set_flags(dpp::m_ephemeral)
@@ -70,12 +78,15 @@ If you have any questions or concerns about this Privacy Policy or our data prac
 
 By using our bot, you consent to the collection, use, and storage of your data as described in this Privacy Policy.)"""));
 
-    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db privacy text!");
-    }
+    mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db privacy text!");
     co_return;
 }
 
 mln::db_init_type_flag mln::db_privacy::get_requested_initialization_type(const db_command_type cmd) const {
 	return db_init_type_flag::none;
+}
+
+bool mln::db_privacy::is_db_initialized() const
+{
+    return true;
 }

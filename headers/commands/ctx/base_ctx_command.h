@@ -4,7 +4,11 @@
 
 #include "commands/base_command.h"
 
-#include <dpp/dispatcher.h>
+namespace dpp {
+	class cluster;
+	struct user_context_menu_t;
+	class slashcommand;
+}
 
 namespace mln {
 	class base_ctx_command : public base_command<dpp::user_context_menu_t> {

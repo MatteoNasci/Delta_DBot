@@ -7,7 +7,7 @@ namespace dpp {
 }
 
 namespace mln {
-	template<typename T_return, typename... T_args>
+	template<typename T_cmd_return, typename T_job_return, typename... T_args>
 	class base_action {
 	private:
 		dpp::cluster& bot_cluster;
@@ -27,7 +27,9 @@ namespace mln {
 
 		base_action& operator=(base_action&& rhs) = default;
 
-		virtual T_return command(T_args... args) const = 0;
+		virtual T_cmd_return command(T_args... args) const = 0;
+		virtual T_job_return job(T_args... args) const = 0;
+		virtual bool use_job() const = 0;
 	};
 }
 

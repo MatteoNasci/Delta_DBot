@@ -1,15 +1,37 @@
-#include "utility/utility.h"
+#include "database/database_callbacks.h"
+#include "database/db_column_data.h"
 #include "utility/constants.h"
+#include "utility/event_data_lite.h"
 #include "utility/json_err.h"
+#include "utility/logs.h"
+#include "utility/response.h"
+#include "utility/utility.h"
 
-#include <dpp/colors.h>
-#include <dpp/channel.h>
-#include <dpp/cache.h>
-#include <dpp/unicode_emoji.h>
+#include <dpp/appcommand.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/job.h>
+#include <dpp/coro/when_any.h>
+#include <dpp/dispatcher.h>
+#include <dpp/event_router.h>
+#include <dpp/message.h>
+#include <dpp/misc-enum.h>
+#include <dpp/restresults.h>
+#include <dpp/snowflake.h>
+#include <dpp/unicode_emoji.h>
 
-#include <regex>
+#include <array>
+#include <cstdint>
+#include <exception>
 #include <format>
+#include <functional>
+#include <map>
+#include <memory>
+#include <regex>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id);
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id, std::string& out_name);
@@ -39,7 +61,7 @@ bool mln::utility::extract_message_url_data(const std::string& msg_url, uint64_t
 
     const bool regex_result = std::regex_search(msg_url, match, url_regex);
     const bool valid_results = regex_result && match.size() == 4;
-    if (valid_results) {
+    if (valid_results) [[likely]] {
         out_guild_id = std::stoull(match[1].str());
         out_channel_id = std::stoull(match[2].str());
         out_message_id = std::stoull(match[3].str());
@@ -47,24 +69,32 @@ bool mln::utility::extract_message_url_data(const std::string& msg_url, uint64_t
 
     return valid_results;
 }
-std::string mln::utility::get_current_date_time()
+constexpr bool mln::utility::is_dev_build()
 {
-    time_t now = std::time(0);
-    struct tm tstruct = *std::localtime(&now);
-    char buf[80];
-    std::strftime(buf, sizeof(buf), "%d-%m-%Y %X", &tstruct);
-    return std::string{ buf };
+#ifdef MLN_DB_DEV_BUILD
+    return true;
+#else
+    return false;
+#endif
+}
+std::string mln::utility::prefix_dev(const char* const text)
+{
+    if (mln::utility::is_dev_build()) {
+        return std::format("dev_{}", text);
+    }
+
+    return text;
 }
 bool mln::utility::extract_generic_attachment_url_data(const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id) {
     bool result = mln::utility::extract_attachment_url_data(attachment_url, out_guild_id, out_channel_id);
-    if (!result) {
+    if (!result) [[unlikely]] {
         result = mln::utility::extract_ephemeral_attachment_url_data(attachment_url, out_guild_id, out_channel_id);
     }
     return result;
 }
 bool mln::utility::extract_generic_attachment_url_data(const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id, std::string& name) {
     bool result = mln::utility::extract_attachment_url_data(attachment_url, out_guild_id, out_channel_id, name);
-    if (!result) {
+    if (!result) [[unlikely]] {
         result = mln::utility::extract_ephemeral_attachment_url_data(attachment_url, out_guild_id, out_channel_id, name);
     }
     return result;
@@ -90,7 +120,7 @@ bool extract_attachment_url(const std::regex& url_regex, const std::string& atta
 
     const bool regex_result = std::regex_search(attachment_url, match, url_regex);
     const bool valid_results = regex_result && match.size() == 3;
-    if (valid_results) {
+    if (valid_results) [[likely]] {
         out_guild_id = std::stoull(match[1].str());
         out_channel_id = std::stoull(match[2].str());
     }
@@ -102,7 +132,7 @@ bool extract_attachment_url(const std::regex& url_regex, const std::string& atta
 
     const bool regex_result = std::regex_search(attachment_url, match, url_regex);
     const bool valid_results = regex_result && match.size() == 4;
-    if (valid_results) {
+    if (valid_results) [[likely]] {
         out_guild_id = std::stoull(match[1].str());
         out_channel_id = std::stoull(match[2].str());
         out_name = std::move(match[3].str());
@@ -141,41 +171,50 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
                 .set_style(dpp::component_style::cos_primary))
     );
 
-    if (data.bot.me.id == 0 || data.token.empty()) {
-        std::cerr << "Error while executing paginated embed job, no cluster or token found!\n";
+    if (data.event_data.command_id == 0 || data.event_data.channel_id == 0 || 
+        data.event_data.guild_id == 0 || data.event_data.token.empty() || 
+        data.event_data.creator == nullptr || data.event_data.creator->me.id == 0) [[unlikely]] {
+
+        const std::string error_txt = std::format("Error while executing paginated embed job, invalid input! Command id: [{}], guild id: [{}], channel id: [{}], token id: [{}], creator: [{}], creator id: [{}].",
+            data.event_data.command_id, data.event_data.guild_id, data.event_data.channel_id, data.event_data.token, data.event_data.creator ? "not null" : "null",
+            data.event_data.creator ? (static_cast<uint64_t>(data.event_data.creator->me.id)) : 0);
+        
+        if (data.event_data.creator) [[likely]] {
+
+            if (mln::response::is_event_data_valid(data.event_data)) {
+                co_await mln::response::co_respond(data.event_data, error_txt, true, error_txt);
+            }
+            else {
+                data.event_data.creator->log(dpp::loglevel::ll_error, error_txt);
+            }
+        }
+        else {
+            mln::logs::log_to_file(dpp::loglevel::ll_critical, error_txt);
+        }
+
         co_return;
     }
 
-    if (data.channel_id == 0 || data.guild_id == 0) {
-        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, no guild_id or channel_id found!");
+    dpp::cluster& bot = *data.event_data.creator;
+
+    if (data.time_limit_seconds == 0) [[unlikely]] {
+        static const std::string s_err_text = "Error while executing paginated embed job, the time_limit_seconds cannot be == 0!";
+
+        co_await mln::response::co_respond(data.event_data, s_err_text, true, s_err_text);
         co_return;
     }
 
-    if (data.time_limit_seconds == 0) {
-        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the time_limit_seconds cannot be == 0!");
-        data.bot.interaction_response_edit(data.token,
-            dpp::message{"Error while executing paginated embed job, the time_limit_seconds cannot be == 0!"}
-            .set_guild_id(data.guild_id)
-            .set_channel_id(data.channel_id));
+    if (!text_ptr || text_ptr->size() == 0) [[unlikely]] {
+        static const std::string s_err_text = "Error while executing paginated embed job, the given text list is either invalid or empty!";
+
+        co_await mln::response::co_respond(data.event_data, s_err_text, true, s_err_text);
         co_return;
     }
 
-    if (!text_ptr || text_ptr->size() == 0) {
-        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is either invalid or empty!");
-        data.bot.interaction_response_edit(data.token,
-            dpp::message{"Error while executing paginated embed job, the given text list is either invalid or empty!"}
-            .set_guild_id(data.guild_id)
-            .set_channel_id(data.channel_id));
-        co_return;
-    }
-
-    dpp::async<dpp::confirmation_callback_t> processing = data.bot.co_interaction_response_edit(data.token,
-        dpp::message{"Processing the data, please wait..."}
-        .set_guild_id(data.guild_id)
-        .set_channel_id(data.channel_id));
+    co_await mln::response::co_respond(data.event_data, "Processing the data, please wait...", false, "Failed notification for processing!");
 
     std::vector<dpp::message> msgs{};
-    msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.guild_id).set_channel_id(data.channel_id));
+    msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.event_data.guild_id).set_channel_id(data.event_data.channel_id));
 
     dpp::embed current_embed{};
     const std::vector<std::string>& input_strings = *text_ptr;
@@ -184,16 +223,17 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     const size_t max_desc_size = std::min(data.text_limit, mln::constants::get_max_characters_embed_description());
     //Fill the msgs array with all the msgs required to display all the input text
     for (const std::string& input : input_strings) {
-        if (input.size() == 0) {
-            data.bot.log(dpp::loglevel::ll_warning, "Found empty string while creating paginated embeds!");
+        if (input.size() == 0) [[unlikely]] {
+            mln::utility::create_event_log_error(data.event_data, "Found empty string while creating paginated embeds!");
             continue;
         }
 
         //The +3 refers to the "\n\n" added to the input.
-        const size_t new_string_size = input.size() + 3;
+        static constexpr size_t s_size_overhead = 3;
+        const size_t new_string_size = input.size() + s_size_overhead;
 
-        if (new_string_size > max_desc_size) {
-            data.bot.log(dpp::loglevel::ll_warning, "Found string that exceeds the max char limits while creating paginated embeds!");
+        if (new_string_size > max_desc_size) [[unlikely]] {
+            mln::utility::create_event_log_error(data.event_data, "Found string that exceeds the max char limits while creating paginated embeds!");
             continue;
         }
 
@@ -204,7 +244,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
             current_embed = dpp::embed{};
 
             ++current_msgs_index;
-            msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.guild_id).set_channel_id(data.channel_id));
+            msgs.emplace_back(dpp::message{s_msg_template}.set_guild_id(data.event_data.guild_id).set_channel_id(data.event_data.channel_id));
 
             current_size = 0;
         }
@@ -219,16 +259,14 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     }
 
     //If only 1 msg present and embeds is empty (for example when all input strings are empty), return an error
-    if (msgs.size() == 1 && msgs[current_msgs_index].embeds.size() == 0) {
-        data.bot.log(dpp::loglevel::ll_error, "Error while executing paginated embed job, the given text list is filled with empty strings!");
-        data.bot.interaction_response_edit(data.token,
-            dpp::message{"Error while executing paginated embed job, the given text list is empty! Internal error."}
-            .set_guild_id(data.guild_id)
-            .set_channel_id(data.channel_id));
+    if (msgs.size() == 1 && msgs[current_msgs_index].embeds.size() == 0) [[unlikely]] {
+        static const std::string s_err_text = "Error while executing paginated embed job, the given text list is empty! Internal error.";
+
+        co_await mln::response::co_respond(data.event_data, s_err_text, true, s_err_text);
         co_return;
     }
 
-    const std::string base_id{std::to_string(data.event_id)};
+    const std::string base_id{std::to_string(data.event_data.command_id)};
     const std::array<std::string, 4> button_ids{base_id + "L", base_id + "l", base_id + "r", base_id + "R"};
     const bool disable_buttons = msgs.size() <= 1;
     size_t index = 1;
@@ -251,8 +289,8 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     }
 
     //If only one message, skip pagination and just display the message
-    if (msgs.size() == 1) {
-        data.bot.interaction_response_edit(data.token, msgs[0]);
+    if (msgs.size() == 1) [[unlikely]] {
+        co_await mln::response::co_respond(data.event_data, msgs[0], false, "Failed to display single paginated embed!");
         co_return;
     }
 
@@ -262,20 +300,21 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     dpp::button_click_t button_data{};
     button_data.command.id = 0;
     while (true) {
-        if (current_msgs_index != next_msgs_index) {
+        if (current_msgs_index != next_msgs_index) [[likely]] {
             current_msgs_index = next_msgs_index;
 
-            co_await data.bot.co_interaction_response_edit(data.token, msgs[current_msgs_index]);
+            co_await mln::response::co_respond(data.event_data, msgs[current_msgs_index], false, 
+                std::format("Failed to display paginated embed! Failed page: [{}/{}].", current_msgs_index, msgs.size()));
         }
 
-        if (button_data.command.id != 0) {
+        if (button_data.command.id != 0) [[likely]] {
             //Positive reply to the button press
             co_await button_data.co_reply();
         }
 
         const auto& result = co_await dpp::when_any{
-            data.bot.co_sleep(data.time_limit_seconds),
-            data.bot.on_button_click.when([&button_ids](const dpp::button_click_t& event_data) {
+            bot.co_sleep(data.time_limit_seconds),
+            bot.on_button_click.when([&button_ids](const dpp::button_click_t& event_data) {
                 for (const std::string s : button_ids) {
                     if (s == event_data.custom_id) {
                         return true;
@@ -285,21 +324,24 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
                 })};
 
         //If the timer run out return an error
-        if (result.index() == 0) {
-            data.bot.interaction_response_edit(data.token, dpp::message{"Too much time has passed since the last interaction, the command execution has terminated"});
+        if (result.index() == 0) [[unlikely]] {
+            co_await mln::response::co_respond(data.event_data, "Too much time has passed since the last interaction, the command execution has terminated!", false,
+                "Failed to notify user that too much time has passed since the last paginated embed interaction, the command execution has terminated!");
             co_return;
         }
 
         //If an exception occurred return an error
-        if (result.is_exception()) {
-            data.bot.interaction_response_edit(data.token, dpp::message{"An unknown error occurred!"});
+        if (result.is_exception()) [[unlikely]] {
+            co_await mln::response::co_respond(data.event_data, "An unknown error occurred!", true, "An unknown exception occurred!");
             co_return;
         }
 
         //It was suggested to copy the event from documentation of ::when
         button_data = result.get<1>();
-        if (button_data.cancelled) {
-            data.bot.interaction_response_edit(data.token, dpp::message{"The event was cancelled!"});
+        if (button_data.cancelled) [[unlikely]] {
+            static const std::string s_err_text = "The event was cancelled!";
+
+            co_await mln::response::co_respond(data.event_data, s_err_text, true, s_err_text);
             co_return;
         }
 
@@ -316,7 +358,9 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
         } else if (button_data.custom_id == button_ids[3]) {
             next_msgs_index = msgs.size() - 1;
         } else {
-            data.bot.interaction_response_edit(data.token, dpp::message{"Invalid button id found, internal error!"});
+            static const std::string s_err_text = "Invalid button id found, internal error!";
+
+            co_await mln::response::co_respond(data.event_data, s_err_text, true, s_err_text);
             co_return;
         }
 
@@ -335,7 +379,7 @@ bool mln::utility::is_ascii(const unsigned char* const text) {
     static const unsigned char bit_to_check = (1 << 7);
     for (size_t i = 0;;++i) {
         const unsigned char c = text[i];
-        if (c == '\0') {
+        if (c == '\0') [[unlikely]] {
             break;
         }
         if (c & bit_to_check) {
@@ -356,7 +400,7 @@ bool mln::utility::is_ascii_printable(const unsigned char* const text) {
     static const unsigned char max_limit = 126;
     for (size_t i = 0;;++i) {
         const unsigned char c = text[i];
-        if (c == '\0') {
+        if (c == '\0') [[unlikely]] {
             break;
         }
         if (c < min_limit || c > max_limit) {
@@ -381,41 +425,78 @@ std::vector<dpp::snowflake> mln::utility::extract_emojis(const std::string& cont
     return result;
 }
 
-bool mln::utility::conf_callback_is_error(const dpp::confirmation_callback_t& callback, const dpp::cluster& bot, const dpp::interaction_create_t* const event_data, const std::string& additional_msg)
+bool mln::utility::conf_callback_is_error(const dpp::confirmation_callback_t& callback, const event_data_lite_t& event_data, const bool always_event_log, const std::string& additional_msg)
 {
-    const bool is_error = callback.is_error();
+    mln::utility::get_conf_callback_is_error(event_data, always_event_log, additional_msg)(callback);
 
-    if (is_error) {
-        const dpp::error_info err = callback.get_error();
-        if (additional_msg.empty()) {
-            bot.log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}].",
-                mln::get_json_err_text(err.code), err.human_readable));
-        }
-        else {
-            bot.log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}]. Additional msg: [{}].",
-                mln::get_json_err_text(err.code), err.human_readable, additional_msg));
-        }
-    }
-
-    if (event_data) {
-        mln::utility::create_event_log_error(*event_data, bot, additional_msg);
-    }
-
-    return is_error;
+    return callback.is_error();
 }
 
-void mln::utility::create_event_log_error(const dpp::interaction_create_t& event_data, const dpp::cluster& bot, const std::string& additional_msg)
+std::function<void(const dpp::confirmation_callback_t&)> mln::utility::get_conf_callback_is_error(const event_data_lite_t& event_data, const bool always_event_log, const std::string& additional_msg)
 {
-    if (additional_msg.empty()) {
-        bot.log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}].", 
-            static_cast<uint64_t>(event_data.command.id), static_cast<uint64_t>(event_data.command.guild_id), static_cast<uint64_t>(event_data.command.channel_id),
-            static_cast<uint64_t>(event_data.command.usr.id), event_data.command.get_command_name()));
+    if (event_data.creator == nullptr) [[unlikely]] {
+        throw std::exception("Invalid creator pointer for confirmation callback!");
+    }
+
+    const bool use_log_data = event_data.command_id != 0;
+
+    if (always_event_log) [[likely]] {
+        return [log_data = event_data, use_log_data, additional_msg](const dpp::confirmation_callback_t& callback) {
+            const bool is_error = callback.is_error();
+
+            if (is_error) [[unlikely]] {
+                const dpp::error_info err = callback.get_error();
+                if (additional_msg.empty()) [[unlikely]] {
+                    log_data.creator->log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}].",
+                        mln::get_json_err_text(err.code), err.human_readable));
+                }
+                else [[likely]] {
+                    log_data.creator->log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}]. Additional msg: [{}].",
+                        mln::get_json_err_text(err.code), err.human_readable, additional_msg));
+                }
+            }
+
+            if (use_log_data) [[likely]] {
+                mln::utility::create_event_log_error(log_data, std::move(additional_msg));
+            }
+            };
+    }
+
+    return [log_data = event_data, use_log_data, additional_msg](const dpp::confirmation_callback_t& callback) {
+        const bool is_error = callback.is_error();
+
+        if (is_error) [[unlikely]] {
+            const dpp::error_info err = callback.get_error();
+            if (additional_msg.empty()) [[unlikely]] {
+                log_data.creator->log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}].",
+                    mln::get_json_err_text(err.code), err.human_readable));
+            }
+            else [[likely]] {
+                log_data.creator->log(dpp::loglevel::ll_error, std::format("Error found when checking dpp::confirmation_callback_t! Error: [{}], details: [{}]. Additional msg: [{}].",
+                    mln::get_json_err_text(err.code), err.human_readable, additional_msg));
+            }
+
+            if (use_log_data) [[likely]] {
+                mln::utility::create_event_log_error(log_data, std::move(additional_msg));
+            }
+        }
+        };
+}
+
+void mln::utility::create_event_log_error(const event_data_lite_t& event_data, const std::string& additional_msg)
+{
+    if (event_data.creator == nullptr) [[unlikely]] {
+        throw std::exception("Invalid creator pointer for event logging!");
+    }
+
+    if (additional_msg.empty()) [[unlikely]] {
+        event_data.creator->log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}].",
+            event_data.command_id, event_data.guild_id, event_data.channel_id, event_data.usr_id, event_data.command_name));
         return;
     }
 
-    bot.log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}], additional info: [{}].",
-        static_cast<uint64_t>(event_data.command.id), static_cast<uint64_t>(event_data.command.guild_id), static_cast<uint64_t>(event_data.command.channel_id),
-        static_cast<uint64_t>(event_data.command.usr.id), event_data.command.get_command_name(), additional_msg));
+    event_data.creator->log(dpp::loglevel::ll_error, std::format("Event error! Event id: [{}], guild: [{}], channel: [{}], user: [{}], command: [{}], additional info: [{}].",
+        event_data.command_id, event_data.guild_id, event_data.channel_id, event_data.usr_id, event_data.command_name, additional_msg));
 }
 
 bool mln::utility::is_same_cmd(const dpp::slashcommand& first, const dpp::slashcommand& second)
@@ -430,7 +511,7 @@ bool mln::utility::is_same_cmd(const dpp::slashcommand& first, const dpp::slashc
         first.name == second.name &&
         first.description == second.description;
     
-    if (equal) { 
+    if (equal) [[likely]] { 
         for (const std::pair<std::string, std::string>& pair : first.description_localizations) {
             const std::map<std::string, std::string>::const_iterator& it = second.description_localizations.find(pair.first);
             if (it == second.description_localizations.end() || it->second != pair.second) {
@@ -439,7 +520,7 @@ bool mln::utility::is_same_cmd(const dpp::slashcommand& first, const dpp::slashc
             }
         }
 
-        if (equal) {
+        if (equal) [[likely]] {
             for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
                 const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
                 if (it == second.name_localizations.end() || it->second != pair.second) {
@@ -448,7 +529,7 @@ bool mln::utility::is_same_cmd(const dpp::slashcommand& first, const dpp::slashc
                 }
             }
 
-            if (equal) {
+            if (equal) [[likely]] {
                 for (size_t i = 0; i < first.options.size(); ++i) {
                     if (!mln::utility::is_same_option(first.options[i], second.options[i])) {
                         equal = false;
@@ -477,7 +558,7 @@ bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::c
         first.name == second.name &&
         first.description == second.description;
 
-    if (equal) {
+    if (equal) [[likely]] {
         for (size_t i = 0; i < first.channel_types.size(); ++i) {
             if (first.channel_types[i] != second.channel_types[i]) {
                 equal = false;
@@ -485,7 +566,7 @@ bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::c
             }
         }
 
-        if (equal) {
+        if (equal) [[likely]] {
             for (const std::pair<std::string, std::string>& pair : first.description_localizations) {
                 const std::map<std::string, std::string>::const_iterator& it = second.description_localizations.find(pair.first);
                 if (it == second.description_localizations.end() || it->second != pair.second) {
@@ -494,7 +575,7 @@ bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::c
                 }
             }
 
-            if (equal) {
+            if (equal) [[likely]] {
                 for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
                     const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
                     if (it == second.name_localizations.end() || it->second != pair.second) {
@@ -503,7 +584,7 @@ bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::c
                     }
                 }
 
-                if (equal) {
+                if (equal) [[likely]] {
                     for (size_t i = 0; i < first.choices.size(); ++i) {
                         if (!mln::utility::is_same_choice(first.choices[i], second.choices[i])) {
                             equal = false;
@@ -511,7 +592,7 @@ bool mln::utility::is_same_option(const dpp::command_option& first, const dpp::c
                         }
                     }
 
-                    if (equal) {
+                    if (equal) [[likely]] {
                         for (size_t i = 0; i < first.options.size(); ++i) {
                             if (!mln::utility::is_same_option(first.options[i], second.options[i])) {
                                 equal = false;
@@ -533,10 +614,10 @@ bool mln::utility::is_same_choice(const dpp::command_option_choice& first, const
         first.name_localizations.size() == second.name_localizations.size() && 
         first.name == second.name;
 
-    if (equal) {
+    if (equal) [[likely]] {
         for (const std::pair<std::string, std::string>& pair : first.name_localizations) {
             const std::map<std::string, std::string>::const_iterator& it = second.name_localizations.find(pair.first);
-            if (it == second.name_localizations.end() || it->second != pair.second) {
+            if (it == second.name_localizations.end() || it->second != pair.second) [[likely]] {
                 equal = false;
                 break;
             }

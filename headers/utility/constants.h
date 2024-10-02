@@ -5,6 +5,9 @@
 namespace mln {
 	class constants {
 	public:
+		static size_t get_max_nickname_length();
+		static size_t get_min_nickname_length();
+
 		static size_t get_max_characters_reply_msg();
 		static size_t get_min_characters_reply_msg();
 		static size_t get_max_characters_command_option_description();

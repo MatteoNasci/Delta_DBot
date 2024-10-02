@@ -1,8 +1,14 @@
 #include "bot_delta.h"
+#include "database/database_handler.h"
 #include "utility/caches.h"
+#include "utility/logs.h"
 
-#include <cstring>
+#include <dpp/misc-enum.h>
+
+#include <cstdio>
+#include <exception>
 #include <format>
+
 
 bool run_app(/*const bool register_bot_cmds*/);
 
@@ -24,15 +30,31 @@ bool run_app(/*const bool register_bot_cmds*/);
 //TODO change thinking response to something else that warns user the wait might be long (for select and insert)
 //TODO add limits to api requests/uploads/ram usage
 //TODO collect http_info from all confirmation_callbacks
-//TODO In the cmd runners use the command ids I get from the register cmds to use the ids as keys instead of strings
 //TODO mln::perms::get_base_permission I could probably remove the dpp::guild requirement, I only need the guild_id and the guild owner_id
 //TODO utility maybe replace regex? It's slow but it is not a necessity for it to be fast
 //TODO make static stuff constepr where possible
 //TODO put file logging outside bot_delta class
 //TODO remove secrets from files, maybe use env vars
+//TODO check all commands parameters for if their values are present, even the params that are set as required (you never know)
+//TODO TODO Make separate thread for db manipulation and other slow stuff. Probably one or more queues to one thread. Uno queue per event_handler, the base_action will have additional funcs, one to tell event_handler if we want to execute on current thread or other thread, then another command func to give to the queue
+//TODO add statistics and time stuff
+//TODO change exceptions with proper class esceptions
+//TODO when doing .is_exception(), use a try cacth to retrieve exception and display msg
 
+/*
+To test: fare qui lista di cose da testare. Ad ogni singolo test associare i relativi comandi discord
+
+all /help commands, including /db privacy policy, /info and /changelog. They all need to display text info as ephermeral reply to the command.
+
+For /db config:
+Test /db update_dump_channel with valid channel, test inserts end up in dump channel, test select works properly
+Test /db update_dump_channel with same channel again, test inserts end up in dump channel, test select works properly
+Test /db update_dump_channel with no channel, test inserts end up in local channel, test select works properly
+Test /db update_dump_channel with no channel again, test inserts end up in local channel, test select works properly
+*/
 int main(int argc, char** argv){
-   
+    mln::logs logger{"log.txt"};
+
     for (size_t i = 1; i < argc; ++i) {
 
     }
@@ -43,17 +65,18 @@ int main(int argc, char** argv){
             is_error = run_app();
         }
         catch (const std::exception& e) {
-            std::cerr << "Exception thrown! msg: " << e.what() << std::endl;
+            mln::logs::log_to_file(dpp::loglevel::ll_critical, std::format("Exception thrown! msg: [{}].", e.what()));
         }
         catch (...) {
-            std::cerr << "Unknown exception thrown!" << std::endl;
+            mln::logs::log_to_file(dpp::loglevel::ll_critical, "Exception thrown! Unknown msg.");
         }
 
         if (!is_error) {
             break;
         }
 
-        std::cerr << "\nA critical error occurred, the bot was shutdown! Trying to restart the bot...\n";
+        mln::logs::log_to_file(dpp::loglevel::ll_critical, "A critical error occurred, the bot was shutdown! Trying to restart the bot...");
+
         mln::caches::cleanup();
     }
 
@@ -67,11 +90,11 @@ bool run_app() {
     {
         mln::bot_delta delta{};
 
-        delta.bot.set_request_timeout(120);
+        delta.set_request_timeout(120);
 
-        delta.start();
+        delta.log(dpp::loglevel::ll_debug, delta.start());
 
-        delta.bot.log(dpp::loglevel::ll_debug, "Press any key to stop the bot...");
+        delta.log(dpp::loglevel::ll_debug, "Press any key to stop the bot...");
 
         while (true) {
             int c = getchar();
@@ -82,15 +105,18 @@ bool run_app() {
             if (c == 'p') {
                 delta.print_main_db();
             } else if (c == 'd') {
-                delta.bot.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
+                delta.log(dpp::loglevel::ll_debug, mln::database_handler::get_db_debug_info());
             }
             else if (c == 'c') {
-                delta.bot.log(dpp::loglevel::ll_debug, std::format("Total cache requests: [{}], total cache misses: [{}], cache miss rate: [{}%].", 
+                delta.log(dpp::loglevel::ll_debug, std::format("Total cache requests: [{}], total cache misses: [{}], cache miss rate: [{} %].", 
                     mln::caches::get_total_cache_requests(), mln::caches::get_total_cache_misses(), mln::caches::get_cache_misses_rate() * 100.0));
+            }
+            else if (c == 't') {
+                delta.print_thread_data();
             }
         }      
 
-        delta.bot.log(dpp::loglevel::ll_debug, "Closing the bot...");
+        delta.log(dpp::loglevel::ll_debug, "Closing the bot...");
 
         while (!delta.close()) {
             

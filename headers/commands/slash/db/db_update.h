@@ -3,16 +3,22 @@
 #define H_MLN_DB_DB_UPDATE_H
 
 #include "commands/slash/db/base_db_command.h"
+#include "commands/slash/db/db_command_type.h"
+#include "commands/slash/db/db_init_type_flag.h"
+
+#include <dpp/coro/task.h>
+
+namespace dpp {
+	class cluster;
+	struct slashcommand_t;
+}
 
 namespace mln {
 	class database_handler;
+	struct db_cmd_data_t;
 
 	class db_update : public base_db_command {
 	private:
-		static const std::unordered_map<mln::db_command_type, std::tuple<
-			mln::db_init_type_flag,
-			std::function<dpp::task<void>(const mln::db_update&, const dpp::slashcommand_t&, const mln::db_cmd_data_t&)>>> s_mapped_commands_info;
-
 		struct data_t {
 			size_t saved_stmt;
 			int saved_param_guild, saved_param_name, saved_param_user, saved_param_to_update;
@@ -23,16 +29,16 @@ namespace mln {
 		database_handler& db;
 	public:
 		db_update(dpp::cluster& cluster, database_handler& db);
-		dpp::task<void> command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const override;
-		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const override;
-
+		dpp::task<void> command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const override final;
+		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const override final;
+		bool is_db_initialized() const override final;
 	private:
 
-		dpp::task<void> description(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const;
-		dpp::task<void> nsfw(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const;
-		dpp::task<void> common(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const data_t& stmt_data) const;
+		dpp::task<void> description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;
+		dpp::task<void> nsfw(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;
+		dpp::task<void> common(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const data_t& stmt_data) const;
 
-		dpp::task<void> help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const;
+		dpp::task<void> help(db_cmd_data_t& cmd_data) const;
 	};
 }
 

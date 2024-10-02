@@ -1,5 +1,6 @@
 #include "utility/json_err.h"
 
+#include <type_traits>
 #include <unordered_map>
 
 const char* mln::get_json_err_text(const std::underlying_type<json_err>::type error)

@@ -4,11 +4,18 @@
 
 #include "commands/base_action.h"
 
-#include <dpp/dispatcher.h>
 #include <dpp/coro/task.h>
 
+#include <functional>
+#include <optional>
+
+namespace dpp {
+	class cluster;
+	struct guild_create_t;
+}
+
 namespace mln {
-	class base_guild_create : public base_action<dpp::task<void>, const dpp::guild_create_t&> {
+	class base_guild_create : public base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::guild_create_t&> {
 	protected:
 		base_guild_create(dpp::cluster& cluster);
 	public:

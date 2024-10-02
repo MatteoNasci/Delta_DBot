@@ -1,21 +1,31 @@
+#include "commands/slash/db/base_db_command.h"
+#include "commands/slash/db/db_cmd_data.h"
+#include "commands/slash/db/db_command_type.h"
 #include "commands/slash/db/db_config.h"
+#include "commands/slash/db/db_init_type_flag.h"
+#include "database/database_callbacks.h"
 #include "database/database_handler.h"
-#include "utility/utility.h"
+#include "database/db_result.h"
 #include "utility/caches.h"
+#include "utility/event_data_lite.h"
 #include "utility/perms.h"
-#include "utility/json_err.h"
 #include "utility/response.h"
+#include "utility/utility.h"
 
+#include <dpp/appcommand.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/task.h>
+#include <dpp/dispatcher.h>
+#include <dpp/message.h>
+#include <dpp/misc-enum.h>
+#include <dpp/permissions.h>
+#include <dpp/snowflake.h>
 
-const std::unordered_map<mln::db_command_type, std::tuple<
-    mln::db_init_type_flag,
-    std::function<dpp::task<void>(const mln::db_config&, const dpp::slashcommand_t&, const mln::db_cmd_data_t&)>>>
-    mln::db_config::s_mapped_commands_info{
-
-    {mln::db_command_type::update_dump_channel, {db_init_type_flag::cmd_data | db_init_type_flag::thinking, &mln::db_config::update_dump}},
-    {mln::db_command_type::help, {db_init_type_flag::none, &mln::db_config::help}},
-};
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <string>
+#include <variant>
 
 mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
 
@@ -37,40 +47,46 @@ mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base
 }
 
 mln::db_init_type_flag mln::db_config::get_requested_initialization_type(const db_command_type cmd) const {
-
-    const auto it = s_mapped_commands_info.find(cmd);
-    if (it == s_mapped_commands_info.end()) {
+    switch (cmd) {
+    case mln::db_command_type::update_dump_channel:
+        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+    case mln::db_command_type::help:
+        return db_init_type_flag::none;
+    default:
         return mln::db_init_type_flag::all;
     }
-    return std::get<0>(it->second);
 }
 
-dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+bool mln::db_config::is_db_initialized() const
+{
+    return data.valid_stmt;
+}
+
+dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
     dpp::snowflake channel_id{0};
-    const dpp::command_value channel_param = event_data.get_parameter("channel");
+    const dpp::command_value& channel_param = event_data.get_parameter("channel");
     if (std::holds_alternative<dpp::snowflake>(channel_param)) {
         channel_id = std::get<dpp::snowflake>(channel_param);
     }
 
-    const std::optional<uint64_t> opt_channel = mln::caches::get_dump_channel_id(cmd_data.cmd_guild->id);//mln::caches::dump_channels_cache.get_element(cmd_data.cmd_guild->id);
+    const std::optional<uint64_t> opt_channel = mln::caches::get_dump_channel_id(cmd_data.data.guild_id);
 
     if (opt_channel.has_value()) {
         if (opt_channel.value() == channel_id) {
-            mln::utility::conf_callback_is_error(
-                co_await mln::response::make_response(false, event_data, "Channel found in cache. The given channel_id is already set as the dump channel!"), bot());
+            co_await mln::response::co_respond(cmd_data.data, "Channel found in cache. The given channel_id is already set as the dump channel!", false, {});
             co_return;
         }
     }
 
-    const mln::db_result_t res1 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    const mln::db_result_t res1 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_channel, static_cast<int64_t>(channel_id));
 
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok) {
-        mln::utility::conf_callback_is_error(
-            co_await mln::response::make_response(false, event_data, "Failed to bind query params, internal error!"), bot(), &event_data, 
-            std::format("Failed to bind query params, internal error! guild_param: [{}, {}], channel_param: [{}, {}].", 
-                mln::database_handler::get_name_from_result(res1.type), res1.err_text, 
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query params, internal error!", true,
+            std::format("Failed to bind query params, internal error! guild_param: [{}, {}], channel_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res1.type), res1.err_text,
                 mln::database_handler::get_name_from_result(res2.type), res2.err_text));
+
         co_return;
     }
 
@@ -83,24 +99,21 @@ dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_dat
             "Failed to update the dump channel, either no record found in the main database with the given guild id or you are not allowed to modify it!" : 
             "Failed to update the dump channel, internal error!");
 
-        mln::utility::conf_callback_is_error(
-            co_await mln::response::make_response(false, event_data, err_text), bot(), &event_data,
+        co_await mln::response::co_respond(cmd_data.data, err_text, true,
             std::format("{} Error: [{}], details: [{}].",
                 err_text,
                 mln::database_handler::get_name_from_result(res.type), res.err_text));
 
-        mln::caches::dump_channels_cache.remove_element(cmd_data.cmd_guild->id);
+        mln::caches::dump_channels_cache.remove_element(cmd_data.data.guild_id);
         co_return;
     }
 
-    mln::caches::dump_channels_cache.add_element(cmd_data.cmd_guild->id, channel_id);
+    mln::caches::dump_channels_cache.add_element(cmd_data.data.guild_id, channel_id);
 
-    if (mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data, "Database operation successful!"), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed update_dump_channel command conclusion reply!");
-    }
+    co_await mln::response::co_respond(cmd_data.data, "Database operation successful!", false, "Failed update_dump_channel command conclusion reply!");
 }
 
-dpp::task<void> mln::db_config::help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_config::help(db_cmd_data_t& cmd_data) const {
     static const dpp::message s_info = dpp::message{"Information regarding the `/db config` commands..."}
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
@@ -115,34 +128,28 @@ This set of commands is generally reserved for users with specific permissions.
   To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  
   Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)"""));
 
-    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db setup help text!");
-    }
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db setup help text!");
+
     co_return;
 }
 
-dpp::task<void> mln::db_config::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const {
-    //Find the command variant and execute it. If no valid command variant found return an error
-    const bool is_first_reply = (mln::db_config::get_requested_initialization_type(type) & mln::db_init_type_flag::thinking) == mln::db_init_type_flag::none;
-    const auto it_func = s_mapped_commands_info.find(type);
-    if (it_func == s_mapped_commands_info.end()) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed command, the given sub_command is not supported!"), bot(), &event_data,
-            std::format("Failed command, the given sub_command [{}] is not supported for /db setup!", mln::get_cmd_type_text(type)));
-    }
+dpp::task<void> mln::db_config::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
 
-    if (cmd_data.cmd_usr && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed database operation, admin permission is required to access this group command!"), bot());
+    if (!cmd_data.cmd_usr || !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed database operation, admin permission is required to access this group command!", false, {});
         co_return;
     }
     
-    if (!data.valid_stmt) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed database operation, the database was not initialized correctly!"), bot(), &event_data,
-            "Failed database operation, the database was not initialized correctly!");
-        co_return;
+    switch (type) {
+    case mln::db_command_type::update_dump_channel:
+        co_await mln::db_config::update_dump(event_data, cmd_data);
+        break;
+    case mln::db_command_type::help:
+        co_await mln::db_config::help(cmd_data);
+        break;
+    default:
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, the given sub_command is not supported!", true,
+            std::format("Failed command, the given sub_command [{}] is not supported for /db setup!", mln::get_cmd_type_text(type)));
+        break;
     }
-
-    co_await std::get<1>(it_func->second)(*this, event_data, cmd_data);
 }

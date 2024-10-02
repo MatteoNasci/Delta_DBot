@@ -1,25 +1,43 @@
+#include "commands/slash/db/base_db_command.h"
+#include "commands/slash/db/db_cmd_data.h"
+#include "commands/slash/db/db_command_type.h"
+#include "commands/slash/db/db_init_type_flag.h"
 #include "commands/slash/db/db_select.h"
+#include "database/database_callbacks.h"
 #include "database/database_handler.h"
-#include "utility/utility.h"
+#include "database/db_column_data.h"
+#include "database/db_result.h"
+#include "database/db_text_encoding.h"
 #include "utility/caches.h"
-#include "utility/perms.h"
 #include "utility/constants.h"
-#include "utility/response.h"
+#include "utility/event_data_lite.h"
 #include "utility/http_err.h"
 #include "utility/json_err.h"
-#include "utility/reply_log_data.h"
+#include "utility/perms.h"
+#include "utility/response.h"
+#include "utility/utility.h"
 
+#include <dpp/appcommand.h>
+#include <dpp/channel.h>
 #include <dpp/cluster.h>
+#include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/guild.h>
+#include <dpp/message.h>
+#include <dpp/misc-enum.h>
+#include <dpp/permissions.h>
+#include <dpp/queues.h>
+#include <dpp/restresults.h>
 
-const std::unordered_map<mln::db_command_type, std::tuple<
-    mln::db_init_type_flag,
-    std::function<dpp::task<void>(const mln::db_select&, const dpp::slashcommand_t&, const mln::db_cmd_data_t&)>>>
-    mln::db_select::s_mapped_commands_info{
-
-    {mln::db_command_type::single, {mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking, &mln::db_select::select}},
-    {mln::db_command_type::help, {mln::db_init_type_flag::none, &mln::db_select::help}},
-};
+#include <cstdint>
+#include <format>
+#include <memory>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <variant>
+#include <vector>
 
 mln::db_select::db_select(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
 
@@ -40,61 +58,65 @@ mln::db_select::db_select(dpp::cluster& cluster, database_handler& in_db) : base
     }
 }
 
-dpp::task<void> mln::db_select::command(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data, const db_command_type type) const {
-    //Find the command variant and execute it. If no valid command variant found return an error
-    const bool is_first_reply = (mln::db_select::get_requested_initialization_type(type) & mln::db_init_type_flag::thinking) == mln::db_init_type_flag::none;
-    const auto it_func = s_mapped_commands_info.find(type);
-    if (it_func == s_mapped_commands_info.end()) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed command, the given sub_command is not supported!"), bot(), &event_data,
-            std::format("Failed command, the given sub_command [{}] is not supported for /db select!", mln::get_cmd_type_text(type)));
-        co_return;
+dpp::task<void> mln::db_select::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+    switch (type) {
+    case mln::db_command_type::single:
+        co_await mln::db_select::select(event_data, cmd_data);
+        break;
+    case mln::db_command_type::help:
+        co_await mln::db_select::help(cmd_data);
+        break;
+    default:
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, the given sub_command is not supported!", true,
+            std::format("Failed command, the given sub_command [{}] is not supported for /db update!", mln::get_cmd_type_text(type)));
+        break;
     }
-
-    //If the query statement was not saved correctly, return an error
-    if (!data.valid_stmt) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(is_first_reply, event_data,
-            "Failed database operation, the database was not initialized correctly!"), bot(), &event_data,
-            "Failed database operation, the database was not initialized correctly!");
-        co_return;
-    }
-
-    co_await std::get<1>(it_func->second)(*this, event_data, cmd_data);
 }
 
 mln::db_init_type_flag mln::db_select::get_requested_initialization_type(const db_command_type cmd) const {
-
-    const auto it = s_mapped_commands_info.find(cmd);
-    if (it == s_mapped_commands_info.end()) {
+    switch (cmd) {
+    case mln::db_command_type::single:
+        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+    case mln::db_command_type::help:
+        return db_init_type_flag::none;
+    default:
         return mln::db_init_type_flag::all;
     }
-    return std::get<0>(it->second);
 }
 
-dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+bool mln::db_select::is_db_initialized() const
+{
+    return data.valid_stmt;
+}
+
+dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
     //Check basic perms for sending result message to user channel
     if (!mln::perms::check_permissions(cmd_data.cmd_bot_perm, dpp::permissions::p_view_channel | dpp::permissions::p_send_messages)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed command, the bot doesn't have the required minimum perms to send messages in the user channel!"), bot());
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot doesn't have the required minimum perms to send messages in the user channel!", false, {});
         co_return;
     }
     
     //Retrieve remaining data required for the database query
-    const std::string name = std::get<std::string>(event_data.get_parameter("name"));
+    const dpp::command_value& name_param = event_data.get_parameter("name");
+    const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
+
+    if (name.empty()) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve name parameter!", true, "Failed to retrieve name parameter!");
+        co_return;
+    }
+
     if (!mln::utility::is_ascii_printable(name)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]"), bot());
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
         co_return;
     }
 
     //Bind query parameters
-    const mln::db_result_t res1 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.cmd_guild->id));
+    const mln::db_result_t res1 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_name, name, mln::db_text_encoding::utf8);
 
     //Check if any error occurred in the binding process, in case return an error
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed to bind query parameters, internal error!"), bot(), &event_data, 
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
             std::format("Failed to bind query parameters, internal error! guild_param: [{}, {}], name_param: [{}, {}].", 
                 mln::database_handler::get_name_from_result(res1.type), res1.err_text, 
                 mln::database_handler::get_name_from_result(res2.type), res2.err_text));
@@ -123,9 +145,8 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
             std::format("Failed while executing database query! The given name was not found in the database! Name: [{}].", name) :
             std::format("Failed while executing database query! Internal error! Name: [{}], url: [{}], is_nsfw: [{}].", name, std::get<0>(retrieved_data), std::get<1>(retrieved_data));
 
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            err_text), bot(), &event_data,
-            std::format("{} Error: [{}], details: [{}].", 
+        co_await mln::response::co_respond(cmd_data.data, err_text, true,
+            std::format("{} Error: [{}], details: [{}].",
                 err_text,
                 mln::database_handler::get_name_from_result(res.type), res.err_text));
         co_return;
@@ -134,8 +155,7 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
     //If selected record is nsfw check if destination channel has the required nsfw tag
     if (std::get<1>(retrieved_data)) {
         if (!cmd_data.cmd_channel->is_nsfw()) {
-            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                "Failed command, the user channel needs to be nsfw in order to select nsfw records from the database!"), bot());
+            co_await mln::response::co_respond(cmd_data.data, "Failed command, the user channel needs to be nsfw in order to select nsfw records from the database!", false, {});
             co_return;
         }
     }
@@ -143,13 +163,10 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
     //Extract url values, return error on fail
     uint64_t url_guild_id{0}, url_channel_id{0}, url_message_id{0};
     if (!mln::utility::extract_message_url_data((std::get<0>(retrieved_data)), url_guild_id, url_channel_id, url_message_id)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed command, internal error! The url extracted from the database is not a valid url!"), bot(), &event_data, 
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, internal error! The url extracted from the database is not a valid url!", true,
             std::format("Failed command, internal error! The url extracted from the database is not a valid url! Url: [{}].", std::get<0>(retrieved_data)));
         co_return;
     }
-
-    const mln::reply_log_data_t reply_log_data{ &event_data, &bot(), false };
 
     //Retrieve url guild data
     std::shared_ptr<const dpp::guild> url_guild;
@@ -157,7 +174,7 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
         url_guild = cmd_data.cmd_guild;
     }
     else {
-        const std::optional<std::shared_ptr<const dpp::guild>> url_guild_opt = co_await mln::caches::get_guild_full(url_guild_id, reply_log_data);
+        const std::optional<std::shared_ptr<const dpp::guild>> url_guild_opt = co_await mln::caches::get_guild_task(url_guild_id, cmd_data.data);
         if (!url_guild_opt.has_value()) {
             co_return;
         }
@@ -170,7 +187,7 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
         url_channel = cmd_data.cmd_channel;
     }
     else {
-        const std::optional<std::shared_ptr<const dpp::channel>> url_channel_opt = co_await mln::caches::get_channel_full(url_channel_id, reply_log_data);
+        const std::optional<std::shared_ptr<const dpp::channel>> url_channel_opt = co_await mln::caches::get_channel_task(url_channel_id, cmd_data.data, &event_data.command.channel, &event_data.command.resolved.channels);
         if (!url_channel_opt.has_value()) {
             co_return;
         }
@@ -178,28 +195,26 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
     }
 
     //Return error if the bot doesn't have the required permissions
-    const std::optional<dpp::permission> url_bot_perm = co_await mln::perms::get_computed_permission_full(*url_guild, *url_channel, *cmd_data.cmd_bot, reply_log_data);
+    const std::optional<dpp::permission> url_bot_perm = co_await mln::perms::get_computed_permission_task(url_guild->owner_id, *url_channel, *cmd_data.cmd_bot, cmd_data.data, &event_data.command.resolved.roles, &event_data.command.resolved.member_permissions);
     if (!url_bot_perm.has_value()) {
         co_return;
     }
-    if (!mln::perms::check_permissions(url_bot_perm.value(), dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) {
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Failed command, the bot doesn't have the permissions to retrieve the stored message!"), bot());
-        co_return;
-    }
 
-    std::optional<dpp::message> stored_msg = co_await mln::caches::get_message_full(url_message_id, url_channel_id, reply_log_data);
+    std::optional<dpp::message> stored_msg = co_await mln::caches::get_message_task(url_message_id, url_channel_id, url_bot_perm.value(), cmd_data.data, &event_data.command.resolved.messages);
     if (!stored_msg.has_value()) {
         co_return;
     }
 
     //Check other perms to send msg to user channel
-    const dpp::permission to_check = co_await mln::perms::get_additional_perms_required(stored_msg.value(), bot(), cmd_data.cmd_guild->id);
+    const std::optional<dpp::permission> to_check_opt = co_await mln::perms::get_additional_perms_required_task(stored_msg.value(), cmd_data.cmd_guild->id, cmd_data.data);
+    if (!to_check_opt.has_value()) {
+        co_return;
+    }
 
+    const dpp::permission to_check = to_check_opt.value();
     if (to_check != 0) {
         if (!mln::perms::check_permissions(cmd_data.cmd_bot_perm, to_check)) {
-            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                "Failed command, the bot doesn't have the additional permissions to send a msg to user channel!"), bot());
+            co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot doesn't have the additional permissions to send a msg to user channel!", false, {});
             co_return;
         }
     }
@@ -214,20 +229,19 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
             if (attach.owner == nullptr || attach.owner->owner == nullptr ||
                 attach.id == 0 || attach.url.empty()) {
 
-                mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                    "Failed to find valid attachment while selecting from database!"), bot(), &event_data,
+                co_await mln::response::co_respond(cmd_data.data, "Failed to find valid attachment while selecting from database!", true,
                     std::format("Failed to find valid attachment while selecting from database! Owner: [{}], owner->owner: [{}], id: [{}], url: [{}].",
                         (attach.owner ? "not null" : "null"), (attach.owner ? (attach.owner->owner ? "not null" : "null") : "null"), static_cast<uint64_t>(attach.id), attach.url));
                 co_return;
             }
 
             //Download attachments and add them to list of downloaded attachments, return an error if operation fails
-            const dpp::http_request_completion_t download_res = co_await bot().co_request(attach.url, dpp::http_method::m_get, "", attach.content_type, {}, "1.1", mln::constants::get_big_files_request_timeout());
+            dpp::http_request_completion_t download_res = co_await bot().co_request(attach.url, dpp::http_method::m_get, "", attach.content_type, {}, "1.1", mln::constants::get_big_files_request_timeout());
             if (download_res.status != 200) {
-                mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                    "Failed to download valid attachment while selecting from database!"), bot(), &event_data,
-                    std::format("Failed to download valid attachment while selecting from database! Status: [{}], error: [{}]", 
+                co_await mln::response::co_respond(cmd_data.data, "Failed to download valid attachment while selecting from database!", true,
+                    std::format("Failed to download valid attachment while selecting from database! Status: [{}], error: [{}]",
                         mln::get_http_err_text(download_res.status), mln::get_dpp_http_err_text(download_res.error)));
+
                 co_return;
             }
 
@@ -244,7 +258,7 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
     stored_msg.value().set_channel_id(cmd_data.cmd_channel->id).set_guild_id(cmd_data.cmd_guild->id);
 
     //Send the message to the target channel, depending on how 'broadcast' was set
-    const dpp::command_value broadcast_param = event_data.get_parameter("broadcast");
+    const dpp::command_value& broadcast_param = event_data.get_parameter("broadcast");
     const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
     
     if (broadcast) {
@@ -252,15 +266,14 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
         if (send_result.is_error()) {
             const dpp::error_info err = send_result.get_error();
 
-            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                "Failed command, the bot failed to send the message to the user's channel!"), bot(), &event_data,
+            co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot failed to send the message to the user's channel!", true,
                 std::format("Failed command, the bot failed to send the message to the user's channel! Error: [{}], details: [{}]",
                     mln::get_json_err_text(err.code), err.human_readable));
+
             co_return;
         }
 
-        mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-            "Message retrieved!"), bot());
+        co_await mln::response::co_respond(cmd_data.data, "Message retrieved!", false, {});
 
     } else {
         stored_msg.value().set_flags(dpp::m_ephemeral);
@@ -269,16 +282,17 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, co
         if (edit_result.is_error()) {
             const dpp::error_info err = edit_result.get_error();
 
-            mln::utility::conf_callback_is_error(co_await mln::response::make_response(false, event_data,
-                std::format("Failed command, the bot failed to send the message to the user's channel! The message size might be too large for ephemeral, try broadcast = true! Url: [{}].", std::get<0>(retrieved_data))), bot(), &event_data,
-                std::format("Failed command, the bot failed to send the message to the user's channel! The message size might be too large for ephemeral, try broadcast = true! Error: [{}], details: [{}], url: [{}].", 
+            co_await mln::response::co_respond(cmd_data.data,
+                std::format("Failed command, the bot failed to send the message to the user's channel! The message size might be too large for ephemeral, try broadcast = true! Url: [{}].", std::get<0>(retrieved_data)), true,
+                std::format("Failed command, the bot failed to send the message to the user's channel! The message size might be too large for ephemeral, try broadcast = true! Error: [{}], details: [{}], url: [{}].",
                     mln::get_json_err_text(err.code), err.human_readable, std::get<0>(retrieved_data)));
+
             co_return;
         }
     }
 }
 
-dpp::task<void> mln::db_select::help(const dpp::slashcommand_t& event_data, const db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_select::help(db_cmd_data_t& cmd_data) const {
     static const dpp::message s_info = dpp::message{"Information regarding the `/db select` commands..."}
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db select` set of commands is used to retrieve data from the database. By supplying a name, the bot will attempt to find a record with the same name and display the content. If the supplied name is not present in the database, an error will occur.
@@ -292,8 +306,6 @@ This is the main set of commands used to retrieve and display records inserted i
   This command asks for a record name and, optionally, a broadcast option. If broadcast is set to `false`, the result will only be shown to the user who invoked the command; if set to `true`, the result will be shown to everyone in the channel where the command was invoked.  
   If you have trouble remembering a record name, use the `/db show` commands to view all or some of the record names in the database, along with their descriptions (if present).)"""));
 
-    if (mln::utility::conf_callback_is_error(co_await event_data.co_reply(s_info), bot())) {
-        mln::utility::create_event_log_error(event_data, bot(), "Failed to reply with the db select help text!");
-    }
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db select help text!");
     co_return;
 }

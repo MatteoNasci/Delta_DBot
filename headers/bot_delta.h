@@ -2,29 +2,47 @@
 #ifndef H_MLN_DB_BOT_DELTA_H
 #define H_MLN_DB_BOT_DELTA_H
 
+#include "database/database_handler.h"
+#include "database/db_result.h"
 #include "events/cmd_ctx_runner.h"
 #include "events/cmd_runner.h"
 #include "events/guild_create_runner.h"
 #include "events/ready_runner.h"
-#include "database/database_handler.h"
+#include "threads/jobs_runner.h"
 
 #include <dpp/cluster.h>
+#include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
+#include <dpp/snowflake.h>
 #include <dpp/timer.h>
 
-#include <string>
-#include <optional>
-#include <memory>
 #include <atomic>
+#include <cstdint>
+#include <string>
 
 namespace mln {
 
 	class bot_delta {
-	public:
-		dpp::cluster bot;
+	private:
+		std::atomic_bool running;
+		dpp::timer db_optimize_timer;
+
+		size_t saved_optimize_db;
+		size_t saved_select_all_query;
+		size_t saved_select_all_gp_query;
+
 		const dpp::snowflake dev_id;
 		const bool is_dev_id_valid;
 
-		database_handler db;
+		database_handler database;
+		dpp::cluster bot;
+
+		jobs_runner j_runner;
+
+		cmd_runner cmds;
+		cmd_ctx_runner ctxs;
+		ready_runner readys;
+		guild_create_runner guild_creates;
 
 	public:
 		bot_delta();
@@ -54,34 +72,19 @@ namespace mln {
 		bool close();
 
 		db_result_t print_main_db() const;
+		void print_thread_data() const;
 
 		const cmd_runner& get_cmd_runner() const;
 		const cmd_ctx_runner& get_cmd_ctx_runner() const;
 		const bool is_bot_running() const;
-	private:
-		dpp::timer db_optimize_timer;
 
-		size_t saved_optimize_db;
-		size_t saved_select_all_query;
-		size_t saved_select_all_gp_query;
-
-		cmd_runner cmds;
-		cmd_ctx_runner ctxs;
-		ready_runner readys;
-		guild_create_runner guild_creates;
-
-		std::atomic_bool running;
-
-		struct file_closer_t {
-			void operator()(FILE* f) const;
-		};
-		std::unique_ptr<FILE, file_closer_t> log_file;
+		void log(const dpp::loglevel severity, const std::string& msg) const;
+		void set_request_timeout(const uint16_t timeout = 20);
 	private:
 		void init();
 		void setup_db();
 
 		static void logger(const dpp::log_t& log);
-		static void log_to_file(const dpp::log_t& log);
 
 	public:
 		static void initialize_environment();
