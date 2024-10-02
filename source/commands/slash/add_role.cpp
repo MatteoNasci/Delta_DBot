@@ -109,6 +109,19 @@ dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
         co_return;
     }
 
+    bool role_already_present = false;
+    for (const dpp::snowflake& role : target.value()->get_roles()) {
+        if (role == role_id) {
+            role_already_present = true;
+            break;
+        }
+    }
+
+    if (role_already_present) {
+        co_await mln::response::co_respond(lite_data, std::format("Failed to add role [{}] to [{}]! The user already has the given role.", dpp::role::get_mention(role_id), dpp::user::get_mention(target.value()->user_id)), false, {});
+        co_return;
+    }
+
     const dpp::confirmation_callback_t editing_user = co_await bot().co_guild_edit_member(dpp::guild_member{*target.value()}.add_role(role_id));
 
     if (editing_user.is_error()) {
