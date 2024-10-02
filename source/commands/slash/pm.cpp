@@ -8,7 +8,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
 #include <dpp/permissions.h>
@@ -34,7 +34,7 @@ mln::pm::pm(dpp::cluster& cluster) : base_slashcommand{ cluster,
             .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))
             .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_reply_msg() - mln::constants::get_max_nickname_length() - s_extra_msg_size))))) } {}
 
-dpp::task<void> mln::pm::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
     mln::event_data_lite_t lite_data{ event_data, bot(), false };
 
     if (!mln::response::is_event_data_valid(lite_data)) {

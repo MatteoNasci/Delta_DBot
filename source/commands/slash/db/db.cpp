@@ -22,7 +22,7 @@
 #include <dpp/appcommand.h>
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/guild.h>
 #include <dpp/permissions.h>
@@ -157,7 +157,7 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
             .add_option(dpp::command_option(dpp::co_sub_command, "policy", "Gives information about the db group command privacy policy", false)))
     ) }, database{ in_database } {}
 
-dpp::task<void> mln::db::command(dpp::slashcommand_t event_data) const{
+dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     static const std::unique_ptr<mln::base_db_command> commands[]{
         std::make_unique<mln::db_insert>(mln::db_insert{bot(), database}),
         std::make_unique<mln::db_config>(mln::db_config{bot(), database}),

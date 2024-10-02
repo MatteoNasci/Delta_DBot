@@ -12,7 +12,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/misc-enum.h>
 #include <dpp/permissions.h>
@@ -41,7 +41,7 @@ mln::report::report(dpp::cluster& cluster, database_handler& in_db) : base_slash
 	}
 }
 
-dpp::task<void> mln::report::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
 	mln::event_data_lite_t lite_data{ event_data, bot(), true };
 
 	if (!mln::response::is_event_data_valid(lite_data)) {

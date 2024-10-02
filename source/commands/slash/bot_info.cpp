@@ -8,7 +8,7 @@
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
 #include <dpp/colors.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
 #include <dpp/permissions.h>
@@ -23,7 +23,7 @@ mln::bot_info::bot_info(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("info"), "Send an embed with the bot info!", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
 
-dpp::task<void> mln::bot_info::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) const {
     static const dpp::embed s_embed = dpp::embed{}
         .set_color(dpp::colors::sti_blue)
         .set_title("Delta")

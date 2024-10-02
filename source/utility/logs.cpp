@@ -10,6 +10,8 @@
 #include <memory>
 #include <string>
 
+static constexpr std::string s_severity_map[] = { "Trace", "Debug", "Info", "Warning", "Error", "Critical" };
+
 mln::logs::logs(const char* const file_name)
 {
 	log_file = std::unique_ptr<FILE, file_closer_t>{ std::freopen(file_name, "a", stderr) };
@@ -18,10 +20,14 @@ mln::logs::logs(const char* const file_name)
 	}
 }
 
+void mln::logs::log_to_file_and_terminal(const dpp::loglevel severity, const std::string& msg)
+{
+	mln::logs::log_to_file(severity, msg);
+	std::cout << "{ [" << mln::time::get_current_date_time() << " " << s_severity_map[severity] << "] " << msg << " }\n";
+}
+
 void mln::logs::log_to_file(const dpp::loglevel severity, const std::string& msg)
 {
-	static constexpr std::string s_severity_map[] = { "Trace", "Debug", "Info", "Warning", "Error", "Critical" };
-
 	std::clog << "{ [" << mln::time::get_current_date_time() << " " << s_severity_map[severity] << "] " << msg << " }\n";
 }
 

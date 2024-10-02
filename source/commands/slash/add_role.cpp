@@ -10,7 +10,7 @@
 #include <dpp/appcommand.h>
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/guild.h>
 #include <dpp/permissions.h>
@@ -34,7 +34,7 @@ mln::add_role::add_role(dpp::cluster& cluster) : base_slashcommand{ cluster,
         .add_option(dpp::command_option(dpp::co_role, "role", "Role to give", true))
     ) } {}
 
-dpp::task<void> mln::add_role::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed add_role, the event is incorrect!");

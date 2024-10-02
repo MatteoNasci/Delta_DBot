@@ -83,7 +83,7 @@ void mln::cmd_runner::attach_event(){
         return;
     }
 
-    event_id = bot().on_slashcommand([this](const dpp::slashcommand_t& event_data) -> dpp::task<void> {
+    event_id = bot().on_slashcommand([this](const dpp::slashcommand_t& event_data) -> void {
         const std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
         const std::string key = event_data.command.get_command_name();
         if (const auto& function_it = actions.find(key); function_it != actions.end()) {
@@ -94,12 +94,12 @@ void mln::cmd_runner::attach_event(){
                 }
             }
             else {
-                co_await function_it->second->command(event_data);
+                function_it->second->command(event_data);
             }
         }
         const std::chrono::system_clock::time_point end = std::chrono::system_clock::now();
         bot().log(dpp::loglevel::ll_critical, std::format("Event [{}] over, elapsed time: [{}].", static_cast<uint64_t>(event_data.command.id), std::chrono::duration_cast<std::chrono::milliseconds>(end.time_since_epoch() - start.time_since_epoch())));
-        co_return;
+        return;
     });
 
     initialized = true;

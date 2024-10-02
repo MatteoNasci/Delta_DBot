@@ -48,7 +48,7 @@ void mln::cmd_ctx_runner::attach_event(){
                 }
             }
             else {
-                co_await function_it->second->command(event_data);
+                function_it->second->command(event_data);
             }
         }
     });

@@ -2,6 +2,7 @@
 #include "database/database_handler.h"
 #include "utility/caches.h"
 #include "utility/logs.h"
+#include "utility/utility.h"
 
 #include <dpp/misc-enum.h>
 
@@ -9,8 +10,7 @@
 #include <exception>
 #include <format>
 
-
-bool run_app(/*const bool register_bot_cmds*/);
+bool run_app();
 
 //TODO sqlite is not really adeguate for a discord bot (if the bot is big there will be a lot of concurrency problems). When needed change to something else (maybe mysql?)
 //TODO add all the checks in all commands for safet, also add checks for permission of both bot and command user
@@ -55,6 +55,8 @@ Test /db update_dump_channel with no channel again, test inserts end up in local
 int main(int argc, char** argv){
     mln::logs logger{"log.txt"};
 
+    mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, std::format("Is dev build? [{}]", mln::utility::is_dev_build()));
+
     for (size_t i = 1; i < argc; ++i) {
 
     }
@@ -65,17 +67,17 @@ int main(int argc, char** argv){
             is_error = run_app();
         }
         catch (const std::exception& e) {
-            mln::logs::log_to_file(dpp::loglevel::ll_critical, std::format("Exception thrown! msg: [{}].", e.what()));
+            mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, std::format("Exception thrown! msg: [{}].", e.what()));
         }
         catch (...) {
-            mln::logs::log_to_file(dpp::loglevel::ll_critical, "Exception thrown! Unknown msg.");
+            mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, "Exception thrown! Unknown msg.");
         }
 
         if (!is_error) {
             break;
         }
 
-        mln::logs::log_to_file(dpp::loglevel::ll_critical, "A critical error occurred, the bot was shutdown! Trying to restart the bot...");
+        mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, "A critical error occurred, the bot was shutdown! Trying to restart the bot...");
 
         mln::caches::cleanup();
     }

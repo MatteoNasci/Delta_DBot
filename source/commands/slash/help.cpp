@@ -7,7 +7,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
 #include <dpp/permissions.h>
@@ -21,7 +21,7 @@ mln::help::help(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("help"), "Display information about this bot's commands.", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
 
-dpp::task<void> mln::help::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::help::command(dpp::slashcommand_t event_data) const {
     static const dpp::message s_info = dpp::message{ std::format("Information regarding the bot's commands (version: [{}])...", mln::get_version()) }
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The bot is primarily focused on its database feature, but it also includes other miscellaneous commands.

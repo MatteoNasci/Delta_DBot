@@ -9,7 +9,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/emoji.h>
 #include <dpp/message.h>
@@ -38,7 +38,7 @@ mln::add_emoji::add_emoji(dpp::cluster& cluster) : base_slashcommand{ cluster,
             .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_emoji()))))
     ) } {}
 
-dpp::task<void> mln::add_emoji::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::add_emoji::command(dpp::slashcommand_t event_data) const {
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed add_emoji, the event is incorrect!");

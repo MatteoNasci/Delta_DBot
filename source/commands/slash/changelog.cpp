@@ -6,7 +6,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/permissions.h>
 
@@ -31,7 +31,7 @@ mln::changelog::changelog(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("changelog"), "Display information about this bot's changes.", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
 
-dpp::task<void> mln::changelog::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::changelog::command(dpp::slashcommand_t event_data) const {
     mln::event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed changelog, the event is incorrect!");

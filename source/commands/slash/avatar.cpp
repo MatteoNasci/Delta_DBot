@@ -7,7 +7,7 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
+#include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/guild.h>
 #include <dpp/permissions.h>
@@ -26,7 +26,7 @@ mln::avatar::avatar(dpp::cluster& cluster) : base_slashcommand{ cluster,
         .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from", true))) } {}
 
-dpp::task<void> mln::avatar::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::avatar::command(dpp::slashcommand_t event_data) const {
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed avatar, the event is incorrect!");

@@ -189,7 +189,7 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
             }
         }
         else {
-            mln::logs::log_to_file(dpp::loglevel::ll_critical, error_txt);
+            mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, error_txt);
         }
 
         co_return;
