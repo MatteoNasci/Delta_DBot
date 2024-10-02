@@ -27,7 +27,7 @@
 #include <string>
 #include <variant>
 
-mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, data_nsfw{ .valid_stmt = true }, db{ in_db } {
 
     const mln::db_result_t res1 = db.save_statement("UPDATE OR ABORT storage SET desc = :DDD WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING user_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
