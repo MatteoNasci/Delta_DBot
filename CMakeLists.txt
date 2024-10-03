@@ -163,7 +163,12 @@ set(botsrc  source/commands/slash/ping.cpp
             source/threads/jobs_runner.cpp
             source/utility/event_data_lite.cpp
             source/utility/logs.cpp
-            source/utility/time.cpp)
+            source/time/time.cpp
+            source/commands/slash/mog/arma/create_team.cpp
+            source/commands/slash/mog/mog.cpp
+            source/commands/slash/mog/command_type.cpp
+            source/time/chronometer.cpp
+            source/commands/slash/mog/base_mog_command.cpp)
 
 add_executable(deploy_delta ${botsrc})
 add_executable(deploy_delta_dev ${botsrc})

@@ -150,9 +150,10 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
                 .add_option(dpp::command_option(dpp::co_user, "user", "The database will show all the records created by this user", true)))
             //Show help command
             .add_option(dpp::command_option(dpp::co_sub_command, "help", "Gives detailed information about the show command group", false)))
-        //help command
+        //db help command
         .add_option(dpp::command_option(dpp::co_sub_command_group, "help", "Gives generic information about the db group command", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "generic", "Gives generic information about the db group command", false)))
+        //db privacy command
         .add_option(dpp::command_option(dpp::co_sub_command_group, "privacy", "Gives information about the db group command privacy policy", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "policy", "Gives information about the db group command privacy policy", false)))
     ) }, database{ in_database } {}

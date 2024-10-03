@@ -30,12 +30,9 @@ bool run_app();
 //TODO change thinking response to something else that warns user the wait might be long (for select and insert)
 //TODO add limits to api requests/uploads/ram usage
 //TODO collect http_info from all confirmation_callbacks
-//TODO mln::perms::get_base_permission I could probably remove the dpp::guild requirement, I only need the guild_id and the guild owner_id
 //TODO utility maybe replace regex? It's slow but it is not a necessity for it to be fast
 //TODO make static stuff constepr where possible
-//TODO put file logging outside bot_delta class
 //TODO remove secrets from files, maybe use env vars
-//TODO check all commands parameters for if their values are present, even the params that are set as required (you never know)
 //TODO TODO Make separate thread for db manipulation and other slow stuff. Probably one or more queues to one thread. Uno queue per event_handler, the base_action will have additional funcs, one to tell event_handler if we want to execute on current thread or other thread, then another command func to give to the queue
 //TODO add statistics and time stuff
 //TODO change exceptions with proper class esceptions
@@ -51,6 +48,9 @@ Test /db update_dump_channel with valid channel, test inserts end up in dump cha
 Test /db update_dump_channel with same channel again, test inserts end up in dump channel, test select works properly
 Test /db update_dump_channel with no channel, test inserts end up in local channel, test select works properly
 Test /db update_dump_channel with no channel again, test inserts end up in local channel, test select works properly
+.
+.
+.
 */
 int main(int argc, char** argv){
     mln::logs logger{"log.txt"};

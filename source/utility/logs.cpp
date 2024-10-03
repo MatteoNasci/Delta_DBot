@@ -1,5 +1,5 @@
 #include "utility/logs.h"
-#include "utility/time.h"
+#include "time/time.h"
 
 #include <dpp/dispatcher.h>
 #include <dpp/misc-enum.h>

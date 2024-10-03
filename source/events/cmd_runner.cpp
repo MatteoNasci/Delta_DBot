@@ -6,6 +6,7 @@
 #include "commands/slash/changelog.h"
 #include "commands/slash/db/db.h"
 #include "commands/slash/help.h"
+#include "commands/slash/mog/mog.h"
 #include "commands/slash/ping.h"
 #include "commands/slash/pm.h"
 #include "commands/slash/report.h"
@@ -14,13 +15,8 @@
 #include "threads/jobs_runner.h"
 
 #include <dpp/cluster.h>
-#include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
-#include <dpp/misc-enum.h>
 
-#include <chrono>
-#include <cstdint>
-#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -65,6 +61,9 @@ void mln::cmd_runner::attach_event(){
     ptr = std::make_unique<mln::db>(bot(), database());
     actions.emplace(ptr->get_cmd().name, std::move(ptr));
 
+    ptr = std::make_unique<mln::mog::mog>(bot(), database());
+    actions.emplace(ptr->get_cmd().name, std::move(ptr));
+
     ptr = std::make_unique<mln::help>(bot());
     actions.emplace(ptr->get_cmd().name, std::move(ptr));
 
@@ -84,7 +83,6 @@ void mln::cmd_runner::attach_event(){
     }
 
     event_id = bot().on_slashcommand([this](const dpp::slashcommand_t& event_data) -> void {
-        const std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
         const std::string key = event_data.command.get_command_name();
         if (const auto& function_it = actions.find(key); function_it != actions.end()) {
             if (function_it->second->use_job()) {
@@ -97,8 +95,6 @@ void mln::cmd_runner::attach_event(){
                 function_it->second->command(event_data);
             }
         }
-        const std::chrono::system_clock::time_point end = std::chrono::system_clock::now();
-        bot().log(dpp::loglevel::ll_critical, std::format("Event [{}] over, elapsed time: [{}].", static_cast<uint64_t>(event_data.command.id), std::chrono::duration_cast<std::chrono::milliseconds>(end.time_since_epoch() - start.time_since_epoch())));
         return;
     });
 
