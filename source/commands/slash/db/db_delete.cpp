@@ -245,16 +245,16 @@ dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, ev
     }
 
     const dpp::command_value& name_param = event_data.get_parameter("name");
-    const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, reply_data, false, 
+        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
 
-    if (name.empty()) {
-        co_await mln::response::co_respond(reply_data, "Failed to retrieve name parameter!", true, "Failed to retrieve name parameter!");
+    if (!name.has_value()) {
         co_return;
     }
 
     const mln::db_result_t res1 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_user, static_cast<int64_t>(target));
-    const mln::db_result_t res3 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_name, name, mln::db_text_encoding::utf8);
+    const mln::db_result_t res3 = db.bind_parameter(data.saved_single, 0, data.saved_param_single_name, name.value(), mln::db_text_encoding::utf8);
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
         co_await mln::response::co_respond(reply_data, "Failed to bind query parameters, internal database error!", true,
             std::format("Failed to bind query parameters, internal database error! guild_param: [{}, {}], user_param: [{}, {}], name_param: [{}, {}].",

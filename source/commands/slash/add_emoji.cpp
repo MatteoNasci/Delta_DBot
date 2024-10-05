@@ -68,16 +68,16 @@ dpp::job mln::add_emoji::command(dpp::slashcommand_t event_data) const {
     }
 
     const dpp::command_value& emoji_param = event_data.get_parameter("name");
-    const std::string emoji_name = std::holds_alternative<std::string>(emoji_param) ? std::get<std::string>(emoji_param) : std::string{};
+    const std::optional<std::string> emoji_name = co_await mln::utility::check_text_validity(emoji_param, lite_data, false, 
+        mln::constants::get_min_characters_emoji(), mln::constants::get_max_characters_emoji(), "emoji name");
 
-    if (emoji_name.empty()) {
-        co_await mln::response::co_respond(lite_data, "Failed to retrieve emoji name!", true, "Failed to retrieve emoji name text!");
+    if (!emoji_name.has_value()) {
         co_return;
     }
 
     const dpp::emoji_map& emojis_map = std::get<dpp::emoji_map>(emojis.value);
     for (const std::pair<dpp::snowflake, dpp::emoji>& pair : emojis_map) {
-        if (pair.second.name == emoji_name) {
+        if (pair.second.name == emoji_name.value()) {
             co_await mln::response::co_respond(lite_data, "Failed to add new emoji, an emoji with the same given name already exist on this server!", false, {});
 
             co_return;
@@ -138,7 +138,7 @@ dpp::job mln::add_emoji::command(dpp::slashcommand_t event_data) const {
         co_return;
     }
 
-    dpp::emoji emoji(emoji_name);
+    dpp::emoji emoji(emoji_name.value());
     emoji.load_image(response.body, allowed_img_type_it->second);
 
     const dpp::confirmation_callback_t confirmation = co_await bot().co_guild_emoji_create(lite_data.guild_id, emoji);

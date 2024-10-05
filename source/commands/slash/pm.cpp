@@ -26,13 +26,15 @@
 
 static constexpr size_t s_extra_msg_size = 4;
 
+static const size_t s_max_msg_size = mln::constants::get_max_characters_reply_msg() - mln::constants::get_max_nickname_length() - s_extra_msg_size;
+
 mln::pm::pm(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("pm"), "Send a private message.", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "The user to message", true))
         .add_option(dpp::command_option(dpp::co_string, "msg", "The message to send", true)
             .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))
-            .set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_reply_msg() - mln::constants::get_max_nickname_length() - s_extra_msg_size))))) } {}
+            .set_max_length(dpp::command_option_range(static_cast<int64_t>(s_max_msg_size))))) } {}
 
 dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
     mln::event_data_lite_t lite_data{ event_data, bot(), false };
@@ -52,14 +54,15 @@ dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
     const dpp::command_value& user_param = event_data.get_parameter("user");
     const dpp::command_value& msg_param = event_data.get_parameter("msg");
     const dpp::snowflake user = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : dpp::snowflake{ 0 };
-    const std::string msg = std::holds_alternative<std::string>(msg_param) ? std::get<std::string>(msg_param) : std::string{};
+    const std::optional<std::string> msg = co_await mln::utility::check_text_validity(msg_param, lite_data, false,
+        mln::constants::get_min_characters_reply_msg(), s_max_msg_size, "pm message");
+
+    if (!msg.has_value()) {
+        co_return;
+    }
 
     if (user == 0) {
         co_await mln::response::co_respond(lite_data, "Failed to retrieve user parameter!", true, "Failed to retrieve user parameter!");
-        co_return;
-    }
-    if (msg.empty()) {
-        co_await mln::response::co_respond(lite_data, "Failed to retrieve msg text!", true, "Failed to retrieve msg text!");
         co_return;
     }
 
@@ -68,7 +71,7 @@ dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
         co_return;
     }
 
-    const dpp::confirmation_callback_t dir_msg_create_res = co_await bot().co_direct_message_create(user, dpp::message{ std::format("[{}]: {}", dpp::user::get_mention(lite_data.usr_id), msg)});
+    const dpp::confirmation_callback_t dir_msg_create_res = co_await bot().co_direct_message_create(user, dpp::message{ std::format("[{}]: {}", dpp::user::get_mention(lite_data.usr_id), msg.value())});
     
     if (dir_msg_create_res.is_error()) {
         const dpp::error_info err = dir_msg_create_res.get_error();

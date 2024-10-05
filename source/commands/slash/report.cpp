@@ -62,20 +62,19 @@ dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
 	}
 
 	const dpp::command_value& report_text_param = event_data.get_parameter("description");
-	std::string text = std::holds_alternative<std::string>(report_text_param) ? std::get<std::string>(report_text_param) : std::string{};
+	const std::optional<std::string> text = co_await mln::utility::check_text_validity(report_text_param, lite_data, false,
+		mln::constants::get_min_characters_reply_msg(), mln::constants::get_max_characters_reply_msg(), "report text");
 
-	if (text.empty()) {
-		co_await mln::response::co_respond(lite_data, "Failed to log the report, either the report text is empty or it was not possible to retrieve it!", true,
-			"Failed to log the report, either the report text is empty or it was not possible to retrieve it!");
+	if (!text.has_value()) {
 		co_return;
 	}
 
-	if (!mln::utility::is_ascii_printable(text)) {
+	if (!mln::utility::is_ascii_printable(text.value())) {
 		co_await mln::response::co_respond(lite_data, "Failed to bind query parameters, given text is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
 		co_return;
 	}
 
-	const mln::db_result_t res1 = db.bind_parameter(saved_insert_rep_query, 0, 1, text.c_str(), text.length(), mln::db_destructor_behavior::transient_b, mln::db_text_encoding::utf8);
+	const mln::db_result_t res1 = db.bind_parameter(saved_insert_rep_query, 0, 1, text.value().c_str(), text.value().length(), mln::db_destructor_behavior::transient_b, mln::db_text_encoding::utf8);
 
 	if (res1.type != mln::db_result::ok) {
 		co_await mln::response::co_respond(lite_data, "Failed to bind query parameters, internal error!", true,
@@ -99,7 +98,7 @@ dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
 		co_return;
 	}
 
-	bot().log(dpp::ll_warning, std::format("[REPORT] {}", text));
+	bot().log(dpp::ll_warning, std::format("[REPORT] {}", text.value()));
 
 	co_await mln::response::co_respond(lite_data, "Report received, Thanks!", false, "Failed to reply with the report text!");
 }

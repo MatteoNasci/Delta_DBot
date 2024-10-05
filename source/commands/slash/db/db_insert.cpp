@@ -124,32 +124,32 @@ bool mln::db_insert::is_db_initialized() const
 dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) const {
     //Verify if given url is a valid discord message url
     const dpp::command_value& input_param = event_data.get_parameter("url");
-    const std::string input_url = std::holds_alternative<std::string>(input_param) ? std::get<std::string>(input_param) : std::string{};
+    const std::optional<std::string> input_url = co_await mln::utility::check_text_validity(input_param, cmd_data.data, false,
+        mln::constants::get_min_characters_url(), mln::constants::get_max_characters_url(), "url");
 
-    if (input_url.empty()) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve url parameter!", true, "Failed to retrieve url parameter!");
+    if (!input_url.has_value()) {
         co_return;
     }
 
     uint64_t url_guild_id{0}, url_channel_id{0}, url_message_id{0};
-    const bool is_url_msg = mln::utility::extract_message_url_data(input_url, url_guild_id, url_channel_id, url_message_id);
+    const bool is_url_msg = mln::utility::extract_message_url_data(input_url.value(), url_guild_id, url_channel_id, url_message_id);
 
     if (!is_url_msg) {
         //Verify if the given url is a valid discord attachment url
         std::string name{};
-        const bool is_url_attach = mln::utility::extract_generic_attachment_url_data(input_url, url_guild_id, url_channel_id, name);
+        const bool is_url_attach = mln::utility::extract_generic_attachment_url_data(input_url.value(), url_guild_id, url_channel_id, name);
 
         //The given url is neither a message url nor an attachment url, return an error
         if (!is_url_attach) {
 
             co_await mln::response::co_respond(cmd_data.data, "Failed url parsing, the given url is neither pointing to a valid message nor to a valid attachment!", true,
-                std::format("Failed url parsing, the given url [{}] is neither pointing to a valid message nor to a valid attachment!", input_url));
+                std::format("Failed url parsing, the given url [{}] is neither pointing to a valid message nor to a valid attachment!", input_url.value()));
 
             co_return;
         }
 
         //Handle attachment url
-        co_await manage_attach_url(event_data, cmd_data, {input_url, name}, nsfw);
+        co_await manage_attach_url(event_data, cmd_data, {input_url.value(), name}, nsfw);
     } else {
         msg_url_t url_data{.guild_id = url_guild_id, .channel_id = url_channel_id, .message_id = url_message_id};
         //Handle msg url
@@ -716,6 +716,11 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
+        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, true,
+            mln::constants::get_min_characters_description(), mln::constants::get_max_characters_description(), "description"))) {
+            co_return false;
+        }
+
         if (!mln::utility::is_ascii_printable(description)) {
             co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given description is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
             co_return false;
@@ -723,14 +728,14 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     }
 
     const dpp::command_value& name_param = event_data.get_parameter("name");
-    const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false,
+        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
 
-    if (name.empty()) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve record name!", true, "Failed to retrieve record name text!");
+    if (!name.has_value()) {
         co_return false;
     }
 
-    if (!mln::utility::is_ascii_printable(name)) {
+    if (!mln::utility::is_ascii_printable(name.value())) {
         co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
         co_return false;
     }
@@ -739,7 +744,7 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     const mln::db_result_t res1 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_user, static_cast<int64_t>(cmd_data.data.usr_id));
     const mln::db_result_t res3 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_url, url, mln::db_text_encoding::utf8);
-    const mln::db_result_t res4 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_name, name, mln::db_text_encoding::utf8);
+    const mln::db_result_t res4 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_name, name.value(), mln::db_text_encoding::utf8);
     mln::db_result_t res5;
     if (valid_description) {
         res5 = db.bind_parameter(data.saved_stmt, 0, data.saved_param_desc, description, mln::db_text_encoding::utf8);

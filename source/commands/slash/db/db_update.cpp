@@ -8,6 +8,7 @@
 #include "database/db_result.h"
 #include "database/db_text_encoding.h"
 #include "utility/caches.h"
+#include "utility/constants.h"
 #include "utility/event_data_lite.h"
 #include "utility/perms.h"
 #include "utility/response.h"
@@ -26,6 +27,7 @@
 #include <format>
 #include <string>
 #include <variant>
+#include <optional>
 
 mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, data_nsfw{ .valid_stmt = true }, db{ in_db } {
 
@@ -117,6 +119,11 @@ dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_dat
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
+        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, false,
+            mln::constants::get_min_characters_description(), mln::constants::get_max_characters_description(), "description"))) {
+            co_return;
+        }
+
         if (!mln::utility::is_ascii_printable(description)) {
             co_await mln::response::co_respond(cmd_data.data,
                 "Failed to bind query parameters, given description is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", false, {});
@@ -168,19 +175,15 @@ dpp::task<void> mln::db_update::nsfw(const dpp::slashcommand_t& event_data, db_c
 dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const mln::db_update::data_t& stmt_data) const {
     //Retrieve remaining data required for the database query
     const dpp::command_value& name_param = event_data.get_parameter("name");
-    if (!std::holds_alternative<std::string>(name_param)) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve name parameter!", true, "Failed to retrieve name parameter!");
+
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false,
+        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
+
+    if (!name.has_value()) {
         co_return;
     }
 
-    const std::string name = std::get<std::string>(name_param);
-    if (name.empty()) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is empty! Only ASCII printable characters are accepted [32,126]", true,
-            "Failed to bind query parameters, given name is empty! Only ASCII printable characters are accepted [32,126]");
-        co_return;
-    }
-
-    if (!mln::utility::is_ascii_printable(name)) {
+    if (!mln::utility::is_ascii_printable(name.value())) {
         co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", true,
             "Failed to bind query parameters, given name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]");
         co_return;
@@ -198,7 +201,7 @@ dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, db
     //Bind query parameters
     const mln::db_result_t res1 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_user, static_cast<int64_t>(target));
-    const mln::db_result_t res3 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_name, name, mln::db_text_encoding::utf8);
+    const mln::db_result_t res3 = db.bind_parameter(stmt_data.saved_stmt, 0, stmt_data.saved_param_name, name.value(), mln::db_text_encoding::utf8);
 
     //Check if any error occurred in the binding process, in case return an error
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
