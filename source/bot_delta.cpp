@@ -64,6 +64,13 @@ void mln::bot_delta::setup_db() {
         const std::string err_msg = std::format("An error occurred while creating the mog_team table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
     }
+
+    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team_member( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), name TEXT NOT NULL REFERENCES mog_team(name), user INTEGER NOT NULL, PRIMARY KEY(guild_id, name, user));", mln::database_callbacks_t());
+    if (mln::database_handler::is_exec_error(res.type)) {
+        const std::string err_msg = std::format("An error occurred while creating the mog_team table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+        throw std::exception(err_msg.c_str());
+    }
+
     //primary key should be both the foreign key and 'name', to allow different guilds to use same name. Make sure max/min_text_id_size are synced with the statement below
     res = database.exec("CREATE TABLE IF NOT EXISTS storage( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), name TEXT NOT NULL CHECK (LENGTH(name) >= "
         "1" " AND LENGTH(name) <= "
@@ -73,7 +80,7 @@ void mln::bot_delta::setup_db() {
         throw std::exception(err_msg.c_str());
     }
 
-    res = database.save_statement("SELECT * FROM guild_profile; SELECT * FROM storage ORDER BY guild_id ASC, user_id ASC, creation_time ASC; SELECT * FROM report ORDER BY creation_time ASC; SELECT * FROM mog_team ORDER BY guild_id ASC, name ASC;", saved_select_all_query);
+    res = database.save_statement("SELECT * FROM guild_profile; SELECT * FROM storage ORDER BY guild_id ASC, user_id ASC, creation_time ASC; SELECT * FROM report ORDER BY creation_time ASC; SELECT * FROM mog_team ORDER BY guild_id ASC, name ASC; SELECT * FROM mog_team_member ORDER BY guild_id ASC, name ASC, user ASC;", saved_select_all_query);
     if (res.type != mln::db_result::ok) {
         const std::string err_msg = std::format("An error occurred saving the select all stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
@@ -249,8 +256,9 @@ bool mln::bot_delta::close() {
 static bool td_callback(void* d, int c) { 
     size_t* stmt_index = static_cast<size_t*>(d);
     return (*stmt_index == 1 && (c == 1 || c == 2 || c == 3 || c == 5 || c == 6)) || 
-        (*stmt_index == 2 && (c == 1 || c == 2) || 
-            (*stmt_index == 3 && (c == 1)));
+        (*stmt_index == 2 && (c == 1 || c == 2)) || 
+        (*stmt_index == 3 && (c == 1)) || 
+        (*stmt_index == 4 && (c == 1));
 }
 static void da_callback(void* d, int col, mln::db_column_data_t&& c_data) {
     size_t* stmt_index = static_cast<size_t*>(d);
@@ -293,7 +301,18 @@ static void da_callback(void* d, int col, mln::db_column_data_t&& c_data) {
             std::cout << " || " << c_data.name << " : " << (std::holds_alternative<const short*>(c_data.data) ? "NULL" : std::to_string(static_cast<uint64_t>(std::get<int64_t>(c_data.data))));
         }
         else if (col == 3) {
-            std::cout << " || " << c_data.name << " : " << (std::holds_alternative<const short*>(c_data.data) ? "NULL" : std::to_string(static_cast<uint64_t>(std::get<int64_t>(c_data.data))));
+            std::cout << " || " << c_data.name << " : " << (std::holds_alternative<const short*>(c_data.data) ? "NULL" : std::to_string(static_cast<uint64_t>(std::get<int64_t>(c_data.data)))) << " }" << std::endl;
+        }
+    }
+    else if (*stmt_index == 4) {
+        if (col == 0) {
+            std::cout << "{ " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data));
+        }
+        else if (col == 1) {
+            std::cout << " || " << c_data.name << " : " << std::get<const unsigned char*>(c_data.data);
+        }
+        else if (col == 2) {
+            std::cout << " || " << c_data.name << " : " << static_cast<uint64_t>(std::get<int64_t>(c_data.data)) << " }" << std::endl;
         }
     }
 }
@@ -309,6 +328,9 @@ static void si_callback(void* data, size_t stmt_i) {
     }
     else if (*stmt_index == 3) {
         std::cout << "****mog_team table****" << std::endl;
+    }
+    else if (*stmt_index == 4) {
+        std::cout << "****mog_team_member table****" << std::endl;
     }
 }
 mln::db_result_t mln::bot_delta::print_main_db() const {
