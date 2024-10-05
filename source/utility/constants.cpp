@@ -1,4 +1,5 @@
 #include "bot_delta.h"
+#include "time/time.h"
 #include "utility/constants.h"
 
 size_t mln::constants::get_min_characters_reply_msg() {
@@ -7,6 +8,46 @@ size_t mln::constants::get_min_characters_reply_msg() {
 size_t mln::constants::get_min_nickname_length()
 {
 	return 1;
+}
+size_t mln::constants::get_max_team_name_length()
+{
+	return 32;
+}
+size_t mln::constants::get_min_team_name_length()
+{
+	return 1;
+}
+size_t mln::constants::get_max_arma_date_length()
+{
+	return mln::time::get_date_to_seconds_size();
+}
+size_t mln::constants::get_min_arma_date_length()
+{
+	return mln::time::get_date_to_seconds_size();
+}
+size_t mln::constants::get_max_arma_cd_length()
+{
+	return mln::time::get_cd_to_seconds_size();
+}
+size_t mln::constants::get_min_arma_cd_length()
+{
+	return mln::time::get_cd_to_seconds_size();
+}
+size_t mln::constants::get_max_arma_cd_minutes()
+{
+	return 5;
+}
+size_t mln::constants::get_min_arma_cd_minutes()
+{
+	return 0;
+}
+size_t mln::constants::get_max_arma_cd_seconds()
+{
+	return 59;
+}
+size_t mln::constants::get_min_arma_cd_seconds()
+{
+	return 0;
 }
 size_t mln::constants::get_max_nickname_length()
 {

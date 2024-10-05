@@ -8,6 +8,21 @@ namespace mln {
 		static size_t get_max_nickname_length();
 		static size_t get_min_nickname_length();
 
+		static size_t get_max_team_name_length();
+		static size_t get_min_team_name_length();
+
+		static size_t get_max_arma_date_length();
+		static size_t get_min_arma_date_length();
+
+		static size_t get_max_arma_cd_length();
+		static size_t get_min_arma_cd_length();
+
+		static size_t get_max_arma_cd_minutes();
+		static size_t get_min_arma_cd_minutes();
+
+		static size_t get_max_arma_cd_seconds();
+		static size_t get_min_arma_cd_seconds();
+
 		static size_t get_max_characters_reply_msg();
 		static size_t get_min_characters_reply_msg();
 		static size_t get_max_characters_command_option_description();
