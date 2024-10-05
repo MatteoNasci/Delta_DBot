@@ -438,6 +438,9 @@ bool mln::utility::is_ascii(const unsigned char* const text) {
 }
 
 bool mln::utility::is_ascii_printable(const std::string& text) {
+    if (text.empty()) {
+        return true;
+    }
     return mln::utility::is_ascii_printable(text.c_str());
 }
 bool mln::utility::is_ascii_printable(const char* const text) {
