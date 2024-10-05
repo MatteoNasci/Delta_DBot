@@ -8,6 +8,14 @@ namespace mln {
 			none = 0,
 			single = 1,
 			help,
+			create,
+			del,
+			show,
+			join,
+			leave,
+			start,
+			cooldown,
+			track_cooldowns,
 			enum_count
 		};
 
