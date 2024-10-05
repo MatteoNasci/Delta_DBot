@@ -10,6 +10,7 @@
 #include <dpp/appcommand.h>
 #include <dpp/cluster.h>
 #include <dpp/coro/job.h>
+#include <dpp/coro/task.h>
 #include <dpp/coro/when_any.h>
 #include <dpp/dispatcher.h>
 #include <dpp/event_router.h>
@@ -26,12 +27,13 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <regex>
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
-
 
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id);
 bool extract_attachment_url(const std::regex& url_regex, const std::string& attachment_url, uint64_t& out_guild_id, uint64_t& out_channel_id, std::string& out_name);
@@ -367,6 +369,52 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     }
 
     co_return;
+}
+
+dpp::task<std::optional<std::string>> mln::utility::check_text_validity(const dpp::command_value& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text)
+{
+    if (!std::holds_alternative<std::string>(text)) {
+        const std::string err = std::format("Failed validity check for [{}], the parameter doesn't holld the correct type value!", err_text);
+
+        co_await mln::response::co_respond(lite_data, err, true, err);
+        co_return std::nullopt;
+    }
+
+    const std::optional<std::string> result = std::get<std::string>(text);
+
+    if (!(co_await mln::utility::check_text_validity(result.value(), lite_data, can_be_empty, min_size, max_size, err_text))) {
+        co_return std::nullopt;
+    }
+
+    co_return result;
+}
+dpp::task<bool> mln::utility::check_text_validity(const std::string& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text)
+{
+    if (!can_be_empty && text.empty()) {
+        const std::string err = std::format("Failed validity check for [{}], empty text is not allowed!", err_text);
+
+        co_await mln::response::co_respond(lite_data, err, true, err);
+        co_return false;
+    }
+
+    if (text.size() < min_size || text.size() > max_size) {
+        const std::string err = std::format("Failed validity check for [{}], text size [{}] is not within the allowed size limits: [{}/{}]!", err_text, text.size(), min_size, max_size);
+
+        co_await mln::response::co_respond(lite_data, err, true, err);
+        co_return false;
+    }
+
+    co_return true;
+}
+
+unsigned int mln::utility::to_digit(const char character)
+{
+    return character - '0';
+}
+
+bool mln::utility::is_digit(const char character)
+{
+    return '0' <= character && character <= '9';
 }
 
 bool mln::utility::is_ascii(const std::string& text) {

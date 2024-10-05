@@ -8,12 +8,14 @@
 
 #include <dpp/appcommand.h>
 #include <dpp/coro/job.h>
+#include <dpp/coro/task.h>
 #include <dpp/restresults.h>
 #include <dpp/snowflake.h>
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,6 +38,11 @@ namespace mln {
 		
 		static dpp::job manage_paginated_embed(const paginated_data_t data, const std::shared_ptr<const std::vector<std::string>> text_ptr);
 
+		[[nodiscard]] static dpp::task<std::optional<std::string>> check_text_validity(const dpp::command_value& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text);
+		[[nodiscard]] static dpp::task<bool> check_text_validity(const std::string& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text);
+
+		[[nodiscard]] static unsigned int to_digit(const char character);
+		[[nodiscard]] static bool is_digit(const char character);
 		[[nodiscard]] static bool is_ascii(const std::string& text);
 		[[nodiscard]] static bool is_ascii(const char* const text);
 		[[nodiscard]] static bool is_ascii(const unsigned char* const text);
