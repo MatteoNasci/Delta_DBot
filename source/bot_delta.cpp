@@ -65,9 +65,9 @@ void mln::bot_delta::setup_db() {
         throw std::exception(err_msg.c_str());
     }
 
-    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team_member( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), name TEXT NOT NULL REFERENCES mog_team(name) ON DELETE CASCADE ON UPDATE CASCADE, user INTEGER NOT NULL, PRIMARY KEY(guild_id, name, user));", mln::database_callbacks_t());
+    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team_member( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), name TEXT NOT NULL REFERENCES mog_team(name) ON DELETE CASCADE ON UPDATE CASCADE, user_id INTEGER NOT NULL, PRIMARY KEY(guild_id, name, user_id));", mln::database_callbacks_t());
     if (mln::database_handler::is_exec_error(res.type)) {
-        const std::string err_msg = std::format("An error occurred while creating the mog_team table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+        const std::string err_msg = std::format("An error occurred while creating the mog_team_member table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
     }
 
