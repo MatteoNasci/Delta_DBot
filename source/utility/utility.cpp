@@ -397,7 +397,7 @@ dpp::task<bool> mln::utility::check_text_validity(const std::string& text, event
         co_return false;
     }
 
-    if (text.size() < min_size || text.size() > max_size) {
+    if (!text.empty() && (text.size() < min_size || text.size() > max_size)) {
         const std::string err = std::format("Failed validity check for [{}], text size [{}] is not within the allowed size limits: [{}/{}]!", err_text, text.size(), min_size, max_size);
 
         co_await mln::response::co_respond(lite_data, err, true, err);
