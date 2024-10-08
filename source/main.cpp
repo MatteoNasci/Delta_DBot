@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <exception>
 #include <format>
+#include <chrono>
+#include <thread>
 
 bool run_app();
 
@@ -37,6 +39,9 @@ bool run_app();
 //TODO add statistics and time stuff
 //TODO change exceptions with proper class esceptions
 //TODO when doing .is_exception(), use a try cacth to retrieve exception and display msg
+
+//TODO add destructors to all commands, delete stmts. Add logs to their constructors. Use for example: mln::mog::team
+//TODO remove as much static as possible
 
 /*
 To test: fare qui lista di cose da testare. Ad ogni singolo test associare i relativi comandi discord
@@ -77,9 +82,13 @@ int main(int argc, char** argv){
             break;
         }
 
-        mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, "A critical error occurred, the bot was shutdown! Trying to restart the bot...");
+        mln::bot_delta::shutdown_environment();
 
-        mln::caches::cleanup();
+        static const size_t s_delay = 5;
+        mln::logs::log_to_file_and_terminal(dpp::loglevel::ll_critical, std::format("A critical error occurred, the bot was shutdown! Trying to restart the bot in {} seconds...", s_delay));
+
+        //artificial delay before bot restart
+        std::this_thread::sleep_for(std::chrono::seconds{ s_delay });
     }
 
     return 0;
