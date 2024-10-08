@@ -21,6 +21,7 @@ mln::insert_guild_db::insert_guild_db(dpp::cluster& cluster, database_handler& i
         bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert guild query statement! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text));
         valid_saved_insert = false;
     }
+    bot().log(dpp::loglevel::ll_debug, std::format("insert_guild_db: [{}].", valid_saved_insert));
 }
 
 mln::insert_guild_db::~insert_guild_db()
