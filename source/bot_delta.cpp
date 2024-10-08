@@ -59,15 +59,9 @@ void mln::bot_delta::setup_db() {
         throw std::exception(err_msg.c_str());
     }
 
-    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id) ON DELETE CASCADE ON UPDATE CASCADE, name TEXT NOT NULL, channel INTEGER DEFAULT (NULL), role INTEGER DEFAULT (NULL), PRIMARY KEY(guild_id, name));", mln::database_callbacks_t());
+    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id) ON DELETE CASCADE ON UPDATE CASCADE, name TEXT NOT NULL, channel INTEGER NOT NULL DEFAULT (0), role INTEGER NOT NULL DEFAULT (0), PRIMARY KEY(guild_id, name));", mln::database_callbacks_t());
     if (mln::database_handler::is_exec_error(res.type)) {
         const std::string err_msg = std::format("An error occurred while creating the mog_team table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
-        throw std::exception(err_msg.c_str());
-    }
-
-    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team_member( guild_id INTEGER NOT NULL REFERENCES guild_profile(guild_id), name TEXT NOT NULL REFERENCES mog_team(name) ON DELETE CASCADE ON UPDATE CASCADE, user_id INTEGER NOT NULL, PRIMARY KEY(guild_id, name, user_id));", mln::database_callbacks_t());
-    if (mln::database_handler::is_exec_error(res.type)) {
-        const std::string err_msg = std::format("An error occurred while creating the mog_team_member table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
     }
 
@@ -80,7 +74,13 @@ void mln::bot_delta::setup_db() {
         throw std::exception(err_msg.c_str());
     }
 
-    res = database.save_statement("SELECT * FROM guild_profile; SELECT * FROM storage ORDER BY guild_id ASC, user_id ASC, creation_time ASC; SELECT * FROM report ORDER BY creation_time ASC; SELECT * FROM mog_team ORDER BY guild_id ASC, name ASC; SELECT * FROM mog_team_member ORDER BY guild_id ASC, name ASC, user ASC;", saved_select_all_query);
+    res = database.exec("CREATE TABLE IF NOT EXISTS mog_team_member( guild_id INTEGER NOT NULL, name TEXT NOT NULL, user_id INTEGER NOT NULL, PRIMARY KEY(guild_id, name, user_id), FOREIGN KEY (guild_id, name) REFERENCES mog_team(guild_id, name) ON DELETE CASCADE ON UPDATE CASCADE);", mln::database_callbacks_t());
+    if (mln::database_handler::is_exec_error(res.type)) {
+        const std::string err_msg = std::format("An error occurred while creating the mog_team_member table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+        throw std::exception(err_msg.c_str());
+    }
+
+    res = database.save_statement("SELECT * FROM guild_profile; SELECT * FROM storage ORDER BY guild_id ASC, user_id ASC, creation_time ASC; SELECT * FROM report ORDER BY creation_time ASC; SELECT * FROM mog_team ORDER BY guild_id ASC, name ASC; SELECT * FROM mog_team_member ORDER BY guild_id ASC, name ASC;", saved_select_all_query);
     if (res.type != mln::db_result::ok) {
         const std::string err_msg = std::format("An error occurred saving the select all stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
@@ -139,16 +139,16 @@ void mln::bot_delta::init(){
 
     mln::bot_delta::setup_db();
 
+    mln::caches::init(&bot, &database);
+
+    bot.log(dpp::loglevel::ll_debug, "Caches initialized!");
+
     readys.attach_event();
     cmds.attach_event();
     ctxs.attach_event();
     guild_creates.attach_event();
 
     bot.log(dpp::loglevel::ll_debug, "Events attached!");
-
-    mln::caches::init(&bot, &database);
-
-    bot.log(dpp::loglevel::ll_debug, "Caches initialized!");
 }
 
 void mln::bot_delta::initialize_environment() {
