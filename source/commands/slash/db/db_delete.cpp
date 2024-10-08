@@ -367,8 +367,8 @@ dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, even
 
     const size_t total_urls_to_delete = urls.size();
     std::unordered_set<uint64_t> visited_guilds{};
-    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash> visited_guild_by_user{};
-    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash> visited_guild_by_channel{};
+    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash, mln::caches::composite_tuple_eq> visited_guild_by_user{};
+    std::unordered_set<std::tuple<uint64_t, uint64_t>, mln::caches::composite_tuple_hash, mln::caches::composite_tuple_eq> visited_guild_by_channel{};
     std::map<uint64_t, db_delete_lists_data_t> messages_per_channel_map{};
     size_t malformed_urls = 0;
     size_t failed_deletes = 0;
