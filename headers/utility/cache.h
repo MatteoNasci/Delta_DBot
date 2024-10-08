@@ -2,6 +2,7 @@
 #ifndef H_MLN_DB_CACHE_H
 #define H_MLN_DB_CACHE_H
 
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -16,14 +17,33 @@ namespace mln {
 
 	template<typename T>
 	struct default_hash {
-		std::size_t operator()(const T& value) const {
+		std::size_t operator()(const T& value) const noexcept {
 			return std::hash<T>{}(value);
 		}
+
+		default_hash() noexcept {}
+		default_hash(const default_hash&) noexcept {}
+		default_hash(default_hash&&) noexcept {}
+		default_hash& operator=(const default_hash&) noexcept { return *this; }
+		default_hash& operator=(default_hash&&) noexcept { return *this; }
+	};
+	
+	template<typename T>
+	struct default_equal {
+		bool operator()(const T& lhs, const T& rhs) const noexcept {
+			return lhs == rhs;
+		}
+
+		default_equal() noexcept {}
+		default_equal(const default_equal&) noexcept {}
+		default_equal(default_equal&&) noexcept {}
+		default_equal& operator=(const default_equal&) noexcept { return *this; }
+		default_equal& operator=(default_equal&&) noexcept { return *this; }
 	};
 
 	template<typename T_key, typename T_value, bool use_unique_over_shared_ptr = false, 
 		size_t purge_limit = 1000, size_t purge_count = 200, double decay_factor = 0.5, 
-		bool automatic_decay_on_resize = true, typename T_hash = default_hash<T_key>>
+		bool automatic_decay_on_resize = true, typename T_hash = default_hash<T_key>, typename T_eq = default_equal<T_key>>
 	class cache {
 		static_assert(purge_limit > 0, "purge_limit must be greater than 0");
 		static_assert(purge_count > 0, "purge_count must be greater than 0");
@@ -35,13 +55,15 @@ namespace mln {
 		using ptr_type = typename std::conditional<use_unique_over_shared_ptr, std::unique_ptr<T_value>, std::shared_ptr<T_value>>::type;
 		using get_return = typename std::conditional<use_unique_over_shared_ptr, T_value, std::shared_ptr<const T_value>>::type;
 
-		std::unordered_map<T_key, std::tuple<ptr_type, size_t>, T_hash> mapped_storage;
+		std::unordered_map<T_key, std::tuple<ptr_type, size_t>, T_hash, T_eq> mapped_storage;
 		std::multimap<size_t, T_key> mapped_frequencies;
 		mutable std::shared_mutex storage_mutex;
 
 	public:
 		cache() : mapped_storage(), mapped_frequencies() {
-			mapped_storage.reserve(purge_limit);
+			if constexpr (purge_limit != std::numeric_limits<size_t>::max()) {
+				mapped_storage.reserve(purge_limit);
+			}
 		}
 
 		get_return add_element(const T_key& key, T_value&& value) {
@@ -268,7 +290,8 @@ namespace mln {
 
 
 
-	template<typename T_key, typename T_value_primitive, size_t purge_limit = 10000, size_t purge_count = 1000, double decay_factor = 0.5, bool automatic_decay_on_resize = false>
+	template<typename T_key, typename T_value_primitive, size_t purge_limit = 10000, size_t purge_count = 1000, 
+		double decay_factor = 0.5, bool automatic_decay_on_resize = false, typename T_hash = default_hash<T_key>, typename T_eq = default_equal<T_key>>
 	class cache_primitive {
 		static_assert(purge_limit > 0, "purge_limit must be greater than 0");
 		static_assert(purge_count > 0, "purge_count must be greater than 0");
@@ -277,13 +300,15 @@ namespace mln {
 		static_assert(decay_factor <= 1.0, "decay_factor must be lower or equal to 1");
 
 	private:
-		std::unordered_map<T_key, std::tuple<T_value_primitive, size_t>> mapped_storage;
+		std::unordered_map<T_key, std::tuple<T_value_primitive, size_t>, T_hash, T_eq> mapped_storage;
 		std::multimap<size_t, T_key> mapped_frequencies;
 		mutable std::shared_mutex storage_mutex;
 
 	public:
 		cache_primitive() : mapped_storage{}, mapped_frequencies{} {
-			mapped_storage.reserve(purge_limit);
+			if constexpr (purge_limit != std::numeric_limits<size_t>::max()) {
+				mapped_storage.reserve(purge_limit);
+			}
 		}
 
 		T_value_primitive add_element(const T_key& key, const T_value_primitive& value) {
