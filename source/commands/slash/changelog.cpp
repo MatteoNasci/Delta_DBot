@@ -20,8 +20,8 @@
 #include <vector>
 
 static const std::vector<std::string> s_text = {
-std::format("[05/09/2024 (dd/mm/yyyy), version: {}]\nFirst bot version released.\n\n[18/09/2024 (dd/mm/yyyy), version: {}]\nAdded nsfw tag for records. Improved command responses.\n\n[21/09/2024 (dd/mm/yyyy), version: {}]\nNow the bot will check if a message to delete is too old, if that's the case it will attempt to properly delete it.\n\n[01/10/2024 (dd/mm/yyyy), version: {}]\nAdded 9 optional file parameters for the `/db insert file` command on top of the original required file parameter. This change will allow the insertion of up to 10 attachments to the database.\nAdded ability for admins to update records owned by other people in their server.\nAdded sender name when receiving a pm from `/pm` command\n\n", 
-    "0.14.0.0", "0.15.0.0", "0.15.1.0", "0.16.0.0"),
+std::format("[05/09/2024 (dd/mm/yyyy), version: {}]\nFirst bot version released.\n\n[18/09/2024 (dd/mm/yyyy), version: {}]\nAdded nsfw tag for records. Improved command responses.\n\n[21/09/2024 (dd/mm/yyyy), version: {}]\nNow the bot will check if a message to delete is too old, if that's the case it will attempt to properly delete it.\n\n[01/10/2024 (dd/mm/yyyy), version: {}]\nAdded 9 optional file parameters for the `/db insert file` command on top of the original required file parameter. This change will allow the insertion of up to 10 attachments to the database.\nAdded ability for admins to update records owned by other people in their server.\nAdded sender name when receiving a pm from `/pm` command\n\n[08/10/2024 (dd/mm/yyyy), version: {}]\nImplemented first commands for the game Eminence in Shadow: Master of Garden.\n\n", 
+    "0.14.0.0", "0.15.0.0", "0.15.1.0", "0.16.0.0", "0.17.0.0"),
 };
 
 static const uint64_t s_timeout{120};
