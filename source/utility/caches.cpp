@@ -9,6 +9,7 @@
 #include "utility/perms.h"
 #include "utility/response.h"
 #include "utility/utility.h"
+#include "commands/slash/mog/team_data.h"
 
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
@@ -37,6 +38,7 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include <limits>
 
 size_t mln::caches::s_saved_select_dump_channel{ 0 };
 
@@ -53,22 +55,12 @@ mln::database_handler* mln::caches::s_db{ nullptr };
 
 mln::cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> mln::caches::dump_channels_cache{};
 mln::cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> mln::caches::show_all_cache{};
-mln::cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::show_user_cache{};
+mln::cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, mln::caches::composite_tuple_hash, mln::caches::composite_tuple_eq> mln::caches::show_user_cache{};
 mln::cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> mln::caches::guild_cache{};
 mln::cache<uint64_t, dpp::channel, false, 4000, 300, 0.7, true> mln::caches::channel_cache{};
 mln::cache<uint64_t, dpp::user_identified, false, 6000, 500, 0.7, true> mln::caches::user_cache{};
-mln::cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, mln::caches::composite_tuple_hash> mln::caches::member_cache{};
+mln::cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, mln::caches::composite_tuple_hash, mln::caches::composite_tuple_eq> mln::caches::member_cache{};
 mln::cache<uint64_t, dpp::role, false, 6000, 500, 0.7, true> mln::caches::role_cache{};
-
-
-size_t mln::caches::composite_tuple_hash::operator()(const std::tuple<uint64_t, uint64_t>& key) const {
-
-	std::size_t h1 = std::hash<uint64_t>{}(std::get<0>(key));
-	std::size_t h2 = std::hash<uint64_t>{}(std::get<1>(key));
-
-	// Combine the hash values
-	return h1 ^ (h2 << 1);
-}
 
 unsigned long long mln::caches::get_total_cache_requests() {
 	return mln::caches::s_cache_requests.load(std::memory_order_relaxed);

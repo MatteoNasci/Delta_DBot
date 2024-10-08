@@ -10,10 +10,12 @@
 
 #include <atomic>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -31,6 +33,7 @@ namespace dpp {
 namespace mln {
 	struct event_data_lite_t;
 	class database_handler;
+
 	/**
 	 * @brief Class that contains all caches used by the bot. 
 	 * All shared_ptr returned by the caches are not thread safe when modified, so any attempt to directly modify the contents of a shared_ptr returned should be avoided.
@@ -63,9 +66,31 @@ namespace mln {
 		static unsigned long long get_total_cache_requests();
 		static unsigned long long get_total_cache_misses();
 		static long double get_cache_misses_rate();
-
+	
 		struct composite_tuple_hash {
-			size_t operator()(const std::tuple<uint64_t, uint64_t>& key) const;
+			size_t operator()(const std::tuple<uint64_t, uint64_t>& value) const noexcept {
+				const size_t hash1 = std::hash<uint64_t>()(std::get<0>(value));
+				const size_t hash2 = std::hash<uint64_t>()(std::get<1>(value));
+
+				return hash1 ^ (hash2 << 1);
+			}
+
+			composite_tuple_hash() noexcept {}
+			composite_tuple_hash(const composite_tuple_hash&) noexcept {}
+			composite_tuple_hash(composite_tuple_hash&&) noexcept {}
+			composite_tuple_hash& operator=(const composite_tuple_hash&) noexcept { return *this; }
+			composite_tuple_hash& operator=(composite_tuple_hash&&) noexcept { return *this; }
+		};
+		struct composite_tuple_eq {
+			bool operator()(const std::tuple<uint64_t, uint64_t>& lhs, const std::tuple<uint64_t, uint64_t>& rhs) const noexcept {
+				return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
+			}
+
+			composite_tuple_eq() noexcept {}
+			composite_tuple_eq(const composite_tuple_eq&) noexcept {}
+			composite_tuple_eq(composite_tuple_eq&&) noexcept {}
+			composite_tuple_eq& operator=(const composite_tuple_eq&) noexcept { return *this; }
+			composite_tuple_eq& operator=(composite_tuple_eq&&) noexcept { return *this; }
 		};
 
 		static cache_primitive<uint64_t, uint64_t, 10000, 1000, 0.75, true> dump_channels_cache;
@@ -80,7 +105,7 @@ namespace mln {
 		static cache<uint64_t, std::vector<std::string>, false, 400, 30, 0.7, true> show_all_cache;
 		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_all(const uint64_t guild_id);
 
-		static cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, composite_tuple_hash> show_user_cache;
+		static cache<std::tuple<uint64_t, uint64_t>, std::vector<std::string>, false, 1000, 100, 0.7, true, composite_tuple_hash, composite_tuple_eq> show_user_cache;
 		static std::optional<std::shared_ptr<const std::vector<std::string>>> get_show_user(const uint64_t guild_id, const uint64_t user_id);
 
 		static cache<uint64_t, dpp::guild, false, 3000, 300, 0.7, true> guild_cache;
@@ -99,7 +124,7 @@ namespace mln {
 		static dpp::task<std::optional<std::shared_ptr<const dpp::user_identified>>> get_user_task(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map);
 		static std::optional<std::shared_ptr<const dpp::user_identified>> get_user(const uint64_t user_id, event_data_lite_t& lite_data, const dpp::user* const invoking_usr, const std::map<dpp::snowflake, dpp::user>* const resolved_map);
 
-		static cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, composite_tuple_hash> member_cache;
+		static cache<std::tuple<uint64_t, uint64_t>, dpp::guild_member, false, 6000, 500, 0.7, true, composite_tuple_hash, composite_tuple_eq> member_cache;
 		static dpp::task<std::optional<std::shared_ptr<const dpp::guild_member>>> get_member_task(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map);
 		static std::optional<std::shared_ptr<const dpp::guild_member>> get_member(const uint64_t guild_id, const uint64_t user_id, event_data_lite_t& lite_data, const dpp::guild_member* const invoking_usr, const std::map<dpp::snowflake, dpp::guild_member>* const resolved_map);
 
