@@ -28,6 +28,7 @@ dpp::job mln::help::command(dpp::slashcommand_t event_data) const {
 
 The main bot commands are:
 - `/db ...`: A collection of commands that allows users to interact with the database. For more information, use the `/db help generic` command.
+- `/mog ...`: A collection of commands that allows users to interact with the game *Eminence in Shadow : Master of Garden* utilities. For more information, use the `/mog help generic` command.
 - `/info`: A command that displays general information about the bot.
 - `/report_issue`: A command used to notify the developer of an issue or bug with the bot, or to suggest improvements or new features.
 - `/pm`: A command that sends a direct message to a specific user.
