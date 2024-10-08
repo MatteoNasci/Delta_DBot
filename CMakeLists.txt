@@ -121,7 +121,7 @@ message(STATUS "Found ${DPP_NAME} dlls: ${DPP_DLLS_LIST}")
 
 set(botsrc  source/commands/slash/ping.cpp
             source/bot_delta.cpp
-            source/commands/slash/help.cpp
+            source/commands/slash/mog/mog_help.cpp
             source/commands/slash/add_emoji.cpp
             source/commands/slash/avatar.cpp
             source/commands/slash/bot_info.cpp
@@ -164,11 +164,14 @@ set(botsrc  source/commands/slash/ping.cpp
             source/utility/event_data_lite.cpp
             source/utility/logs.cpp
             source/time/time.cpp
-            source/commands/slash/mog/arma/create_team.cpp
+            source/commands/slash/mog/team.cpp
             source/commands/slash/mog/mog.cpp
             source/commands/slash/mog/command_type.cpp
             source/time/chronometer.cpp
-            source/commands/slash/mog/base_mog_command.cpp)
+            source/commands/slash/mog/base_mog_command.cpp
+            source/commands/slash/mog/arma.cpp
+            source/commands/slash/mog/team_data.cpp
+            source/commands/slash/help.cpp)
 
 add_executable(deploy_delta ${botsrc})
 add_executable(deploy_delta_dev ${botsrc})
