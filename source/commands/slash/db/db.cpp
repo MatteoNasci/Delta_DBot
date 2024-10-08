@@ -160,14 +160,14 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
 
 dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     static const std::unique_ptr<mln::base_db_command> commands[]{
-        std::make_unique<mln::db_insert>(mln::db_insert{bot(), database}),
-        std::make_unique<mln::db_config>(mln::db_config{bot(), database}),
-        std::make_unique<mln::db_select>(mln::db_select{bot(), database}),
-        std::make_unique<mln::db_show>(mln::db_show{bot(), database}),
-        std::make_unique<mln::db_delete>(mln::db_delete{bot(), database}),
-        std::make_unique<mln::db_update>(mln::db_update{bot(), database}),
-        std::make_unique<mln::db_help>(mln::db_help{bot()}),
-        std::make_unique<mln::db_privacy>(mln::db_privacy{bot()}),
+        std::make_unique<mln::db_insert>(bot(), database),
+        std::make_unique<mln::db_config>(bot(), database),
+        std::make_unique<mln::db_select>(bot(), database),
+        std::make_unique<mln::db_show>(bot(), database),
+        std::make_unique<mln::db_delete>(bot(), database),
+        std::make_unique<mln::db_update>(bot(), database),
+        std::make_unique<mln::db_help>(bot()),
+        std::make_unique<mln::db_privacy>(bot()),
     };
     static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_insert_sub_commands{
         {"url", {commands[0], mln::db_command_type::url}},
@@ -272,7 +272,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     //Return early if the selected db command is not initialized correctly
     if (!(std::get<0>(sub_it->second)->is_db_initialized())) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, the database was not initialized correctly!", true,
-            std::format("Failed database operation, the database was not initialized correctly! Command: [{}].", sub_command.name));
+            std::format("Failed database operation, the database was not initialized correctly! Command: [{}].", cmd_data.data.command_name));
         co_return;
     }
 
