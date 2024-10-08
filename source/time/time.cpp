@@ -72,6 +72,31 @@ std::optional<uint64_t> mln::time::convert_cd_to_seconds_left(const std::string&
     return mln::time::get_current_time_sec().count() + seconds;
 }
 
+std::string mln::time::convert_timestamp_to_mmss(const uint64_t timestamp)
+{
+    static constexpr uint64_t s_seconds_in_day = 86400;
+    static constexpr uint64_t s_seconds_in_hour = 3600;
+    static constexpr uint64_t s_seconds_in_minute = 60;
+
+    const uint64_t start_day_timestamp = timestamp % s_seconds_in_day;
+
+    const uint64_t start_hour_timestamp = start_day_timestamp % s_seconds_in_hour;
+
+    const uint64_t minutes = start_hour_timestamp / s_seconds_in_minute;
+    const uint64_t seconds = start_hour_timestamp % s_seconds_in_minute;
+
+    static constexpr uint64_t s_zeroed_limit = 10;
+    const bool are_minutes_zeroed = minutes < s_zeroed_limit;
+    const bool are_seconds_zeroed = seconds < s_zeroed_limit;
+
+    if (are_minutes_zeroed) {
+        return are_seconds_zeroed ? std::format("0{}:0{}", minutes, seconds) : std::format("0{}:{}", minutes, seconds);
+    }
+    else {
+        return are_seconds_zeroed ? std::format("{}:0{}", minutes, seconds) : std::format("{}:{}", minutes, seconds);
+    }
+}
+
 std::chrono::seconds mln::time::get_current_time_sec() noexcept
 {
     return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());

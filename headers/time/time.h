@@ -17,6 +17,7 @@ namespace mln {
 		static std::string get_current_date_time();
 		static std::optional<uint64_t> convert_date_to_seconds_left(const std::string& date);
 		static std::optional<uint64_t> convert_cd_to_seconds_left(const std::string& cooldown, const uint64_t negative_offset);
+		static std::string convert_timestamp_to_mmss(const uint64_t timestamp);
 
 		static [[nodiscard]] std::chrono::seconds get_current_time_sec() noexcept;
 		static [[nodiscard]] std::chrono::milliseconds get_current_time_milli() noexcept;
