@@ -166,13 +166,27 @@ show_all_data{ std::move(rhs.show_all_data) }, db{ rhs.db }
 
 mln::mog::mog_team::~mog_team()
 {
-    db.delete_statement(show_all_data.saved_stmt);
-    db.delete_statement(show_data.saved_stmt);
-    db.delete_statement(show_team_data.saved_stmt);
-    db.delete_statement(del_member_data.saved_stmt);
-    db.delete_statement(member_data.saved_stmt);
-    db.delete_statement(del_data.saved_stmt);
-    db.delete_statement(data.saved_stmt);
+    if (show_all_data.valid_stmt) {
+        db.delete_statement(show_all_data.saved_stmt);
+    }
+    if (show_data.valid_stmt) {
+        db.delete_statement(show_data.saved_stmt);
+    }
+    if (show_team_data.valid_stmt) {
+        db.delete_statement(show_team_data.saved_stmt);
+    }
+    if (del_member_data.valid_stmt) {
+        db.delete_statement(del_member_data.saved_stmt);
+    }
+    if (member_data.valid_stmt) {
+        db.delete_statement(member_data.saved_stmt);
+    }
+    if (del_data.valid_stmt) {
+        db.delete_statement(del_data.saved_stmt);
+    }
+    if (data.valid_stmt) {
+        db.delete_statement(data.saved_stmt);
+    }
 }
 
 dpp::task<void> mln::mog::mog_team::command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type) const
