@@ -1,30 +1,30 @@
 #include "commands/slash/mog/base_mog_command.h"
-#include "commands/slash/mog/cmd_data.h"
-#include "commands/slash/mog/command_type.h"
-#include "commands/slash/mog/init_type_flag.h"
-#include "commands/slash/mog/team.h"
-#include "commands/slash/mog/team_data.h"
+#include "commands/slash/mog/mog_cmd_data.h"
+#include "commands/slash/mog/mog_command_type.h"
+#include "commands/slash/mog/mog_init_type_flag.h"
+#include "commands/slash/mog/mog_team.h"
+#include "commands/slash/mog/mog_team_data.h"
+#include "database/database_callbacks.h"
 #include "database/database_handler.h"
+#include "database/db_column_data.h"
 #include "database/db_result.h"
+#include "database/db_text_encoding.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
 #include "utility/perms.h"
 #include "utility/response.h"
 #include "utility/utility.h"
 
+#include <dpp/appcommand.h>
 #include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/message.h>
 #include <dpp/misc-enum.h>
 #include <dpp/permissions.h>
+#include <dpp/snowflake.h>
 
 #include <cstdint>
-#include <database/database_callbacks.h>
-#include <database/db_column_data.h>
-#include <database/db_text_encoding.h>
-#include <dpp/appcommand.h>
-#include <dpp/message.h>
-#include <dpp/snowflake.h>
 #include <format>
 #include <memory>
 #include <mutex>
@@ -41,7 +41,7 @@
 static constexpr size_t s_pagination_timeout = 120;
 static constexpr size_t s_pagination_max_text_size = 2000;
 
-mln::mog::team::team(dpp::cluster& cluster, database_handler& db) : base_mog_command{ cluster }, teams_mutex{}, teams_data_cache{},
+mln::mog::mog_team::mog_team(dpp::cluster& cluster, database_handler& db) : base_mog_command{ cluster }, teams_mutex{}, teams_data_cache{},
 data{ .valid_stmt = true }, del_data{ .valid_stmt = true }, member_data{ .valid_stmt = true }, 
 del_member_data{ .valid_stmt = true }, show_data{ .valid_stmt = true }, show_team_data{ .valid_stmt = true }, show_all_data{ .valid_stmt = true }, db{ db }
 {
@@ -157,14 +157,14 @@ del_member_data{ .valid_stmt = true }, show_data{ .valid_stmt = true }, show_tea
     load_teams();
 }
 
-mln::mog::team::team(team&& rhs) noexcept : base_mog_command{ rhs.bot() }, teams_mutex{}, teams_data_cache{ std::move(rhs.teams_data_cache) },
+mln::mog::mog_team::mog_team(mog_team&& rhs) noexcept : base_mog_command{ rhs.bot() }, teams_mutex{}, teams_data_cache{ std::move(rhs.teams_data_cache) },
 data{ std::move(rhs.data) }, del_data{ std::move(rhs.del_data) }, member_data{ std::move(rhs.member_data) },
 del_member_data{ std::move(rhs.del_member_data) }, show_data{ std::move(rhs.show_data) }, show_team_data{ std::move(rhs.show_team_data) }, 
 show_all_data{ std::move(rhs.show_all_data) }, db{ rhs.db }
 {
 }
 
-mln::mog::team::~team()
+mln::mog::mog_team::~mog_team()
 {
     db.delete_statement(show_all_data.saved_stmt);
     db.delete_statement(show_data.saved_stmt);
@@ -175,29 +175,29 @@ mln::mog::team::~team()
     db.delete_statement(data.saved_stmt);
 }
 
-dpp::task<void> mln::mog::team::command(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data, const command_type type) const
+dpp::task<void> mln::mog::mog_team::command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type) const
 {
     switch (type) {
-    case mln::mog::command_type::create:
-        co_await mln::mog::team::create(event_data, cmd_data);
+    case mln::mog::mog_command_type::create:
+        co_await mln::mog::mog_team::create(event_data, cmd_data);
         break;
-    case mln::mog::command_type::del:
-        co_await mln::mog::team::del(event_data, cmd_data);
+    case mln::mog::mog_command_type::del:
+        co_await mln::mog::mog_team::del(event_data, cmd_data);
         break;
-    case mln::mog::command_type::join:
-        co_await mln::mog::team::join(event_data, cmd_data);
+    case mln::mog::mog_command_type::join:
+        co_await mln::mog::mog_team::join(event_data, cmd_data);
         break;
-    case mln::mog::command_type::leave:
-        co_await mln::mog::team::leave(event_data, cmd_data);
+    case mln::mog::mog_command_type::leave:
+        co_await mln::mog::mog_team::leave(event_data, cmd_data);
         break;
-    case mln::mog::command_type::leave_and_join:
-        co_await mln::mog::team::leave_and_join(event_data, cmd_data);
+    case mln::mog::mog_command_type::leave_and_join:
+        co_await mln::mog::mog_team::leave_and_join(event_data, cmd_data);
         break;
-    case mln::mog::command_type::show:
-        co_await mln::mog::team::show(event_data, cmd_data);
+    case mln::mog::mog_command_type::show:
+        co_await mln::mog::mog_team::show(event_data, cmd_data);
         break;
-    case mln::mog::command_type::help:
-        co_await mln::mog::team::help(cmd_data);
+    case mln::mog::mog_command_type::help:
+        co_await mln::mog::mog_team::help(cmd_data);
         break;
     default:
         co_await mln::response::co_respond(cmd_data.data, "Failed command, the given sub_command is not supported!", true,
@@ -206,29 +206,29 @@ dpp::task<void> mln::mog::team::command(const dpp::slashcommand_t& event_data, c
     }
 }
 
-mln::mog::init_type_flag mln::mog::team::get_requested_initialization_type(const command_type cmd) const
+mln::mog::mog_init_type_flag mln::mog::mog_team::get_requested_initialization_type(const mog_command_type cmd) const
 {
     switch (cmd) {
-    case mln::mog::command_type::create:
-    case mln::mog::command_type::del:
-    case mln::mog::command_type::join:
-    case mln::mog::command_type::leave:
-    case mln::mog::command_type::leave_and_join:
-    case mln::mog::command_type::show:
-        return mln::mog::init_type_flag::cmd_data | mln::mog::init_type_flag::thinking;
-    case mln::mog::command_type::help:
-        return mln::mog::init_type_flag::none;
+    case mln::mog::mog_command_type::create:
+    case mln::mog::mog_command_type::del:
+    case mln::mog::mog_command_type::join:
+    case mln::mog::mog_command_type::leave:
+    case mln::mog::mog_command_type::leave_and_join:
+    case mln::mog::mog_command_type::show:
+        return mln::mog::mog_init_type_flag::cmd_data | mln::mog::mog_init_type_flag::thinking;
+    case mln::mog::mog_command_type::help:
+        return mln::mog::mog_init_type_flag::none;
     default:
-        return mln::mog::init_type_flag::all;
+        return mln::mog::mog_init_type_flag::all;
     }
 }
 
-bool mln::mog::team::is_db_initialized() const
+bool mln::mog::mog_team::is_db_initialized() const
 {
     return data.valid_stmt && del_data.valid_stmt && member_data.valid_stmt && del_member_data.valid_stmt && show_data.valid_stmt && show_team_data.valid_stmt && show_all_data.valid_stmt;
 }
 
-dpp::task<void> mln::mog::team::create(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::create(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, this command required admin perms to be used!", false, {});
@@ -280,12 +280,12 @@ dpp::task<void> mln::mog::team::create(const dpp::slashcommand_t& event_data, cm
         co_return;
     }
 
-    set_team(mln::mog::team_data_t{ name.value(), cmd_data.data.guild_id, channel, role });
+    set_team(mln::mog::mog_team_data_t{ name.value(), cmd_data.data.guild_id, channel, role });
 
     co_await mln::response::co_respond(cmd_data.data, "Team created!", false, {});
 }
 
-dpp::task<void> mln::mog::team::del(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::del(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, this command required admin perms to be used!", false, {});
@@ -333,7 +333,7 @@ dpp::task<void> mln::mog::team::del(const dpp::slashcommand_t& event_data, cmd_d
     co_await mln::response::co_respond(cmd_data.data, "Team deleted!", false, {});
 }
 
-dpp::task<void> mln::mog::team::join(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     const dpp::command_value& name_param = event_data.get_parameter("name");
     const dpp::command_value& user_param = event_data.get_parameter("user");
@@ -347,10 +347,10 @@ dpp::task<void> mln::mog::team::join(const dpp::slashcommand_t& event_data, cmd_
         }
     }
 
-    co_await mln::mog::team::join(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
+    co_await mln::mog::mog_team::join(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
 }
 
-dpp::task<void> mln::mog::team::join(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
+dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
 {
     if (target == 0) {
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
@@ -406,7 +406,7 @@ dpp::task<void> mln::mog::team::join(const dpp::slashcommand_t& event_data, cmd_
     co_await mln::response::co_respond(cmd_data.data, "User added to team!", false, {});
 }
 
-dpp::task<bool> mln::mog::team::leave(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     const dpp::command_value& name_param = event_data.get_parameter("name");
     const dpp::command_value& user_param = event_data.get_parameter("user");
@@ -420,10 +420,10 @@ dpp::task<bool> mln::mog::team::leave(const dpp::slashcommand_t& event_data, cmd
         }
     }
 
-    co_return co_await mln::mog::team::leave(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
+    co_return co_await mln::mog::mog_team::leave(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
 }
 
-dpp::task<bool> mln::mog::team::leave(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
+dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
 {
     if (target == 0) {
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
@@ -480,7 +480,7 @@ dpp::task<bool> mln::mog::team::leave(const dpp::slashcommand_t& event_data, cmd
     co_return true;
 }
 
-dpp::task<void> mln::mog::team::leave_and_join(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::leave_and_join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     const dpp::command_value& team_to_join_param = event_data.get_parameter("team_to_join");
     const std::string team_to_join = std::holds_alternative<std::string>(team_to_join_param) ? std::get<std::string>(team_to_join_param) : std::string{};
@@ -499,7 +499,7 @@ dpp::task<void> mln::mog::team::leave_and_join(const dpp::slashcommand_t& event_
     }
 
     if (!is_user_in_any_team(cmd_data.data.guild_id, target)) {
-        co_await mln::mog::team::join(event_data, cmd_data, target, team_to_join);
+        co_await mln::mog::mog_team::join(event_data, cmd_data, target, team_to_join);
         co_return;
     }
 
@@ -508,13 +508,13 @@ dpp::task<void> mln::mog::team::leave_and_join(const dpp::slashcommand_t& event_
         co_return;
     }
 
-    const bool left = co_await mln::mog::team::leave(event_data, cmd_data, target, team_to_leave);
+    const bool left = co_await mln::mog::mog_team::leave(event_data, cmd_data, target, team_to_leave);
     if (left) {
-        co_await mln::mog::team::join(event_data, cmd_data, target, team_to_join);
+        co_await mln::mog::mog_team::join(event_data, cmd_data, target, team_to_join);
     }
 }
 
-dpp::task<void> mln::mog::team::show(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::show(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     const dpp::command_value& name_param = event_data.get_parameter("name");
 
@@ -526,12 +526,12 @@ dpp::task<void> mln::mog::team::show(const dpp::slashcommand_t& event_data, cmd_
     }
     const bool show_all_teams = name.empty();
 
-    std::vector<mln::mog::team_data_t> data_to_display{};
+    std::vector<mln::mog::mog_team_data_t> data_to_display{};
     if (show_all_teams) {
         get_teams(cmd_data.data.guild_id, data_to_display);
     }
     else {
-        const std::optional<mln::mog::team_data_t> team = get_team(cmd_data.data.guild_id, name);
+        const std::optional<mln::mog::mog_team_data_t> team = get_team(cmd_data.data.guild_id, name);
         if (team.has_value()) {
             data_to_display.push_back(team.value());
         }
@@ -547,8 +547,8 @@ dpp::task<void> mln::mog::team::show(const dpp::slashcommand_t& event_data, cmd_
     std::vector<std::string> records{};
     records.reserve(data_to_display.size());
     size_t total_size = 0;
-    for (const mln::mog::team_data_t& team : data_to_display) {
-        records.emplace_back(mln::mog::team_data_t::to_string_no_cd(team));
+    for (const mln::mog::mog_team_data_t& team : data_to_display) {
+        records.emplace_back(mln::mog::mog_team_data_t::to_string_no_cd(team));
         total_size += records[records.size() - 1].size();
     }
 
@@ -570,7 +570,7 @@ dpp::task<void> mln::mog::team::show(const dpp::slashcommand_t& event_data, cmd_
     }
 }
 
-dpp::task<void> mln::mog::team::help(cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_team::help(mog_cmd_data_t& cmd_data) const
 {
     static const dpp::message s_info = dpp::message{ "Information regarding the `/mog team` commands..." }
         .set_flags(dpp::m_ephemeral)
@@ -633,7 +633,7 @@ struct members_eq {
         return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
     }
 };
-void mln::mog::team::load_teams() const
+void mln::mog::mog_team::load_teams() const
 {
     std::vector<std::tuple<uint64_t, std::string, uint64_t, uint64_t>> mog_teams{};
     std::unordered_map<std::tuple<uint64_t, std::string>, std::vector<uint64_t>, members_hasher, members_eq> mog_members{};
@@ -695,12 +695,12 @@ void mln::mog::team::load_teams() const
     //NOTE: Slow but who cares
     size_t i = 0;
     for (const std::tuple<uint64_t, std::string, uint64_t, uint64_t>& raw_team_data : mog_teams) {
-        mln::mog::team_data_t team_data;
+        mln::mog::mog_team_data_t team_data;
         team_data.guild_id = std::get<0>(raw_team_data);
         team_data.name = std::get<1>(raw_team_data);
         team_data.channel_id = std::get<2>(raw_team_data);
         team_data.role_id = std::get<3>(raw_team_data);
-        team_data.users_id_cd = std::vector<mln::mog::team_data_t::user_data_t>{};
+        team_data.users_id_cd = std::vector<mln::mog::mog_team_data_t::user_data_t>{};
 
         const std::unordered_map<std::tuple<uint64_t, std::string>, std::vector<uint64_t>>::const_iterator it = mog_members.find({ std::get<0>(raw_team_data), std::get<1>(raw_team_data) });
         if (it != mog_members.end()) {
@@ -717,16 +717,16 @@ void mln::mog::team::load_teams() const
     bot().log(dpp::loglevel::ll_debug, std::format("Loaded [{}] guilds with teams from db!", teams_count()));
 }
 
-std::optional<mln::mog::team_data_t> mln::mog::team::get_team(const uint64_t guild_id, const std::string& team_name) const
+std::optional<mln::mog::mog_team_data_t> mln::mog::mog_team::get_team(const uint64_t guild_id, const std::string& team_name) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return std::nullopt;
     }
 
-    const std::unordered_map<std::string, mln::mog::team_data_t>::const_iterator it = it_map->second.find(team_name);
+    const std::unordered_map<std::string, mln::mog::mog_team_data_t>::const_iterator it = it_map->second.find(team_name);
     if (it == it_map->second.end()) {
         return std::nullopt;
     }
@@ -734,17 +734,17 @@ std::optional<mln::mog::team_data_t> mln::mog::team::get_team(const uint64_t gui
     return it->second;
 }
 
-std::optional<mln::mog::team_data_t> mln::mog::team::get_team(const uint64_t guild_id, const uint64_t user_id) const
+std::optional<mln::mog::mog_team_data_t> mln::mog::mog_team::get_team(const uint64_t guild_id, const uint64_t user_id) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return std::nullopt;
     }
 
-    for (const std::pair<const std::string, mln::mog::team_data_t>& pair : it_map->second) {
-        for (const mln::mog::team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
+    for (const std::pair<const std::string, mln::mog::mog_team_data_t>& pair : it_map->second) {
+        for (const mln::mog::mog_team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
             if (u_data.id == user_id) {
                 return pair.second;
             }
@@ -754,27 +754,27 @@ std::optional<mln::mog::team_data_t> mln::mog::team::get_team(const uint64_t gui
     return std::nullopt;
 }
 
-void mln::mog::team::get_teams(const uint64_t guild_id, std::vector<mln::mog::team_data_t>& out_teams) const
+void mln::mog::mog_team::get_teams(const uint64_t guild_id, std::vector<mln::mog::mog_team_data_t>& out_teams) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
   
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return;
     }
 
     out_teams.reserve(it_map->second.size() + out_teams.size());
-    for (const std::pair<std::string, mln::mog::team_data_t>& pair : it_map->second) {
+    for (const std::pair<std::string, mln::mog::mog_team_data_t>& pair : it_map->second) {
         out_teams.push_back(pair.second);
     }
 }
 
-bool mln::mog::team::is_any_team_in_guild(const uint64_t guild_id) const
+bool mln::mog::mog_team::is_any_team_in_guild(const uint64_t guild_id) const
 {
     {
         std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
         if (it_map == teams_data_cache.end()) {
             return false;
         }
@@ -783,30 +783,30 @@ bool mln::mog::team::is_any_team_in_guild(const uint64_t guild_id) const
     return true;
 }
 
-bool mln::mog::team::is_team_present(const uint64_t guild_id, const std::string& team_name) const
+bool mln::mog::mog_team::is_team_present(const uint64_t guild_id, const std::string& team_name) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return false;
     }
 
-    const std::unordered_map<std::string, mln::mog::team_data_t>::const_iterator it = it_map->second.find(team_name);
+    const std::unordered_map<std::string, mln::mog::mog_team_data_t>::const_iterator it = it_map->second.find(team_name);
     return it != it_map->second.end();
 }
 
-bool mln::mog::team::is_user_in_any_team(const uint64_t guild_id, const uint64_t user_id) const
+bool mln::mog::mog_team::is_user_in_any_team(const uint64_t guild_id, const uint64_t user_id) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return false;
     }
 
-    for (const std::pair<const std::string, mln::mog::team_data_t>& pair : it_map->second) {
-        for (const mln::mog::team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
+    for (const std::pair<const std::string, mln::mog::mog_team_data_t>& pair : it_map->second) {
+        for (const mln::mog::mog_team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
             if (u_data.id == user_id) {
                 return true;
             }
@@ -816,19 +816,19 @@ bool mln::mog::team::is_user_in_any_team(const uint64_t guild_id, const uint64_t
     return false;
 }
 
-size_t mln::mog::team::teams_with_user(const uint64_t guild_id, const uint64_t user_id) const
+size_t mln::mog::mog_team::teams_with_user(const uint64_t guild_id, const uint64_t user_id) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
     size_t counter = 0;
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return counter;
     }
 
-    for (const std::pair<const std::string, mln::mog::team_data_t>& pair : it_map->second) {
-        for (const mln::mog::team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
+    for (const std::pair<const std::string, mln::mog::mog_team_data_t>& pair : it_map->second) {
+        for (const mln::mog::mog_team_data_t::user_data_t& u_data : pair.second.users_id_cd) {
             if (u_data.id == user_id) {
                 ++counter;
             }
@@ -838,21 +838,21 @@ size_t mln::mog::team::teams_with_user(const uint64_t guild_id, const uint64_t u
     return counter;
 }
 
-bool mln::mog::team::is_user_in_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
+bool mln::mog::mog_team::is_user_in_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return false;
     }
 
-    const std::unordered_map<std::string, mln::mog::team_data_t>::const_iterator it = it_map->second.find(team_name);
+    const std::unordered_map<std::string, mln::mog::mog_team_data_t>::const_iterator it = it_map->second.find(team_name);
     if (it == it_map->second.end()) {
         return false;
     }
 
-    for (const mln::mog::team_data_t::user_data_t& u_data : it->second.users_id_cd) {
+    for (const mln::mog::mog_team_data_t::user_data_t& u_data : it->second.users_id_cd) {
         if (u_data.id == user_id) {
             return true;
         }
@@ -861,18 +861,18 @@ bool mln::mog::team::is_user_in_team(const uint64_t guild_id, const uint64_t use
     return false;
 }
 
-size_t mln::mog::team::teams_count() const
+size_t mln::mog::mog_team::teams_count() const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
     return teams_data_cache.size();
 }
 
-size_t mln::mog::team::guild_teams_count(const uint64_t guild_id) const
+size_t mln::mog::mog_team::guild_teams_count(const uint64_t guild_id) const
 {
     std::shared_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::const_iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return 0;
     }
@@ -880,36 +880,36 @@ size_t mln::mog::team::guild_teams_count(const uint64_t guild_id) const
     return it_map->second.size();
 }
 
-bool mln::mog::team::is_team_valid(const mln::mog::team_data_t& team) noexcept
+bool mln::mog::mog_team::is_team_valid(const mln::mog::mog_team_data_t& team) noexcept
 {
-    return mln::mog::team::is_team_valid(team.guild_id,team.name);
+    return mln::mog::mog_team::is_team_valid(team.guild_id,team.name);
 }
 
-bool mln::mog::team::is_team_valid(const uint64_t guild_id, const std::string& team_name) noexcept
+bool mln::mog::mog_team::is_team_valid(const uint64_t guild_id, const std::string& team_name) noexcept
 {
     return guild_id && !team_name.empty();
 }
 
-bool mln::mog::team::set_user_cooldown(const uint64_t guild_id, const std::string& team_name, const mln::mog::team_data_t::user_data_t& user_data) const
+bool mln::mog::mog_team::set_user_cooldown(const uint64_t guild_id, const std::string& team_name, const mln::mog::mog_team_data_t::user_data_t& user_data) const
 {
-    if (!mln::mog::team::is_team_valid(guild_id, team_name) || user_data.id == 0) {
+    if (!mln::mog::mog_team::is_team_valid(guild_id, team_name) || user_data.id == 0) {
         return false;
     }
 
     {
         std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
+        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
         if (it_map == teams_data_cache.end()) {
             return false;
         }
 
-        const std::unordered_map<std::string, mln::mog::team_data_t>::iterator it = it_map->second.find(team_name);
+        const std::unordered_map<std::string, mln::mog::mog_team_data_t>::iterator it = it_map->second.find(team_name);
         if (it == it_map->second.end()) {
             return false;
         }
 
-        for (mln::mog::team_data_t::user_data_t& u_data : it->second.users_id_cd) {
+        for (mln::mog::mog_team_data_t::user_data_t& u_data : it->second.users_id_cd) {
             if (u_data.id == user_data.id) {
                 u_data = user_data;
                 return true;
@@ -920,7 +920,7 @@ bool mln::mog::team::set_user_cooldown(const uint64_t guild_id, const std::strin
     return false;
 }
 
-void mln::mog::team::delete_team(const uint64_t guild_id, const std::string& team_name) const
+void mln::mog::mog_team::delete_team(const uint64_t guild_id, const std::string& team_name) const
 {
     if (guild_id == 0 || team_name.empty()) {
         return;
@@ -929,12 +929,12 @@ void mln::mog::team::delete_team(const uint64_t guild_id, const std::string& tea
     {
         std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
+        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
         if (it_map == teams_data_cache.end()) {
             return;
         }
 
-        const std::unordered_map<std::string, mln::mog::team_data_t>::iterator it = it_map->second.find(team_name);
+        const std::unordered_map<std::string, mln::mog::mog_team_data_t>::iterator it = it_map->second.find(team_name);
         if (it == it_map->second.end()) {
             return;
         }
@@ -943,7 +943,7 @@ void mln::mog::team::delete_team(const uint64_t guild_id, const std::string& tea
     }
 }
 
-void mln::mog::team::delete_teams(const uint64_t guild_id) const
+void mln::mog::mog_team::delete_teams(const uint64_t guild_id) const
 {
     if (guild_id == 0) {
         return;
@@ -952,7 +952,7 @@ void mln::mog::team::delete_teams(const uint64_t guild_id) const
     {
         std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
+        const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
         if (it_map == teams_data_cache.end()) {
             return;
         }
@@ -960,21 +960,21 @@ void mln::mog::team::delete_teams(const uint64_t guild_id) const
         teams_data_cache.erase(it_map);
     }
 }
-bool mln::mog::team::add_user_to_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
+bool mln::mog::mog_team::add_user_to_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
 {
     std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return false;
     }
 
-    const std::unordered_map<std::string, mln::mog::team_data_t>::iterator it = it_map->second.find(team_name);
+    const std::unordered_map<std::string, mln::mog::mog_team_data_t>::iterator it = it_map->second.find(team_name);
     if (it == it_map->second.end()) {
         return false;
     }
 
-    for (const mln::mog::team_data_t::user_data_t& u_data : it->second.users_id_cd) {
+    for (const mln::mog::mog_team_data_t::user_data_t& u_data : it->second.users_id_cd) {
         if (u_data.id == user_id) {
             return false;
         }
@@ -984,21 +984,21 @@ bool mln::mog::team::add_user_to_team(const uint64_t guild_id, const uint64_t us
     return true;
 }
 
-bool mln::mog::team::remove_user_from_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
+bool mln::mog::mog_team::remove_user_from_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
 {
     std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
+    const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
         return false;
     }
 
-    const std::unordered_map<std::string, mln::mog::team_data_t>::iterator it = it_map->second.find(team_name);
+    const std::unordered_map<std::string, mln::mog::mog_team_data_t>::iterator it = it_map->second.find(team_name);
     if (it == it_map->second.end()) {
         return false;
     }
 
-    for (std::vector<mln::mog::team_data_t::user_data_t>::iterator it_to_delete = it->second.users_id_cd.begin(); it_to_delete != it->second.users_id_cd.end(); ++it_to_delete) {
+    for (std::vector<mln::mog::mog_team_data_t::user_data_t>::iterator it_to_delete = it->second.users_id_cd.begin(); it_to_delete != it->second.users_id_cd.end(); ++it_to_delete) {
         if (it_to_delete->id == user_id) {
             it->second.users_id_cd.erase(it_to_delete);
             return true;
@@ -1008,9 +1008,9 @@ bool mln::mog::team::remove_user_from_team(const uint64_t guild_id, const uint64
     return false;
 }
 
-bool mln::mog::team::set_team(mln::mog::team_data_t team) const
+bool mln::mog::mog_team::set_team(mln::mog::mog_team_data_t team) const
 {
-    if (!mln::mog::team::is_team_valid(team)) {
+    if (!mln::mog::mog_team::is_team_valid(team)) {
         return false;
     }
 
@@ -1023,7 +1023,7 @@ bool mln::mog::team::set_team(mln::mog::team_data_t team) const
     return true;
 }
 
-void mln::mog::team::clear_teams() const
+void mln::mog::mog_team::clear_teams() const
 {
     if (teams_count() == 0) {
         return;

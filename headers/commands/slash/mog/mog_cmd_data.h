@@ -16,7 +16,7 @@ namespace dpp {
 
 namespace mln {
     namespace mog {
-        struct cmd_data_t {
+        struct mog_cmd_data_t {
 			mln::event_data_lite_t data;
 			std::shared_ptr<const dpp::guild> cmd_guild;
 			std::shared_ptr<const dpp::channel> cmd_channel;

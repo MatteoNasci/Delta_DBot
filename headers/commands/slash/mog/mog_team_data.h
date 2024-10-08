@@ -8,7 +8,7 @@
 
 namespace mln {
 	namespace mog{
-		struct team_data_t {
+		struct mog_team_data_t {
 			struct user_data_t {
 				uint64_t id;
 				uint64_t cd;
@@ -27,16 +27,16 @@ namespace mln {
 			uint64_t role_id;
 			std::vector<user_data_t> users_id_cd;
 
-			team_data_t() noexcept;
-			team_data_t(std::string name, const uint64_t guild_id, const uint64_t channel_id, const uint64_t role_id) noexcept;
-			team_data_t(const team_data_t& rhs) noexcept;
-			team_data_t(team_data_t&& rhs) noexcept;
-			team_data_t& operator=(const team_data_t& rhs) noexcept;
-			team_data_t& operator=(team_data_t&& rhs) noexcept;
+			mog_team_data_t() noexcept;
+			mog_team_data_t(std::string name, const uint64_t guild_id, const uint64_t channel_id, const uint64_t role_id) noexcept;
+			mog_team_data_t(const mog_team_data_t& rhs) noexcept;
+			mog_team_data_t(mog_team_data_t&& rhs) noexcept;
+			mog_team_data_t& operator=(const mog_team_data_t& rhs) noexcept;
+			mog_team_data_t& operator=(mog_team_data_t&& rhs) noexcept;
 
-			static std::string to_string(const team_data_t& data);
-			static std::string to_string_partial(const team_data_t& data);
-			static std::string to_string_no_cd(const team_data_t& data);
+			static std::string to_string(const mog_team_data_t& data);
+			static std::string to_string_partial(const mog_team_data_t& data);
+			static std::string to_string_no_cd(const mog_team_data_t& data);
 		};
 	}
 }

@@ -1,3 +1,4 @@
+#include "commands/slash/mog/mog_team_data.h"
 #include "database/database_callbacks.h"
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
@@ -9,7 +10,6 @@
 #include "utility/perms.h"
 #include "utility/response.h"
 #include "utility/utility.h"
-#include "commands/slash/mog/team_data.h"
 
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <exception>
 #include <format>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -38,7 +39,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-#include <limits>
 
 size_t mln::caches::s_saved_select_dump_channel{ 0 };
 

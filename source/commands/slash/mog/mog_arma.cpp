@@ -1,47 +1,48 @@
-#include "commands/slash/mog/arma.h"
-#include "commands/slash/mog/cmd_data.h"
 #include "commands/base_action.h"
 #include "commands/slash/mog/base_mog_command.h"
-#include "commands/slash/mog/command_type.h"
-#include "commands/slash/mog/init_type_flag.h"
-#include "commands/slash/mog/team.h"
+#include "commands/slash/mog/mog_arma.h"
+#include "commands/slash/mog/mog_cmd_data.h"
+#include "commands/slash/mog/mog_command_type.h"
+#include "commands/slash/mog/mog_init_type_flag.h"
+#include "commands/slash/mog/mog_team.h"
+#include "commands/slash/mog/mog_team_data.h"
+#include "utility/constants.h"
 #include "utility/response.h"
 #include "utility/utility.h"
-#include "utility/constants.h"
 
+#include <dpp/appcommand.h>
 #include <dpp/coro/task.h>
-#include <dpp/message.h>
 #include <dpp/dispatcher.h>
+#include <dpp/message.h>
 #include <dpp/snowflake.h>
 
+#include <cstdint>
 #include <format>
-#include <dpp/appcommand.h>
-#include <string>
-#include <variant>
-#include <commands/slash/mog/team_data.h>
 #include <memory>
 #include <optional>
+#include <string>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 static constexpr size_t s_pagination_timeout = 120;
 static constexpr size_t s_pagination_max_text_size = 2000;
 
-mln::mog::arma::arma(dpp::cluster& cluster, mln::mog::team& teams_handler) : base_mog_command{ cluster }, teams_handler{ teams_handler }
+mln::mog::mog_arma::mog_arma(dpp::cluster& cluster, mln::mog::mog_team& teams_handler) : base_mog_command{ cluster }, teams_handler{ teams_handler }
 {
 }
 
-dpp::task<void> mln::mog::arma::command(const dpp::slashcommand_t& event_data, mln::mog::cmd_data_t& cmd_data, const mln::mog::command_type type) const
+dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type) const
 {
 	switch (type) {
-	case mln::mog::command_type::cooldown:
-		co_await mln::mog::arma::cooldown(event_data, cmd_data);
+	case mln::mog::mog_command_type::cooldown:
+		co_await mln::mog::mog_arma::cooldown(event_data, cmd_data);
 		break;
-	case mln::mog::command_type::show_cooldowns:
-		co_await mln::mog::arma::show_cooldowns(event_data, cmd_data);
+	case mln::mog::mog_command_type::show_cooldowns:
+		co_await mln::mog::mog_arma::show_cooldowns(event_data, cmd_data);
 		break;
-	case mln::mog::command_type::help:
-		co_await mln::mog::arma::help(cmd_data);
+	case mln::mog::mog_command_type::help:
+		co_await mln::mog::mog_arma::help(cmd_data);
 		break;
 	default:
 		co_await mln::response::co_respond(cmd_data.data, "Failed command, the given sub_command is not supported!", true,
@@ -50,25 +51,25 @@ dpp::task<void> mln::mog::arma::command(const dpp::slashcommand_t& event_data, m
 	}
 }
 
-mln::mog::init_type_flag mln::mog::arma::get_requested_initialization_type(const mln::mog::command_type cmd) const
+mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_type(const mln::mog::mog_command_type cmd) const
 {
 	switch (cmd) {
-	case mln::mog::command_type::cooldown:
-	case mln::mog::command_type::show_cooldowns:
-		return mln::mog::init_type_flag::cmd_data | mln::mog::init_type_flag::thinking;
-	case mln::mog::command_type::help:
-		return mln::mog::init_type_flag::none;
+	case mln::mog::mog_command_type::cooldown:
+	case mln::mog::mog_command_type::show_cooldowns:
+		return mln::mog::mog_init_type_flag::cmd_data | mln::mog::mog_init_type_flag::thinking;
+	case mln::mog::mog_command_type::help:
+		return mln::mog::mog_init_type_flag::none;
 	default:
-		return mln::mog::init_type_flag::all;
+		return mln::mog::mog_init_type_flag::all;
 	}
 }
 
-bool mln::mog::arma::is_db_initialized() const
+bool mln::mog::mog_arma::is_db_initialized() const
 {
 	return true;
 }
 
-dpp::task<void> mln::mog::arma::cooldown(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
 	const dpp::command_value& min_param = event_data.get_parameter("minutes");
 	const dpp::command_value& sec_param = event_data.get_parameter("seconds");
@@ -129,18 +130,18 @@ dpp::task<void> mln::mog::arma::cooldown(const dpp::slashcommand_t& event_data, 
 		break;
 	}
 
-	const std::optional<mln::mog::team_data_t> team_data = name.empty() ? teams_handler.get_team(cmd_data.data.guild_id, cmd_data.data.usr_id) : teams_handler.get_team(cmd_data.data.guild_id, name);
+	const std::optional<mln::mog::mog_team_data_t> team_data = name.empty() ? teams_handler.get_team(cmd_data.data.guild_id, cmd_data.data.usr_id) : teams_handler.get_team(cmd_data.data.guild_id, name);
 	if (!team_data.has_value()) {
 		const std::string err_text = name.empty() ? "Failed to update cooldown! The command user is not part of any team!" : "Failed to update cooldown! The command user is not part of the given team!";
 		co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
 		co_return;
 	}
 
-	for (const mln::mog::team_data_t::user_data_t& u_data : team_data.value().users_id_cd) {
+	for (const mln::mog::mog_team_data_t::user_data_t& u_data : team_data.value().users_id_cd) {
 		if (u_data.id == cmd_data.data.usr_id) {
 			const uint64_t creation_time = static_cast<uint64_t>(event_data.command.id.get_creation_time());
 
-			mln::mog::team_data_t::user_data_t to_set;
+			mln::mog::mog_team_data_t::user_data_t to_set;
 			to_set.id = cmd_data.data.usr_id;
 			to_set.cd = creation_time + total_cd_delay;
 			to_set.last_update = creation_time;
@@ -158,7 +159,7 @@ dpp::task<void> mln::mog::arma::cooldown(const dpp::slashcommand_t& event_data, 
 	co_await mln::response::co_respond(cmd_data.data, "Failed to update cooldown! The command user is not part of the given team!", true, "Failed to update cooldown! The command user is no longer part of the given team! (over)");
 }
 
-dpp::task<void> mln::mog::arma::show_cooldowns(const dpp::slashcommand_t& event_data, cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_arma::show_cooldowns(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
 	const dpp::command_value& name_param = event_data.get_parameter("name");
 
@@ -170,12 +171,12 @@ dpp::task<void> mln::mog::arma::show_cooldowns(const dpp::slashcommand_t& event_
 	}
 	const bool show_all_teams = name.empty();
 
-	std::vector<mln::mog::team_data_t> data_to_display{};
+	std::vector<mln::mog::mog_team_data_t> data_to_display{};
 	if (show_all_teams) {
 		teams_handler.get_teams(cmd_data.data.guild_id, data_to_display);
 	}
 	else {
-		const std::optional<mln::mog::team_data_t> team = teams_handler.get_team(cmd_data.data.guild_id, name);
+		const std::optional<mln::mog::mog_team_data_t> team = teams_handler.get_team(cmd_data.data.guild_id, name);
 		if (team.has_value()) {
 			data_to_display.push_back(team.value());
 		}
@@ -191,8 +192,8 @@ dpp::task<void> mln::mog::arma::show_cooldowns(const dpp::slashcommand_t& event_
 	std::vector<std::string> records{};
 	records.reserve(data_to_display.size());
 	size_t total_size = 0;
-	for (const mln::mog::team_data_t& team : data_to_display) {
-		records.emplace_back(mln::mog::team_data_t::to_string(team));
+	for (const mln::mog::mog_team_data_t& team : data_to_display) {
+		records.emplace_back(mln::mog::mog_team_data_t::to_string(team));
 		total_size += records[records.size() - 1].size();
 	}
 
@@ -214,7 +215,7 @@ dpp::task<void> mln::mog::arma::show_cooldowns(const dpp::slashcommand_t& event_
 	}
 }
 
-dpp::task<void> mln::mog::arma::help(cmd_data_t& cmd_data) const
+dpp::task<void> mln::mog::mog_arma::help(mog_cmd_data_t& cmd_data) const
 {
 	static const dpp::message s_info = dpp::message{ "Information regarding the `/mog arma` commands..." }
 		.set_flags(dpp::m_ephemeral)

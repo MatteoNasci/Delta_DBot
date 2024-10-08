@@ -1,13 +1,13 @@
 #include "commands/base_action.h"
 #include "commands/slash/base_slashcommand.h"
 #include "commands/slash/mog/base_mog_command.h"
-#include "commands/slash/mog/cmd_data.h"
-#include "commands/slash/mog/command_type.h"
-#include "commands/slash/mog/init_type_flag.h"
 #include "commands/slash/mog/mog.h"
+#include "commands/slash/mog/mog_arma.h"
+#include "commands/slash/mog/mog_cmd_data.h"
+#include "commands/slash/mog/mog_command_type.h"
 #include "commands/slash/mog/mog_help.h"
-#include "commands/slash/mog/arma.h"
-#include "commands/slash/mog/team.h"
+#include "commands/slash/mog/mog_init_type_flag.h"
+#include "commands/slash/mog/mog_team.h"
 #include "database/database_handler.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
@@ -25,6 +25,7 @@
 #include <dpp/permissions.h>
 
 #include <cstdint>
+#include <exception>
 #include <format>
 #include <functional>
 #include <memory>
@@ -35,7 +36,6 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
-#include <exception>
 
 mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("mog"), "Commands related to the game MoG.", cluster.me.id)
@@ -111,33 +111,33 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
     database{ in_database }, 
     commands{},
     allowed_team_sub_commands{
-        {"create", {0, mln::mog::command_type::create}},
-        {"delete", {0, mln::mog::command_type::del}},
-        {"join", {0, mln::mog::command_type::join}},
-        {"leave", {0, mln::mog::command_type::leave}},
-        {"leave_and_join", {0, mln::mog::command_type::leave_and_join}},
-        {"show", {0, mln::mog::command_type::show}},
-        {"help", {0, mln::mog::command_type::help}}, }, 
+        {"create", {0, mln::mog::mog_command_type::create}},
+        {"delete", {0, mln::mog::mog_command_type::del}},
+        {"join", {0, mln::mog::mog_command_type::join}},
+        {"leave", {0, mln::mog::mog_command_type::leave}},
+        {"leave_and_join", {0, mln::mog::mog_command_type::leave_and_join}},
+        {"show", {0, mln::mog::mog_command_type::show}},
+        {"help", {0, mln::mog::mog_command_type::help}}, },
         allowed_arma_sub_commands{
-        {"cooldown", {1, mln::mog::command_type::cooldown}},
-        {"show_cooldowns", {1, mln::mog::command_type::show_cooldowns}},
-        {"help", {1, mln::mog::command_type::help}}, },
+        {"cooldown", {1, mln::mog::mog_command_type::cooldown}},
+        {"show_cooldowns", {1, mln::mog::mog_command_type::show_cooldowns}},
+        {"help", {1, mln::mog::mog_command_type::help}}, },
         allowed_help_sub_commands{ 
-            {"generic", {2, mln::mog::command_type::generic}}, },
+            {"generic", {2, mln::mog::mog_command_type::generic}}, },
         allowed_privacy_sub_commands{}, 
         allowed_primary_sub_commands{ 
             {"team", allowed_team_sub_commands}, 
             {"arma", allowed_arma_sub_commands},
             {"help", allowed_help_sub_commands}, }
 {
-    commands[0] = std::make_unique<mln::mog::team>(bot(), database);
+    commands[0] = std::make_unique<mln::mog::mog_team>(bot(), database);
 
-    mln::mog::team* team = dynamic_cast<mln::mog::team*>(commands[0].get());
+    mln::mog::mog_team* team = dynamic_cast<mln::mog::mog_team*>(commands[0].get());
     if (team == nullptr) {
         throw std::exception("Failed to extract team pointer from mog commands!");
     }
 
-    commands[1] = std::make_unique<mln::mog::arma>(bot(), *team);
+    commands[1] = std::make_unique<mln::mog::mog_arma>(bot(), *team);
     commands[2] = std::make_unique<mln::mog::mog_help>(bot());
 }
 
@@ -145,7 +145,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
 {
     //Return error if event_data or cmd_data are incorrect
     //Data to be given to the selected command function
-    mln::mog::cmd_data_t cmd_data{ event_data_lite_t{ event_data, bot(), true }, nullptr, nullptr, nullptr, nullptr, 0, 0 };
+    mln::mog::mog_cmd_data_t cmd_data{ event_data_lite_t{ event_data, bot(), true }, nullptr, nullptr, nullptr, nullptr, 0, 0 };
 
     if (!mln::response::is_event_data_valid(cmd_data.data)) {
         mln::utility::create_event_log_error(cmd_data.data, "Failed mog command, the event is incorrect!");
@@ -184,7 +184,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     }
 
     //Get the sub_command handler, return an error if not found
-    const std::unordered_map<std::string, std::tuple<size_t, mln::mog::command_type>>& mapper = it->second;
+    const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>>& mapper = it->second;
     const dpp::command_data_option sub_command = primary_cmd.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, sub_command.name);
     const auto& sub_it = mapper.find(sub_command.name);
@@ -202,11 +202,11 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
         co_return;
     }
 
-    const mln::mog::command_type cmd_type = std::get<1>(sub_it->second);
-    const mln::mog::init_type_flag init_requested = commands[std::get<0>(sub_it->second)]->get_requested_initialization_type(cmd_type);
+    const mln::mog::mog_command_type cmd_type = std::get<1>(sub_it->second);
+    const mln::mog::mog_init_type_flag init_requested = commands[std::get<0>(sub_it->second)]->get_requested_initialization_type(cmd_type);
 
     //If the command requests thinking, start thinking
-    const bool is_thinking = (init_requested & mln::mog::init_type_flag::thinking) != mln::mog::init_type_flag::none;
+    const bool is_thinking = (init_requested & mln::mog::mog_init_type_flag::thinking) != mln::mog::mog_init_type_flag::none;
     if (is_thinking) {
         static const std::string s_err_text = "Failed thinking confirmation, command aborted!";
         const bool is_error = co_await mln::response::co_think(cmd_data.data, true, false, {});
@@ -217,7 +217,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     }
 
     //If the command requests cmd_data, retrieve it
-    if ((init_requested & mln::mog::init_type_flag::cmd_data) != mln::mog::init_type_flag::none) {
+    if ((init_requested & mln::mog::mog_init_type_flag::cmd_data) != mln::mog::mog_init_type_flag::none) {
 
         //Prepare most common data for commands
         //Retrieve guild data

@@ -4,7 +4,7 @@
 
 namespace mln {
     namespace mog {
-		enum class command_type {
+		enum class mog_command_type {
 			none = 0,
 			single = 1,
 			help,
@@ -21,7 +21,7 @@ namespace mln {
 			enum_count
 		};
 
-		extern const char* get_cmd_type_text(const mln::mog::command_type type);
+		extern const char* get_cmd_type_text(const mln::mog::mog_command_type type);
     }
 }
 
