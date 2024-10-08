@@ -5,7 +5,7 @@
 const char* mln::mog::get_cmd_type_text(const mln::mog::command_type type)
 {
     static const char* s_invalid_error_text = "Unknown mog command type";
-    static constexpr size_t s_type_to_text_map_size = 12;
+    static constexpr size_t s_type_to_text_map_size = 14;
     static constexpr const char* s_type_to_text_map[s_type_to_text_map_size]{
         "none",
         "single",
@@ -15,9 +15,11 @@ const char* mln::mog::get_cmd_type_text(const mln::mog::command_type type)
         "show",
         "join",
         "leave",
+        "leave_and_join",
         "start",
         "cooldown",
-        "track_cooldowns",
+        "show_cooldowns",
+        "generic",
         "enum_count",
     };
 

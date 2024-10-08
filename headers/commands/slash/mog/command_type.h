@@ -13,9 +13,11 @@ namespace mln {
 			show,
 			join,
 			leave,
+			leave_and_join,
 			start,
 			cooldown,
-			track_cooldowns,
+			show_cooldowns,
+			generic,
 			enum_count
 		};
 
