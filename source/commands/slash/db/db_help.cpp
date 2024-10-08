@@ -30,7 +30,7 @@ The main database commands are:
 
 Each of these command sets has a `help` variant, providing in-depth information about the respective commands.)"""));
 
-    mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db help text!");
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db help text!");
     co_return;
 }
 
