@@ -716,7 +716,7 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
-        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, true,
+        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, false,
             mln::constants::get_min_characters_description(), mln::constants::get_max_characters_description(), "description"))) {
             co_return false;
         }
