@@ -26,7 +26,9 @@
 #include <variant>
 #include <vector>
 
-mln::register_commands::register_commands(dpp::cluster& cluster, cmd_runner& in_runner_cmd_ptr, cmd_ctx_runner& in_runner_ctx_ptr) : base_ready{ cluster }, runner_cmd_ptr{ in_runner_cmd_ptr }, runner_ctx_ptr{ in_runner_ctx_ptr } {}
+mln::register_commands::register_commands(dpp::cluster& cluster, cmd_runner& in_runner_cmd_ptr, cmd_ctx_runner& in_runner_ctx_ptr) : base_ready{ cluster }, runner_cmd_ptr{ in_runner_cmd_ptr }, runner_ctx_ptr{ in_runner_ctx_ptr } {
+    bot().log(dpp::loglevel::ll_debug, std::format("register_commands: [{}].", true));
+}
 
 dpp::task<void> mln::register_commands::command(const dpp::ready_t& event_data) const{
     if (dpp::run_once<struct register_bot_commands>()) {
