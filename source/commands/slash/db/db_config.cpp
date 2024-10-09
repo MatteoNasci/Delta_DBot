@@ -27,7 +27,23 @@
 #include <string>
 #include <variant>
 
-mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
+info{ 
+    dpp::message{"Information regarding the `/db config` commands..."}
+        .set_flags(dpp::m_ephemeral)
+        .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
+
+This set of commands is generally reserved for users with specific permissions.
+
+**Types of config:**
+
+- **/db config update_dump_channel**  
+  *Parameters:* channel[text_channel, optional].  
+  This command asks for a valid text channel to be used for storage purposes. If not provided, the current dump channel will be unset, and the database will use the channel where the database commands are used as the dump channel.  
+  To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  
+  Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)""")) },
+data { .valid_stmt = true }, 
+db{ in_db } {
 
     const mln::db_result_t res1 = db.save_statement("UPDATE OR ABORT guild_profile SET dedicated_channel_id = :CCC WHERE guild_id = :GGG RETURNING dedicated_channel_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
@@ -44,6 +60,8 @@ mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base
             data.valid_stmt = false;
         }
     }
+
+    bot().log(dpp::loglevel::ll_debug, std::format("db_config: [{}].", is_db_initialized()));
 }
 
 mln::db_init_type_flag mln::db_config::get_requested_initialization_type(const db_command_type cmd) const {
@@ -114,22 +132,8 @@ dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_dat
 }
 
 dpp::task<void> mln::db_config::help(db_cmd_data_t& cmd_data) const {
-    static const dpp::message s_info = dpp::message{"Information regarding the `/db config` commands..."}
-        .set_flags(dpp::m_ephemeral)
-        .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
 
-This set of commands is generally reserved for users with specific permissions.
-
-**Types of config:**
-
-- **/db config update_dump_channel**  
-  *Parameters:* channel[text_channel, optional].  
-  This command asks for a valid text channel to be used for storage purposes. If not provided, the current dump channel will be unset, and the database will use the channel where the database commands are used as the dump channel.  
-  To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  
-  Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)"""));
-
-    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db setup help text!");
-
+    co_await mln::response::co_respond(cmd_data.data, info, false, "Failed to reply with the db setup help text!");
     co_return;
 }
 

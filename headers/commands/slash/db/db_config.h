@@ -8,13 +8,10 @@
 
 #include <dpp/coro/task.h>
 
-#include <functional>
-#include <unordered_map>
-#include <utility>
-
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
+	struct message;
 }
 
 namespace mln {
@@ -29,6 +26,7 @@ namespace mln {
 			int saved_param_guild, saved_param_channel;
 			bool valid_stmt;
 		};
+		const dpp::message& info;
 		data_t data;
 		database_handler& db;
 	public:
