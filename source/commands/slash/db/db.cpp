@@ -156,67 +156,58 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
         //db privacy command
         .add_option(dpp::command_option(dpp::co_sub_command_group, "privacy", "Gives information about the db group command privacy policy", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "policy", "Gives information about the db group command privacy policy", false)))
-    ) }, database{ in_database } {}
+    ) }, 
+    database{ in_database }, commands{}, 
+    allowed_insert_sub_commands{ 
+        {"url", {0, mln::db_command_type::url}},
+        {"file", {0, mln::db_command_type::file}},
+        {"text", {0, mln::db_command_type::text}},
+        {"help", {0, mln::db_command_type::help}}, }, 
+    allowed_update_sub_commands{ 
+        {"description", {5, mln::db_command_type::description}},
+        {"nsfw", {5, mln::db_command_type::nsfw}},
+        {"help", {5, mln::db_command_type::help}}, },
+    allowed_delete_sub_commands{ 
+        {"single", {4, mln::db_command_type::single}},
+        {"user", {4, mln::db_command_type::user}},
+        {"self", {4, mln::db_command_type::self}},
+        {"guild", {4, mln::db_command_type::guild}},
+        {"help", {4, mln::db_command_type::help}}, },
+    allowed_config_sub_commands{ 
+        {"update_dump_channel", {1, mln::db_command_type::update_dump_channel}},
+        {"help", {1, mln::db_command_type::help}}, },
+    allowed_select_sub_commands{ 
+        {"single", {2, mln::db_command_type::single}},
+        {"help", {2, mln::db_command_type::help}}, },
+    allowed_show_sub_commands{ 
+        {"all", {3, mln::db_command_type::all}},
+        {"user", {3, mln::db_command_type::user}},
+        {"help", {3, mln::db_command_type::help}}, },
+    allowed_help_sub_commands{ 
+        {"generic", {6, mln::db_command_type::generic}}, },
+    allowed_privacy_sub_commands{ 
+        {"policy", {7, mln::db_command_type::policy}}, },
+    allowed_primary_sub_commands{ 
+        {"insert", allowed_insert_sub_commands},
+        {"config", allowed_config_sub_commands},
+        {"select", allowed_select_sub_commands},
+        {"show", allowed_show_sub_commands},
+        {"delete", allowed_delete_sub_commands},
+        {"update", allowed_update_sub_commands},
+        {"help", allowed_help_sub_commands},
+        {"privacy", allowed_privacy_sub_commands}, }
+    {
+        commands[0] = std::make_unique<mln::db_insert>(bot(), database);
+        commands[1] = std::make_unique<mln::db_config>(bot(), database);
+        commands[2] = std::make_unique<mln::db_select>(bot(), database);
+        commands[3] = std::make_unique<mln::db_show>(bot(), database);
+        commands[4] = std::make_unique<mln::db_delete>(bot(), database);
+        commands[5] = std::make_unique<mln::db_update>(bot(), database);
+        commands[6] = std::make_unique<mln::db_help>(bot());
+        commands[7] = std::make_unique<mln::db_privacy>(bot());
+    }
 
 dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
-    static const std::unique_ptr<mln::base_db_command> commands[]{
-        std::make_unique<mln::db_insert>(bot(), database),
-        std::make_unique<mln::db_config>(bot(), database),
-        std::make_unique<mln::db_select>(bot(), database),
-        std::make_unique<mln::db_show>(bot(), database),
-        std::make_unique<mln::db_delete>(bot(), database),
-        std::make_unique<mln::db_update>(bot(), database),
-        std::make_unique<mln::db_help>(bot()),
-        std::make_unique<mln::db_privacy>(bot()),
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_insert_sub_commands{
-        {"url", {commands[0], mln::db_command_type::url}},
-        {"file", {commands[0], mln::db_command_type::file}},
-        {"text", {commands[0], mln::db_command_type::text}},
-        {"help", {commands[0], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_update_sub_commands{
-        {"description", {commands[5], mln::db_command_type::description}},
-        {"nsfw", {commands[5], mln::db_command_type::nsfw}},
-        {"help", {commands[5], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_delete_sub_commands{
-        {"single", {commands[4], mln::db_command_type::single}},
-        {"user", {commands[4], mln::db_command_type::user}},
-        {"self", {commands[4], mln::db_command_type::self}},
-        {"guild", {commands[4], mln::db_command_type::guild}},
-        {"help", {commands[4], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_config_sub_commands{
-        {"update_dump_channel", {commands[1], mln::db_command_type::update_dump_channel}},
-        {"help", {commands[1], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_select_sub_commands{
-        {"single", {commands[2], mln::db_command_type::single}},
-        {"help", {commands[2], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_show_sub_commands{
-        {"all", {commands[3], mln::db_command_type::all}},
-        {"user", {commands[3], mln::db_command_type::user}},
-        {"help", {commands[3], mln::db_command_type::help}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_help_sub_commands{
-        {"generic", {commands[6], mln::db_command_type::generic}},
-    };
-    static const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>> s_allowed_privacy_sub_commands{
-        {"policy", {commands[7], mln::db_command_type::policy}},
-    };
-    static const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>>&> s_allowed_primary_sub_commands{
-        {"insert", s_allowed_insert_sub_commands},
-        {"config", s_allowed_config_sub_commands},
-        {"select", s_allowed_select_sub_commands},
-        {"show", s_allowed_show_sub_commands},
-        {"delete", s_allowed_delete_sub_commands},
-        {"update", s_allowed_update_sub_commands},
-        {"help", s_allowed_help_sub_commands},
-        {"privacy", s_allowed_privacy_sub_commands},
-    };
-
     //Return error if event_data or cmd_data are incorrect
     //Data to be given to the selected command function
     db_cmd_data_t cmd_data{ { event_data, bot(), true }, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0 };
@@ -241,8 +232,8 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     //Get the mapper for the primary cmds, return error if not found
     const dpp::command_data_option primary_cmd = cmd_interaction.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, primary_cmd.name);
-    const auto& it = s_allowed_primary_sub_commands.find(primary_cmd.name);
-    if (it == s_allowed_primary_sub_commands.end()) {
+    const auto& it = allowed_primary_sub_commands.find(primary_cmd.name);
+    if (it == allowed_primary_sub_commands.end()) {
         const std::string err_text = std::format("Couldn't find primary sub command [{}].", primary_cmd.name);
         co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
 
@@ -258,7 +249,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     }
 
     //Get the sub_command handler, return an error if not found
-    const std::unordered_map<std::string, std::tuple<const std::unique_ptr<mln::base_db_command>&, db_command_type>>& mapper = it->second;
+    const std::unordered_map<std::string, std::tuple<size_t, db_command_type>>& mapper = it->second;
     const dpp::command_data_option sub_command = primary_cmd.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, sub_command.name);
     const auto& sub_it = mapper.find(sub_command.name);
@@ -270,14 +261,14 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     }
 
     //Return early if the selected db command is not initialized correctly
-    if (!(std::get<0>(sub_it->second)->is_db_initialized())) {
+    if (!(commands[std::get<0>(sub_it->second)]->is_db_initialized())) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, the database was not initialized correctly!", true,
             std::format("Failed database operation, the database was not initialized correctly! Command: [{}].", cmd_data.data.command_name));
         co_return;
     }
 
     const db_command_type cmd_type = std::get<1>(sub_it->second);
-    const db_init_type_flag init_requested = std::get<0>(sub_it->second)->get_requested_initialization_type(cmd_type);
+    const db_init_type_flag init_requested = commands[std::get<0>(sub_it->second)]->get_requested_initialization_type(cmd_type);
 
     //If the command requests thinking, start thinking
     const bool is_thinking = (init_requested & db_init_type_flag::thinking) != db_init_type_flag::none;
@@ -374,7 +365,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
         }
     }
 
-    co_await std::get<0>(sub_it->second)->command(event_data, cmd_data, cmd_type);
+    co_await commands[std::get<0>(sub_it->second)]->command(event_data, cmd_data, cmd_type);
 }
 
 std::optional<std::function<void()>> mln::db::job(dpp::slashcommand_t) const
