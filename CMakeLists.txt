@@ -171,7 +171,10 @@ set(botsrc  source/commands/slash/ping.cpp
             source/commands/slash/mog/base_mog_command.cpp
             source/commands/slash/mog/mog_arma.cpp
             source/commands/slash/mog/mog_team_data.cpp
-            source/commands/slash/help.cpp)
+            source/commands/slash/help.cpp
+            source/commands/slash/db/db_cmd_data.cpp
+            source/commands/slash/mog/mog_cmd_data.cpp
+            source/database/db_saved_stmt_state.cpp)
 
 add_executable(deploy_delta ${botsrc})
 add_executable(deploy_delta_dev ${botsrc})
