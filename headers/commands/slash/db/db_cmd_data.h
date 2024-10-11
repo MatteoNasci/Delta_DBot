@@ -27,6 +27,8 @@ namespace mln {
 		dpp::permission cmd_usr_perm;
 		dpp::permission cmd_bot_perm;
 		dpp::permission dump_channel_bot_perm;
+
+		db_cmd_data_t() noexcept;
 	};
 }
 
