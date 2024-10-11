@@ -6,7 +6,9 @@
 #include "database/database_callbacks.h"
 #include "database/database_handler.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
@@ -25,57 +27,92 @@
 #include <dpp/permissions.h>
 #include <dpp/snowflake.h>
 #include <format>
-#include <string>
-#include <variant>
 #include <optional>
+#include <string>
+#include <type_traits>
+#include <variant>
 
-mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, data_nsfw{ .valid_stmt = true }, db{ in_db } {
+mln::db_update::db_update(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
+data{ .state = db_saved_stmt_state::none }, data_nsfw{ .state = db_saved_stmt_state::none }, db{ in_db } {
 
     const mln::db_result_t res1 = db.save_statement("UPDATE OR ABORT storage SET desc = :DDD WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING user_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save update description stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update description stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
     }
     else {
+        data.state = mln::flags::add(data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt, 0, ":NNN", data.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(data.saved_stmt, 0, ":UUU", data.saved_param_user);
         const mln::db_result_t res14 = db.get_bind_parameter_index(data.saved_stmt, 0, ":DDD", data.saved_param_to_update);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save update description stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update description stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
                 mln::database_handler::get_name_from_result(res14.type), res14.err_text));
 
-            data.valid_stmt = false;
+        }
+        else {
+            data.state = mln::flags::add(data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res2 = db.save_statement("UPDATE OR ABORT storage SET nsfw = :WWW WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING user_id;", data_nsfw.saved_stmt);
     if (res2.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res2.type), res2.err_text));
-        data.valid_stmt = false;
     }
     else {
+        data_nsfw.state = mln::flags::add(data_nsfw.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":GGG", data_nsfw.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":NNN", data_nsfw.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":UUU", data_nsfw.saved_param_user);
         const mln::db_result_t res14 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":WWW", data_nsfw.saved_param_to_update);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
                 mln::database_handler::get_name_from_result(res14.type), res14.err_text));
-            data.valid_stmt = false;
         }
+        else {
+            data_nsfw.state = mln::flags::add(data_nsfw.state, db_saved_stmt_state::params_initialized);
+        }
+    }
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_update: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::db_update::~db_update()
+{
+    if (mln::flags::has(data.state, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt);
+    }
+    if (mln::flags::has(data_nsfw.state, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data_nsfw.saved_stmt);
     }
 }
 
-dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+mln::db_update::db_update(db_update&& rhs) noexcept : base_db_command{ std::forward<db_update>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.state = db_saved_stmt_state::none;
+    rhs.data_nsfw.state = db_saved_stmt_state::none;
+}
+
+mln::db_update& mln::db_update::operator=(db_update&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_update>(rhs));
+
+    data = rhs.data;
+    rhs.data.state = db_saved_stmt_state::none;
+    rhs.data_nsfw.state = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
 
     switch (type) {
     case mln::db_command_type::description:
@@ -94,11 +131,11 @@ dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, d
     }
 }
 
-mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::description:
     case mln::db_command_type::nsfw:
-        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::thinking);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
@@ -106,9 +143,9 @@ mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const d
     }
 }
 
-bool mln::db_update::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_update::is_db_initialized() const noexcept
 {
-    return data.valid_stmt && data_nsfw.valid_stmt;
+    return mln::flags::com(data.state, data_nsfw.state);
 }
 
 dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {

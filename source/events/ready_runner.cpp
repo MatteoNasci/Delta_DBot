@@ -7,10 +7,13 @@
 #include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
 
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 void mln::ready_runner::attach_event(){
@@ -46,4 +49,12 @@ void mln::ready_runner::attach_event(){
 
 mln::ready_runner::ready_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner, cmd_runner& in_runner, cmd_ctx_runner& in_ctx_runner) : base_event{ cluster, db, j_runner }, event_id{}, initialized{ false }, runner{ in_runner }, ctx_runner{ in_ctx_runner }
 {
+    cbot().log(dpp::loglevel::ll_debug, std::format("ready_runner: [{}].", true));
+}
+mln::ready_runner::~ready_runner()
+{
+    if (initialized) {
+        bot().on_ready.detach(event_id);
+        initialized = false;
+    }
 }

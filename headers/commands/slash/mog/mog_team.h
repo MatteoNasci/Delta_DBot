@@ -6,6 +6,7 @@
 #include "commands/slash/mog/mog_command_type.h"
 #include "commands/slash/mog/mog_init_type_flag.h"
 #include "commands/slash/mog/mog_team_data.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/task.h>
 
@@ -32,22 +33,22 @@ namespace mln {
 			struct data_t {
 				size_t saved_stmt;
 				int saved_param_guild, saved_param_name, saved_param_channel, saved_param_role;
-				bool valid_stmt;
+				db_saved_stmt_state state;
 			};
 			struct del_data_t {
 				size_t saved_stmt;
 				int saved_param_guild, saved_param_name;
-				bool valid_stmt;
+				db_saved_stmt_state state;
 			};
 			struct member_data_t {
 				size_t saved_stmt;
 				int saved_param_guild, saved_param_name, saved_param_user;
-				bool valid_stmt;
+				db_saved_stmt_state state;
 			};
 			typedef del_data_t show_team_data_t;
 			struct show_data_t {
 				size_t saved_stmt;
-				bool valid_stmt;
+				db_saved_stmt_state state;
 			};
 
 			mutable std::shared_mutex teams_mutex;
@@ -64,11 +65,15 @@ namespace mln {
 			database_handler& db;
 		public:
 			mog_team(dpp::cluster& cluster, database_handler& db);
-			mog_team(mog_team&& rhs) noexcept;
 			~mog_team();
-			dpp::task<void> command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type) const override final;
-			mog_init_type_flag get_requested_initialization_type(const mog_command_type cmd) const override final;
-			bool is_db_initialized() const override final;
+			mog_team(const mog_team&) = delete;
+			mog_team(mog_team&& rhs) noexcept;
+			mog_team& operator=(const mog_team&) = delete;
+			mog_team& operator=(mog_team&& rhs) noexcept;
+
+			dpp::task<void> command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type) override final;
+			mog_init_type_flag get_requested_initialization_type(const mog_command_type cmd) const noexcept override final;
+			db_saved_stmt_state is_db_initialized() const noexcept override final;
 		private:
 			dpp::task<void> create(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<void> del(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;

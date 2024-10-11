@@ -1,8 +1,7 @@
 #include "commands/slash/mog/mog_command_type.h"
+#include "enum/flags.h"
 
-#include <type_traits>
-
-const char* mln::mog::get_cmd_type_text(const mln::mog::mog_command_type type)
+const char* mln::mog::get_cmd_type_text(const mln::mog::mog_command_type type) noexcept
 {
     static const char* s_invalid_error_text = "Unknown mog command type";
     static constexpr size_t s_type_to_text_map_size = 14;
@@ -23,8 +22,8 @@ const char* mln::mog::get_cmd_type_text(const mln::mog::mog_command_type type)
         "enum_count",
     };
 
-    const std::underlying_type<mln::mog::mog_command_type>::type casted_type = static_cast<std::underlying_type<mln::mog::mog_command_type>::type>(type);
-    if (casted_type >= static_cast<std::underlying_type<mln::mog::mog_command_type>::type>(mln::mog::mog_command_type::none) && casted_type < s_type_to_text_map_size) {
+    const auto casted_type = mln::flags::to_value(type);
+    if (casted_type >= 0 && casted_type < s_type_to_text_map_size) {
         return s_type_to_text_map[casted_type];
     }
 

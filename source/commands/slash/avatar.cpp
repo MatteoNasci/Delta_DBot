@@ -24,9 +24,11 @@
 mln::avatar::avatar(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("avatar"), "Get your or another user's avatar image", cluster.me.id)
         .set_default_permissions(dpp::permissions::p_use_application_commands)
-        .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from", true))) } {}
+        .add_option(dpp::command_option(dpp::co_user, "user", "User to fetch the avatar from", true))) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("avatar: [{}].", true));
+}
 
-dpp::job mln::avatar::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::avatar::command(dpp::slashcommand_t event_data) {
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed avatar, the event is incorrect!");
@@ -77,13 +79,13 @@ dpp::job mln::avatar::command(dpp::slashcommand_t event_data) const {
     co_await mln::response::co_respond(lite_data, avatar_url, false, "Failed avatar command conclusion reply!");
 }
 
-std::optional<std::function<void()>> mln::avatar::job(dpp::slashcommand_t event_data) const
+std::optional<std::function<void()>> mln::avatar::job(dpp::slashcommand_t event_data)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::avatar::use_job() const
+bool mln::avatar::use_job() const noexcept
 {
     return false;
 }

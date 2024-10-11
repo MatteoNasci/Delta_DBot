@@ -23,6 +23,11 @@ namespace mln {
     public:
         guild_create_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner);
         ~guild_create_runner();
+        guild_create_runner(const guild_create_runner&) = delete;
+        guild_create_runner(guild_create_runner&& rhs) = delete;
+        guild_create_runner& operator=(const guild_create_runner&) = delete;
+        guild_create_runner& operator=(guild_create_runner&& rhs) = delete;
+
         void attach_event() override final;
     };
 }

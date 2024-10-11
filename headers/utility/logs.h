@@ -23,6 +23,11 @@ namespace mln {
 	public:
 		logs(const char* const file_name);
 		logs() = delete;
+		logs(const logs&) = delete;
+		logs(logs&& rhs) noexcept;
+		logs& operator=(const logs&) = delete;
+		logs& operator=(logs&& rhs) noexcept;
+
 		static void log_to_file_and_terminal(const dpp::loglevel severity, const std::string& msg);
 		static void log_to_file(const dpp::loglevel severity, const std::string& msg);
 		static void log_to_file(const dpp::log_t& log);

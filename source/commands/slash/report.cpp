@@ -4,7 +4,9 @@
 #include "database/database_handler.h"
 #include "database/db_destructor_behavior.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
 #include "utility/response.h"
@@ -31,17 +33,44 @@ mln::report::report(dpp::cluster& cluster, database_handler& in_db) : base_slash
 		.add_option(dpp::command_option(dpp::command_option_type::co_string, "description", "Description of the issue", true)
 			.set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))
 			.set_max_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_max_characters_reply_msg()))))) },
-	db{ in_db }, saved_insert_rep_query{}, valid_saved_stmt{ true } {
+	db{ in_db }, saved_insert_rep_query{}, db_state{ db_saved_stmt_state::none } {
 
 	const mln::db_result_t res = db.save_statement("INSERT OR ABORT INTO report (report_text) VALUES(?1) RETURNING id;", saved_insert_rep_query); 
 	if (res.type != mln::db_result::ok) {
-		bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert report stmt! Error: [{}], details: [{}].",
+		cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert report stmt! Error: [{}], details: [{}].",
 			mln::database_handler::get_name_from_result(res.type), res.err_text));
-		valid_saved_stmt = false;
+	}
+	else {
+		db_state = mln::flags::add(db_state, db_saved_stmt_state::initialized);
+	}
+
+	cbot().log(dpp::loglevel::ll_debug, std::format("report: [{}].", mln::get_saved_stmt_state_text(db_state)));
+}
+
+mln::report::~report()
+{
+	if (mln::flags::has(db_state, db_saved_stmt_state::stmt_initialized)) {
+		db.delete_statement(saved_insert_rep_query);
 	}
 }
 
-dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
+mln::report::report(report&& rhs) noexcept : base_slashcommand{ std::forward<report>(rhs) }, db{ rhs.db }, saved_insert_rep_query{ rhs.saved_insert_rep_query }, db_state{ rhs.db_state }
+{
+	rhs.db_state = db_saved_stmt_state::none;
+}
+
+mln::report& mln::report::operator=(report&& rhs) noexcept
+{
+	base_slashcommand::operator=(std::forward<report>(rhs));
+
+	saved_insert_rep_query = rhs.saved_insert_rep_query;
+	db_state = rhs.db_state;
+	rhs.db_state = db_saved_stmt_state::none;
+
+	return *this;
+}
+
+dpp::job mln::report::command(dpp::slashcommand_t event_data) {
 	mln::event_data_lite_t lite_data{ event_data, bot(), true };
 
 	if (!mln::response::is_event_data_valid(lite_data)) {
@@ -51,7 +80,7 @@ dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
 
 	co_await mln::response::co_think(lite_data, true, false, {});
 
-	if (!valid_saved_stmt) {
+	if (!mln::flags::has(db_state, db_saved_stmt_state::initialized)) {
 		co_await mln::response::co_respond(lite_data, "Failed to log the report, internal database error!", true, "Failed to log the report, internal database error!");
 		co_return;
 	}
@@ -98,18 +127,18 @@ dpp::job mln::report::command(dpp::slashcommand_t event_data) const {
 		co_return;
 	}
 
-	bot().log(dpp::ll_warning, std::format("[REPORT] {}", text.value()));
+	cbot().log(dpp::ll_warning, std::format("[REPORT] {}", text.value()));
 
 	co_await mln::response::co_respond(lite_data, "Report received, Thanks!", false, "Failed to reply with the report text!");
 }
 
-std::optional<std::function<void()>> mln::report::job(dpp::slashcommand_t event_data) const
+std::optional<std::function<void()>> mln::report::job(dpp::slashcommand_t event_data)
 {
 	log_incorrect_command();
 	return std::nullopt;
 }
 
-bool mln::report::use_job() const
+bool mln::report::use_job() const noexcept
 {
 	return false;
 }

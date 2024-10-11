@@ -24,18 +24,15 @@ namespace mln {
         cmd_runner& runner_cmd_ptr;
         cmd_ctx_runner& runner_ctx_ptr;
     public:
-        register_commands(dpp::cluster& cluster, cmd_runner& runner_cmd_ptr, cmd_ctx_runner& runner_ctx_ptr);
-        dpp::task<void> command(const dpp::ready_t& event_data) const override final;
-        std::optional<std::function<void()>> job(const dpp::ready_t& event_data) const override final;
-        bool use_job() const override final;
+        register_commands(dpp::cluster& cluster, cmd_runner& runner_cmd_ptr, cmd_ctx_runner& runner_ctx_ptr) noexcept;
+        dpp::task<void> command(const dpp::ready_t& event_data) override final;
+        std::optional<std::function<void()>> job(const dpp::ready_t& event_data) override final;
+        bool use_job() const noexcept override final;
 
-        register_commands(const register_commands&) = default;
-
-        register_commands(register_commands&&) = default;
-
-        register_commands& operator=(const register_commands&) = default;
-
-        register_commands& operator=(register_commands&&) = default;
+        register_commands(const register_commands&) noexcept = default;
+        register_commands(register_commands&&) noexcept = default;
+        register_commands& operator=(const register_commands&) noexcept = default;
+        register_commands& operator=(register_commands&&) noexcept = default;
     };
 }
 

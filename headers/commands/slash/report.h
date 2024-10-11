@@ -3,6 +3,7 @@
 #define H_MLN_DB_REPORT_H
 
 #include "commands/slash/base_slashcommand.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/job.h>
 
@@ -22,14 +23,20 @@ namespace mln {
     private:
         database_handler& db;
         size_t saved_insert_rep_query;
-        bool valid_saved_stmt;
+        db_saved_stmt_state db_state;
 
     public:
         report(dpp::cluster& cluster, database_handler& db);
-        dpp::job command(dpp::slashcommand_t event_data) const override final;
+        ~report();
+        report(const report&) = delete;
+        report(report&& rhs) noexcept;
+        report& operator=(const report&) = delete;
+        report& operator=(report&& rhs) noexcept;
 
-        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) const override final;
-        bool use_job() const override final;
+        dpp::job command(dpp::slashcommand_t event_data) override final;
+
+        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) override final;
+        bool use_job() const noexcept override final;
     };
 }
 

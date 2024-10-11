@@ -8,8 +8,6 @@
 #include "database/db_result.h"
 #include "database/db_text_encoding.h"
 
-#include <dpp/coro/task.h>
-
 #include <cstdint>
 #include <queue>
 #include <string>
@@ -58,33 +56,20 @@ namespace mln {
 		db_result_t exec(
 			size_t saved_statement_id, 
 			const database_callbacks_t& callbacks) const;
-		dpp::task<db_result_t> exec_task(
-			size_t saved_statement_id,
-			const database_callbacks_t& callbacks) const;
 		//The saved_id overload is to be preferred for statements that will be executed several times
 		db_result_t exec(
 			const std::string& stmt,
 			const database_callbacks_t& callbacks) const;
-		dpp::task<db_result_t> exec_task(
-			const std::string& stmt,
-			const database_callbacks_t& callbacks) const;
 		//The saved_id overload is to be preferred for statements that will be executed several times
 		db_result_t exec(
-			const char* stmt,
-			int length_with_null,
-			const database_callbacks_t& callbacks) const;
-		dpp::task<db_result_t> exec_task(
 			const char* stmt,
 			int length_with_null,
 			const database_callbacks_t& callbacks) const;
 
 		db_result_t save_statement(const std::string& statement, size_t& out_saved_statement_id);
-		dpp::task<db_result_t> save_statement_task(const std::string& statement, size_t& out_saved_statement_id);
 		db_result_t save_statement(const char* statement, int length_with_null, size_t& out_saved_statement_id);
-		dpp::task<db_result_t> save_statement_task(const char* statement, int length_with_null, size_t& out_saved_statement_id);
 		//Use only when you know you don't need the statement anymore
 		db_result_t delete_statement(size_t saved_statement_id);
-		dpp::task<db_result_t> delete_statement_task(size_t saved_statement_id);
 
 		void delete_all_statement();
 
@@ -93,25 +78,16 @@ namespace mln {
 		//The bind param_index are indexed from 1!
 		//https://www.sqlite.org/capi3ref.html#sqlite3_bind_blob
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, int value) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, int value) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, int64_t value) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, int64_t value) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, double value) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, double value) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const char* text, uint64_t bytes, db_destructor_behavior mem_management, db_text_encoding encoding) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const char* text, uint64_t bytes, db_destructor_behavior mem_management, db_text_encoding encoding) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const;
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const void* blob, uint64_t bytes, db_destructor_behavior mem_management) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const void* blob, uint64_t bytes, db_destructor_behavior mem_management) const;
 		//The void* is ignored here
 		db_result_t bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const void*, uint64_t bytes) const;
-		dpp::task<db_result_t> bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const void*, uint64_t bytes) const;
 
 		db_result_t get_bind_parameter_index(size_t saved_statement_id, size_t stmt_index, const char* param_name, int& out_index) const;
-		dpp::task<db_result_t> get_bind_parameter_index_task(size_t saved_statement_id, size_t stmt_index, const char* param_name, int& out_index) const;
 
 		std::string get_last_err_msg() const;
 		size_t get_last_changes() const;

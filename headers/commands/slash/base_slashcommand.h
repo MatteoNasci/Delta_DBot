@@ -22,14 +22,6 @@ namespace mln {
 	public:
 
 		base_slashcommand() = delete;
-
-		base_slashcommand(const base_slashcommand&) = default;
-
-		base_slashcommand(base_slashcommand&&) = default;
-
-		base_slashcommand& operator=(const base_slashcommand&) = default;
-
-		base_slashcommand& operator=(base_slashcommand&&) = default;
 	};
 }
 

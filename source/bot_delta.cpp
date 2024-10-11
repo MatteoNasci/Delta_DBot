@@ -17,6 +17,7 @@
 #include <dpp/snowflake.h>
 #include <dpp/timer.h>
 
+#include <atomic>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -35,6 +36,7 @@ size_t mln::bot_delta::min_text_id_size() {
 
 void mln::bot_delta::setup_db() {
     std::filesystem::create_directory(std::filesystem::current_path().concat("/dbs"));
+
     mln::db_result_t res = database.open_connection("dbs/main.db");
     if (res.type != mln::db_result::ok) {
         const std::string err_msg = std::format("An error occurred while connecting to database. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
@@ -245,11 +247,15 @@ bool mln::bot_delta::close() {
     if (is_bot_running()) {
         bot.stop_timer(db_optimize_timer);
 
+        database.delete_statement(saved_optimize_db);
+        database.delete_statement(saved_select_all_gp_query);
+        database.delete_statement(saved_select_all_query);
+
+        mln::caches::cleanup();
+
         bot.shutdown();
         running.store(false, std::memory_order_relaxed);
     }
-
-    mln::caches::cleanup();
 
     return database.close_connection().type == mln::db_result::ok;
 }

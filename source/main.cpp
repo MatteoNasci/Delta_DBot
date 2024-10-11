@@ -40,8 +40,8 @@ bool run_app();
 //TODO change exceptions with proper class esceptions
 //TODO when doing .is_exception(), use a try cacth to retrieve exception and display msg
 
-//TODO add destructors to all commands, delete stmts. Add logs to their constructors. Use for example: mln::mog::team
 //TODO remove as much static as possible
+//TODO use chronometer to time stuff
 
 /*
 To test: fare qui lista di cose da testare. Ad ogni singolo test associare i relativi comandi discord

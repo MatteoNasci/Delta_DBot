@@ -22,11 +22,11 @@ namespace mln {
 		gateway_unavailable = 502, //(GATEWAY UNAVAILABLE)	There was not a gateway available to process your request.Wait a bit and retry.
 	};
 
-	extern const char* get_http_err_text(const std::underlying_type<http_err>::type error);
+	extern const char* get_http_err_text(const std::underlying_type<http_err>::type error) noexcept;
 
-	extern const char* get_dpp_http_err_text(const dpp::http_error error);
+	extern const char* get_dpp_http_err_text(const dpp::http_error error) noexcept;
 
-	extern constexpr bool is_http_rate_limited(const std::underlying_type<http_err>::type error);
+	extern constexpr bool is_http_rate_limited(const std::underlying_type<http_err>::type error) noexcept;
 }
 
 #endif //H_MLN_DB_HTTP_ERR_H

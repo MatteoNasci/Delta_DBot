@@ -8,7 +8,9 @@
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
 #include "utility/perms.h"
@@ -42,154 +44,186 @@ static constexpr size_t s_pagination_timeout = 120;
 static constexpr size_t s_pagination_max_text_size = 2000;
 
 mln::mog::mog_team::mog_team(dpp::cluster& cluster, database_handler& db) : base_mog_command{ cluster }, teams_mutex{}, teams_data_cache{},
-data{ .valid_stmt = true }, del_data{ .valid_stmt = true }, member_data{ .valid_stmt = true }, 
-del_member_data{ .valid_stmt = true }, show_data{ .valid_stmt = true }, show_team_data{ .valid_stmt = true }, show_all_data{ .valid_stmt = true }, db{ db }
+data{ .state = db_saved_stmt_state::none }, del_data{ .state = db_saved_stmt_state::none }, member_data{ .state = db_saved_stmt_state::none },
+del_member_data{ .state = db_saved_stmt_state::none }, show_data{ .state = db_saved_stmt_state::none },
+show_team_data{ .state = db_saved_stmt_state::none }, show_all_data{ .state = db_saved_stmt_state::none }, db{ db }
 {
     const mln::db_result_t res1 = db.save_statement("INSERT OR ABORT INTO mog_team(guild_id, name, channel, role) VALUES(:GGG, :NNN, :CCC, :RRR) RETURNING guild_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
     }
     else {
+        data.state = mln::flags::add(data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt, 0, ":NNN", data.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(data.saved_stmt, 0, ":CCC", data.saved_param_channel);
         const mln::db_result_t res14 = db.get_bind_parameter_index(data.saved_stmt, 0, ":RRR", data.saved_param_role);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], channel_param: [{}, {}], role_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], channel_param: [{}, {}], role_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
                 mln::database_handler::get_name_from_result(res14.type), res14.err_text));
-            data.valid_stmt = false;
+        }
+        else {
+            data.state = mln::flags::add(data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res2 = db.save_statement("DELETE FROM mog_team WHERE guild_id = :GGG AND name = :NNN RETURNING guild_id;", del_data.saved_stmt);
     if (res2.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res2.type), res2.err_text));
-        del_data.valid_stmt = false;
     }
     else {
+        del_data.state = mln::flags::add(del_data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(del_data.saved_stmt, 0, ":GGG", del_data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(del_data.saved_stmt, 0, ":NNN", del_data.saved_param_name);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            del_data.valid_stmt = false;
+        }
+        else {
+            del_data.state = mln::flags::add(del_data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res3 = db.save_statement("INSERT OR ABORT INTO mog_team_member(guild_id, name, user_id) VALUES(:GGG, :NNN, :UUU) RETURNING user_id;", member_data.saved_stmt);
     if (res3.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team member stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team member stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res3.type), res3.err_text));
-        member_data.valid_stmt = false;
     }
     else {
+        member_data.state = mln::flags::add(member_data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(member_data.saved_stmt, 0, ":GGG", member_data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(member_data.saved_stmt, 0, ":NNN", member_data.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(member_data.saved_stmt, 0, ":UUU", member_data.saved_param_user);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team member stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert mog team member stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text));
-            member_data.valid_stmt = false;
+        }
+        else {
+            member_data.state = mln::flags::add(member_data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res4 = db.save_statement("DELETE FROM mog_team_member WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING user_id;", del_member_data.saved_stmt);
     if (res4.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team member stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team member stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res4.type), res4.err_text));
-        del_member_data.valid_stmt = false;
     }
     else {
+        del_member_data.state = mln::flags::add(del_member_data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(del_member_data.saved_stmt, 0, ":GGG", del_member_data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(del_member_data.saved_stmt, 0, ":NNN", del_member_data.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(del_member_data.saved_stmt, 0, ":UUU", del_member_data.saved_param_user);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team member stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete mog team member stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text, 
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text));
-            del_member_data.valid_stmt = false;
+        }
+        else {
+            del_member_data.state = mln::flags::add(del_member_data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res5 = db.save_statement("SELECT t.channel, t.role FROM mog_team AS t WHERE t.guild_id = :GGG AND t.name = :NNN; SELECT m.user_id FROM mog_team_member AS m WHERE m.guild_id = :GGG AND m.name = :NNN;", show_team_data.saved_stmt);
     if (res5.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save select mog team stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select mog team stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res5.type), res5.err_text));
-        show_team_data.valid_stmt = false;
     }
     else {
+        show_team_data.state = mln::flags::add(show_team_data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(show_team_data.saved_stmt, 0, ":GGG", show_team_data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(show_team_data.saved_stmt, 0, ":NNN", show_team_data.saved_param_name);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save select mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select mog team stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            show_team_data.valid_stmt = false;
+        }
+        else {
+            show_team_data.state = mln::flags::add(show_team_data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
     const mln::db_result_t res6 = db.save_statement("SELECT t.name, t.channel, t.role, m.user_id FROM mog_team AS t JOIN mog_team_member AS m ON t.guild_id = m.guild_id AND t.name = m.name WHERE t.guild_id = ?1 ORDER BY t.name ASC;", show_data.saved_stmt);
     if (res6.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save select all mog team stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select all mog team stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res6.type), res6.err_text));
-        show_data.valid_stmt = false;
+    }
+    else {
+        show_data.state = mln::flags::add(show_data.state, db_saved_stmt_state::initialized);
     }
 
     const mln::db_result_t res7 = db.save_statement("SELECT * FROM mog_team; SELECT * FROM mog_team_member;", show_all_data.saved_stmt);
     if (res7.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save select all mog teams stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select all mog teams stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res7.type), res7.err_text));
-        show_all_data.valid_stmt = false;
+    }
+    else {
+        show_all_data.state = mln::flags::add(show_all_data.state, db_saved_stmt_state::initialized);
     }
 
-    bot().log(dpp::loglevel::ll_debug, std::format("Team db: [{}].", is_db_initialized()));
+    cbot().log(dpp::loglevel::ll_debug, std::format("mog_team: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
 
     load_teams();
 }
 
-mln::mog::mog_team::mog_team(mog_team&& rhs) noexcept : base_mog_command{ rhs.bot() }, teams_mutex{}, teams_data_cache{ std::move(rhs.teams_data_cache) },
-data{ std::move(rhs.data) }, del_data{ std::move(rhs.del_data) }, member_data{ std::move(rhs.member_data) },
-del_member_data{ std::move(rhs.del_member_data) }, show_data{ std::move(rhs.show_data) }, show_team_data{ std::move(rhs.show_team_data) }, 
-show_all_data{ std::move(rhs.show_all_data) }, db{ rhs.db }
+mln::mog::mog_team::mog_team(mog_team&& rhs) noexcept : base_mog_command{ std::forward<mog_team>(rhs) }, teams_mutex{}, teams_data_cache{ std::move(rhs.teams_data_cache) },
+data{ rhs.data }, del_data{ rhs.del_data }, member_data{ rhs.member_data },
+del_member_data{ rhs.del_member_data }, show_data{ rhs.show_data }, show_team_data{ rhs.show_team_data }, 
+show_all_data{ rhs.show_all_data }, db{ rhs.db }
 {
+    rhs.teams_data_cache = {};
+}
+
+mln::mog::mog_team& mln::mog::mog_team::operator=(mog_team&& rhs) noexcept
+{
+    base_mog_command::operator=(std::forward<mog_team>(rhs));
+    teams_data_cache = std::move(rhs.teams_data_cache);
+    rhs.teams_data_cache = {};
+    data = rhs.data;
+    del_data = rhs.del_data;
+    member_data = rhs.member_data;
+    del_member_data = rhs.del_member_data;
+    show_data = rhs.show_data;
+    show_team_data = rhs.show_team_data;
+    show_all_data = rhs.show_all_data;
+
+    return *this;
 }
 
 mln::mog::mog_team::~mog_team()
 {
-    if (show_all_data.valid_stmt) {
+    if (mln::flags::has(show_all_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(show_all_data.saved_stmt);
     }
-    if (show_data.valid_stmt) {
+    if (mln::flags::has(show_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(show_data.saved_stmt);
     }
-    if (show_team_data.valid_stmt) {
+    if (mln::flags::has(show_team_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(show_team_data.saved_stmt);
     }
-    if (del_member_data.valid_stmt) {
+    if (mln::flags::has(del_member_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(del_member_data.saved_stmt);
     }
-    if (member_data.valid_stmt) {
+    if (mln::flags::has(member_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(member_data.saved_stmt);
     }
-    if (del_data.valid_stmt) {
+    if (mln::flags::has(del_data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(del_data.saved_stmt);
     }
-    if (data.valid_stmt) {
+    if (mln::flags::has(data.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(data.saved_stmt);
     }
 }
 
-dpp::task<void> mln::mog::mog_team::command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type) const
+dpp::task<void> mln::mog::mog_team::command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type type)
 {
     switch (type) {
     case mln::mog::mog_command_type::create:
@@ -220,7 +254,7 @@ dpp::task<void> mln::mog::mog_team::command(const dpp::slashcommand_t& event_dat
     }
 }
 
-mln::mog::mog_init_type_flag mln::mog::mog_team::get_requested_initialization_type(const mog_command_type cmd) const
+mln::mog::mog_init_type_flag mln::mog::mog_team::get_requested_initialization_type(const mog_command_type cmd) const noexcept
 {
     switch (cmd) {
     case mln::mog::mog_command_type::create:
@@ -229,7 +263,7 @@ mln::mog::mog_init_type_flag mln::mog::mog_team::get_requested_initialization_ty
     case mln::mog::mog_command_type::leave:
     case mln::mog::mog_command_type::leave_and_join:
     case mln::mog::mog_command_type::show:
-        return mln::mog::mog_init_type_flag::cmd_data | mln::mog::mog_init_type_flag::thinking;
+        return mln::flags::add(mln::mog::mog_init_type_flag::cmd_data, mln::mog::mog_init_type_flag::thinking);
     case mln::mog::mog_command_type::help:
         return mln::mog::mog_init_type_flag::none;
     default:
@@ -237,9 +271,9 @@ mln::mog::mog_init_type_flag mln::mog::mog_team::get_requested_initialization_ty
     }
 }
 
-bool mln::mog::mog_team::is_db_initialized() const
+mln::db_saved_stmt_state mln::mog::mog_team::is_db_initialized() const noexcept
 {
-    return data.valid_stmt && del_data.valid_stmt && member_data.valid_stmt && del_member_data.valid_stmt && show_data.valid_stmt && show_team_data.valid_stmt && show_all_data.valid_stmt;
+    return mln::flags::com(data.state, del_data.state, member_data.state, del_member_data.state, show_data.state, show_team_data.state, show_all_data.state);
 }
 
 dpp::task<void> mln::mog::mog_team::create(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
@@ -690,7 +724,7 @@ void mln::mog::mog_team::load_teams() const
         };
     
 
-    bot().log(dpp::loglevel::ll_debug, "Recovering teams from database...");
+    cbot().log(dpp::loglevel::ll_debug, "Recovering teams from database...");
     const mln::db_result_t res = db.exec(show_all_data.saved_stmt, calls);
     const bool empty_result = mog_teams.empty();
     if (mln::database_handler::is_exec_error(res.type) || empty_result) {
@@ -699,12 +733,12 @@ void mln::mog::mog_team::load_teams() const
             "Failed while executing database query for loading mog teams! Failed to find any teams!" :
             "Failed while executing database query for loading mog teams! Internal database error!";
 
-        bot().log(dpp::loglevel::ll_error, std::format("{} Error: [{}], details: [{}].", err_text, mln::database_handler::get_name_from_result(res.type), res.err_text));
+        cbot().log(dpp::loglevel::ll_error, std::format("{} Error: [{}], details: [{}].", err_text, mln::database_handler::get_name_from_result(res.type), res.err_text));
     }
 
-    bot().log(dpp::loglevel::ll_debug, "Clearing teams cache...");
+    cbot().log(dpp::loglevel::ll_debug, "Clearing teams cache...");
     clear_teams();
-    bot().log(dpp::loglevel::ll_debug, std::format("Cleared cache! Using [{}] recovered teams from db (total users: [{}]) to fill the cache...", mog_teams.size(), mog_members.size()));
+    cbot().log(dpp::loglevel::ll_debug, std::format("Cleared cache! Using [{}] recovered teams from db (total users: [{}]) to fill the cache...", mog_teams.size(), mog_members.size()));
 
     //NOTE: Slow but who cares
     size_t i = 0;
@@ -728,7 +762,7 @@ void mln::mog::mog_team::load_teams() const
         set_team(team_data);
     }
 
-    bot().log(dpp::loglevel::ll_debug, std::format("Loaded [{}] guilds with teams from db!", teams_count()));
+    cbot().log(dpp::loglevel::ll_debug, std::format("Loaded [{}] guilds with teams from db!", teams_count()));
 }
 
 std::optional<mln::mog::mog_team_data_t> mln::mog::mog_team::get_team(const uint64_t guild_id, const std::string& team_name) const

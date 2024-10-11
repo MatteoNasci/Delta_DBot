@@ -6,7 +6,9 @@
 #include "database/database_callbacks.h"
 #include "database/database_handler.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
@@ -44,14 +46,14 @@
 #include <variant>
 #include <vector>
 
-mln::db_insert::db_insert(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_insert::db_insert(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .state = db_saved_stmt_state::none }, db{ in_db } {
 
     const mln::db_result_t res1 = db.save_statement(
         "INSERT OR ABORT INTO storage(guild_id, name, url, desc, user_id, nsfw) VALUES(:GGG, :NNN, :LLL, :DDD, :UUU, :WWW) RETURNING user_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert url stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert url stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res1.type), res1.err_text));
     } else {
+        data.state = mln::flags::add(data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt, 0, ":NNN", data.saved_param_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(data.saved_stmt, 0, ":LLL", data.saved_param_url);
@@ -59,19 +61,45 @@ mln::db_insert::db_insert(dpp::cluster& cluster, database_handler& in_db) : base
         const mln::db_result_t res15 = db.get_bind_parameter_index(data.saved_stmt, 0, ":DDD", data.saved_param_desc);
         const mln::db_result_t res16 = db.get_bind_parameter_index(data.saved_stmt, 0, ":WWW", data.saved_param_nsfw);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok || res15.type != mln::db_result::ok || res16.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save insert url stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], url_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}], nsfw_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save insert url stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], url_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}], nsfw_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
                 mln::database_handler::get_name_from_result(res14.type), res14.err_text,
                 mln::database_handler::get_name_from_result(res15.type), res15.err_text,
                 mln::database_handler::get_name_from_result(res16.type), res16.err_text));
-            data.valid_stmt = false;
         }
+        else {
+            data.state = mln::flags::add(data.state, db_saved_stmt_state::params_initialized);
+        }
+    }
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_insert: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::db_insert::~db_insert()
+{
+    if (mln::flags::has(data.state, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt);
     }
 }
 
-dpp::task<void> mln::db_insert::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+mln::db_insert::db_insert(db_insert&& rhs) noexcept : base_db_command{ std::forward<db_insert>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.state = db_saved_stmt_state::none;
+}
+
+mln::db_insert& mln::db_insert::operator=(db_insert&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_insert>(rhs));
+
+    data = rhs.data;
+    rhs.data.state = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+dpp::task<void> mln::db_insert::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
 
     //Checking nsfw permission on dump channel
     const dpp::command_value& nsfw_param = event_data.get_parameter("nsfw");
@@ -102,13 +130,13 @@ dpp::task<void> mln::db_insert::command(const dpp::slashcommand_t& event_data, d
     }
 }
 
-mln::db_init_type_flag mln::db_insert::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_insert::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::url:
     case mln::db_command_type::file:
-        return db_init_type_flag::cmd_data | db_init_type_flag::dump_channel | db_init_type_flag::thinking;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::dump_channel, db_init_type_flag::thinking);
     case mln::db_command_type::text:
-        return db_init_type_flag::cmd_data | db_init_type_flag::dump_channel;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::dump_channel);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
@@ -116,12 +144,12 @@ mln::db_init_type_flag mln::db_insert::get_requested_initialization_type(const d
     }
 }
 
-bool mln::db_insert::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_insert::is_db_initialized() const noexcept
 {
-    return data.valid_stmt;
+    return data.state;
 }
 
-dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) const {
+dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) {
     //Verify if given url is a valid discord message url
     const dpp::command_value& input_param = event_data.get_parameter("url");
     const std::optional<std::string> input_url = co_await mln::utility::check_text_validity(input_param, cmd_data.data, false,
@@ -156,7 +184,7 @@ dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_dat
         co_await manage_msg_url(event_data, cmd_data, url_data, nsfw);
     }
 }
-dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) const {
+dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) {
     static const uint32_t s_max_characters_allowed = static_cast<uint32_t>(std::min(mln::constants::get_max_characters_modal_component(), std::max(mln::constants::get_max_characters_embed_description(), std::max(mln::constants::get_max_characters_embed_field_value(), mln::constants::get_max_characters_reply_msg()))));
     static const uint32_t s_max_characters_allowed_field = std::min(static_cast<uint32_t>(mln::constants::get_max_characters_embed_field_value()), s_max_characters_allowed);
     static const uint32_t s_max_characters_allowed_msg = std::min(static_cast<uint32_t>(mln::constants::get_max_characters_reply_msg()), s_max_characters_allowed);
@@ -346,7 +374,7 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
 
     co_await mln::response::co_respond(form_lite, "Database operation successful!", false, "Failed insert command conclusion reply!");
 }
-dpp::task<void> mln::db_insert::command_file(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) const {
+dpp::task<void> mln::db_insert::command_file(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) {
     //Find given file from resolved elements, if not found return an error
     static constexpr size_t s_files_param_names_size = 10;
     static constexpr std::string s_files_param_names[s_files_param_names_size]{ "file", "file1", "file2" , "file3" , "file4" , "file5" , "file6" , "file7" , "file8" , "file9" };
@@ -486,7 +514,7 @@ Only ASCII printable characters are accepted as input for the `name` and `descri
     co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db insert help text!");
     co_return;
 }
-dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const std::tuple<std::string, std::string>& url_name, bool nsfw) const {
+dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const std::tuple<std::string, std::string>& url_name, bool nsfw) {
     const bool create_msg_permission = mln::perms::check_permissions(cmd_data.dump_channel_bot_perm, 
         dpp::permissions::p_send_messages | dpp::permissions::p_view_channel | dpp::permissions::p_attach_files);
     //Return an error if the bot is not allowed to send messages in the dump channel
@@ -555,7 +583,7 @@ dpp::task<void> mln::db_insert::manage_attach_url(const dpp::slashcommand_t& eve
     //Return a success reply to the user
     co_await mln::response::co_respond(cmd_data.data, "Database operation successful!", false, "Failed insert command conclusion reply!");
 }
-dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const mln::msg_url_t& url_data, bool nsfw) const {
+dpp::task<void> mln::db_insert::manage_msg_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const mln::msg_url_t& url_data, bool nsfw) {
     
     //Check permission for storing msg
     const bool create_msg_permission =

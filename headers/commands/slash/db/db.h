@@ -27,23 +27,23 @@ namespace mln {
     class db final : public base_slashcommand {
     private:
         std::array<std::unique_ptr<mln::base_db_command>, 8> commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_insert_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_update_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_delete_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_config_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_select_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_show_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_help_sub_commands;
-        const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> allowed_privacy_sub_commands;
-        const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, db_command_type>>&> allowed_primary_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_insert_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_update_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_delete_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_config_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_select_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_show_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_help_sub_commands;
+        static const std::unordered_map<std::string, std::tuple<size_t, db_command_type>> s_allowed_privacy_sub_commands;
+        static const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, db_command_type>>&> s_allowed_primary_sub_commands;
 
         database_handler& database;
     public:
         db(dpp::cluster& cluster, database_handler& database);
-        dpp::job command(dpp::slashcommand_t event_data) const override final;
+        dpp::job command(dpp::slashcommand_t event_data) override final;
 
-        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) const override final;
-        bool use_job() const override final;
+        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) override final;
+        bool use_job() const noexcept override final;
     };
 }
 

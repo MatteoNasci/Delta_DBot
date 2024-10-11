@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <unordered_map>
 
-const char* mln::get_http_err_text(const std::underlying_type<http_err>::type error)
+const char* mln::get_http_err_text(const std::underlying_type<http_err>::type error) noexcept
 {
     static const char* s_invalid_error_text = "Unknown http error";
     static const char* s_server_error_text = ">502: The server had an error processing your request (these are rare).";
@@ -35,7 +35,7 @@ const char* mln::get_http_err_text(const std::underlying_type<http_err>::type er
     return s_invalid_error_text;
 }
 
-const char* mln::get_dpp_http_err_text(const dpp::http_error error)
+const char* mln::get_dpp_http_err_text(const dpp::http_error error) noexcept
 {
     static const char* s_invalid_error_text = "Unknown dpp http error";
     static constexpr size_t s_error_to_text_map_size = 13;
@@ -62,7 +62,7 @@ const char* mln::get_dpp_http_err_text(const dpp::http_error error)
     return s_invalid_error_text;
 }
 
-constexpr bool mln::is_http_rate_limited(const std::underlying_type<http_err>::type error)
+constexpr bool mln::is_http_rate_limited(const std::underlying_type<http_err>::type error) noexcept
 {
     return error == static_cast<std::underlying_type<http_err>::type>(http_err::too_many_requests);
 }

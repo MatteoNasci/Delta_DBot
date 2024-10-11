@@ -33,9 +33,11 @@ mln::add_role::add_role(dpp::cluster& cluster) : base_slashcommand{ cluster,
         .set_default_permissions(dpp::permissions::p_use_application_commands)
         .add_option(dpp::command_option(dpp::co_user, "user", "User to give role to", true))
         .add_option(dpp::command_option(dpp::co_role, "role", "Role to give", true))
-    ) } {}
+    ) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("add_role: [{}].", true));
+}
 
-dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::add_role::command(dpp::slashcommand_t event_data) {
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed add_role, the event is incorrect!");
@@ -157,13 +159,13 @@ dpp::job mln::add_role::command(dpp::slashcommand_t event_data) const {
     co_return;
 }
 
-std::optional<std::function<void()>> mln::add_role::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::add_role::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::add_role::use_job() const
+bool mln::add_role::use_job() const noexcept
 {
     return false;
 }

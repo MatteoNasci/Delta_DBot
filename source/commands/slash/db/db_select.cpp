@@ -7,7 +7,9 @@
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
@@ -39,26 +41,52 @@
 #include <variant>
 #include <vector>
 
-mln::db_select::db_select(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_select::db_select(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .state = db_saved_stmt_state::none }, db{ in_db } {
 
     const mln::db_result_t res = db.save_statement("SELECT url, nsfw FROM storage WHERE guild_id = :GGG AND name = :NNN;", data.saved_stmt);
     if (res.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt! Error: [{}], details: [{}].", 
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt! Error: [{}], details: [{}].", 
             mln::database_handler::get_name_from_result(res.type), res.err_text));
-        data.valid_stmt = false;
     } else {
+        data.state = mln::flags::add(data.state, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt, 0, ":NNN", data.saved_param_name);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            data.valid_stmt = false;
         }
+        else {
+            data.state = mln::flags::add(data.state, db_saved_stmt_state::params_initialized);
+        }
+    }
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_select: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::db_select::~db_select()
+{
+    if (mln::flags::has(data.state, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt);
     }
 }
 
-dpp::task<void> mln::db_select::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+mln::db_select::db_select(db_select&& rhs) noexcept : base_db_command{ std::forward<db_select>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.state = db_saved_stmt_state::none;
+}
+
+mln::db_select& mln::db_select::operator=(db_select&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_select>(rhs));
+
+    data = rhs.data;
+    rhs.data.state = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+dpp::task<void> mln::db_select::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
     switch (type) {
     case mln::db_command_type::single:
         co_await mln::db_select::select(event_data, cmd_data);
@@ -73,10 +101,10 @@ dpp::task<void> mln::db_select::command(const dpp::slashcommand_t& event_data, d
     }
 }
 
-mln::db_init_type_flag mln::db_select::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_select::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::single:
-        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::thinking);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
@@ -84,12 +112,12 @@ mln::db_init_type_flag mln::db_select::get_requested_initialization_type(const d
     }
 }
 
-bool mln::db_select::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_select::is_db_initialized() const noexcept
 {
-    return data.valid_stmt;
+    return data.state;
 }
 
-dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) {
     //Check basic perms for sending result message to user channel
     if (!mln::perms::check_permissions(cmd_data.cmd_bot_perm, dpp::permissions::p_view_channel | dpp::permissions::p_send_messages)) {
         co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot doesn't have the required minimum perms to send messages in the user channel!", false, {});

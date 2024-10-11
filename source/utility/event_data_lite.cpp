@@ -14,6 +14,8 @@ mln::event_data_lite_t::event_data_lite_t() noexcept : event_data_lite_t{ 0, 0, 
 mln::event_data_lite_t::event_data_lite_t(event_data_lite_t&& rhs) noexcept :
 	command_id{ rhs.command_id }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, usr_id{ rhs.usr_id }, app_id{ rhs.app_id }, command_name{ std::move(rhs.command_name) }, token{ std::move(rhs.token) }, creator{ rhs.creator }, is_first_reply{ rhs.is_first_reply }
 {
+	rhs.command_name = {};
+	rhs.token = {};
 }
 
 mln::event_data_lite_t::event_data_lite_t(const event_data_lite_t& rhs) noexcept : event_data_lite_t{ rhs.command_id, rhs.guild_id, rhs.channel_id, rhs.usr_id, rhs.app_id, rhs.command_name, rhs.token, rhs.creator, rhs.is_first_reply }
@@ -42,7 +44,9 @@ mln::event_data_lite_t& mln::event_data_lite_t::operator=(event_data_lite_t&& rh
 	usr_id = rhs.usr_id;
 	app_id = rhs.app_id;
 	command_name = std::move(rhs.command_name);
+	rhs.command_name = {};
 	token = std::move(rhs.token);
+	rhs.token = {};
 	creator = rhs.creator;
 	is_first_reply = rhs.is_first_reply;
 	return *this;

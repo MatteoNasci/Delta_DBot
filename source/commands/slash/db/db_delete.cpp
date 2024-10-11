@@ -7,7 +7,9 @@
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
 #include "database/db_text_encoding.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
@@ -46,57 +48,106 @@
 
 static const uint64_t s_confirmation_button_timeout{ 60 };
 
-mln::db_delete::db_delete(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_delete::db_delete(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
+data{ .valid_guild = db_saved_stmt_state::none, .valid_self = db_saved_stmt_state::none, .valid_user = db_saved_stmt_state::none, .valid_single = db_saved_stmt_state::none, }, db{ in_db } {
     //Delete a specific record by name, works only if used by record owner or by admin
     const mln::db_result_t res1 = db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND name = :NNN AND user_id = :UUU RETURNING url;", data.saved_single);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res1.type), res1.err_text));
     } else {
+        data.valid_single = mln::flags::add(data.valid_single, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_single, 0, ":GGG", data.saved_param_single_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_single, 0, ":NNN", data.saved_param_single_name);
         const mln::db_result_t res13 = db.get_bind_parameter_index(data.saved_single, 0, ":UUU", data.saved_param_single_user);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].", 
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete single stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}].", 
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text));
-            data.valid_stmt = false;
+        }
+        else {
+            data.valid_single = mln::flags::add(data.valid_single, db_saved_stmt_state::params_initialized);
         }
     }
 
     //Delete all records of a specified user in the guild, works only if used by record owner or by admin
     const mln::db_result_t res2 = db.save_statement("DELETE FROM storage WHERE guild_id = :GGG AND user_id = :UUU RETURNING url;", data.saved_user);
     if (res2.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res2.type), res2.err_text));
-        data.valid_stmt = false;
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res2.type), res2.err_text));
     } else {
+        data.valid_user = mln::flags::add(data.valid_user, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_user, 0, ":GGG", data.saved_param_user_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_user, 0, ":UUU", data.saved_param_user_user);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt param indexes! guild_param: [{}, {}], user_param: [{}, {}].", 
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete user stmt param indexes! guild_param: [{}, {}], user_param: [{}, {}].", 
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text, 
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            data.valid_stmt = false;
+        }
+        else {
+            data.valid_user = mln::flags::add(data.valid_user, db_saved_stmt_state::params_initialized);
         }
     }
 
     //Delete all record of the guild, works only if used by admin
     const mln::db_result_t res3 = db.save_statement("DELETE FROM storage WHERE guild_id = ?1 RETURNING url, user_id;", data.saved_guild);
     if (res3.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete guild stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res3.type), res3.err_text));
-        data.valid_stmt = false;
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete guild stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res3.type), res3.err_text));
+    }
+    else {
+        data.valid_guild = mln::flags::add(data.valid_guild, db_saved_stmt_state::initialized);
     }
 
     //Delete all records of a user (regardless of the server the records are saved in), works only for the command user
     const mln::db_result_t res4 = db.save_statement("DELETE FROM storage WHERE user_id = ?1 RETURNING url;", data.saved_self);
     if (res4.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save delete self stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res4.type), res4.err_text));
-        data.valid_stmt = false;
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save delete self stmt! Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res4.type), res4.err_text));
+    }
+    else {
+        data.valid_self = mln::flags::add(data.valid_self, db_saved_stmt_state::initialized);
+    }
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_delete: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::db_delete::~db_delete()
+{
+    if (mln::flags::has(data.valid_guild, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_guild);
+    }
+    if (mln::flags::has(data.valid_self, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_self);
+    }
+    if (mln::flags::has(data.valid_single, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_single);
+    }
+    if (mln::flags::has(data.valid_user, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_user);
     }
 }
 
-dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+mln::db_delete::db_delete(db_delete&& rhs) noexcept : base_db_command{ std::forward<db_delete>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.valid_guild = db_saved_stmt_state::none;
+    rhs.data.valid_self = db_saved_stmt_state::none;
+    rhs.data.valid_user = db_saved_stmt_state::none;
+    rhs.data.valid_single = db_saved_stmt_state::none;
+}
+
+
+mln::db_delete& mln::db_delete::operator=(db_delete&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_delete>(rhs));
+
+    data = rhs.data;
+    rhs.data.valid_guild = db_saved_stmt_state::none;
+    rhs.data.valid_self = db_saved_stmt_state::none;
+    rhs.data.valid_user = db_saved_stmt_state::none;
+    rhs.data.valid_single = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
 
     const std::string button_text = mln::db_delete::get_warning_message(type);
     event_data_lite_t button_lite{};
@@ -198,13 +249,13 @@ dpp::task<void> mln::db_delete::command(const dpp::slashcommand_t& event_data, d
     }
 }
 
-mln::db_init_type_flag mln::db_delete::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_delete::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::user:
     case mln::db_command_type::self:
     case mln::db_command_type::single:
     case mln::db_command_type::guild:
-        return mln::db_init_type_flag::cmd_data | mln::db_init_type_flag::thinking;
+        return mln::flags::add(mln::db_init_type_flag::cmd_data, mln::db_init_type_flag::thinking);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
@@ -212,7 +263,7 @@ mln::db_init_type_flag mln::db_delete::get_requested_initialization_type(const d
     }
 }
 
-std::string mln::db_delete::get_warning_message(const db_command_type type) const {
+std::string mln::db_delete::get_warning_message(const db_command_type type) const noexcept {
     switch (type) {
     case mln::db_command_type::user:
         return "Are you sure you want to delete ALL records related to the given user on this server? This action cannot be reversed.";
@@ -227,12 +278,12 @@ std::string mln::db_delete::get_warning_message(const db_command_type type) cons
         return "";
     }
 }
-bool mln::db_delete::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_delete::is_db_initialized() const noexcept
 {
-    return data.valid_stmt;
+    return mln::flags::com(data.valid_guild, data.valid_self, data.valid_single, data.valid_user);
 }
 
-dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) {
     const dpp::command_value& user_param = event_data.get_parameter("owner");
     dpp::snowflake target = cmd_data.data.usr_id;
     if (std::holds_alternative<dpp::snowflake>(user_param)) {
@@ -267,7 +318,7 @@ dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, ev
 
     co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_single, target);
 }
-dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) {
     const dpp::command_value& user_param = event_data.get_parameter("user");
     const dpp::snowflake target = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : dpp::snowflake{ 0 };
 
@@ -293,7 +344,7 @@ dpp::task<void> mln::db_delete::user(const dpp::slashcommand_t& event_data, even
 
     co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_user, target);
 }
-dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) {
     if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
         co_await mln::response::co_respond(reply_data, "Failed to delete the guild records, admin permission required!", false, {});
         co_return;
@@ -316,7 +367,7 @@ dpp::task<void> mln::db_delete::guild(const dpp::slashcommand_t& event_data, eve
 
     co_await mln::db_delete::exec(event_data, reply_data, cmd_data, data.saved_guild, 0);
 }
-dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) const {
+dpp::task<void> mln::db_delete::self(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data) {
 
     const mln::db_result_t res = db.bind_parameter(data.saved_self, 0, 1, static_cast<int64_t>(cmd_data.data.usr_id));
     if (res.type != mln::db_result::ok) {
@@ -336,7 +387,7 @@ struct db_delete_url_data_t {
 struct db_delete_lists_data_t {
     std::vector<std::vector<dpp::snowflake>> lists;
 };
-dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data, const size_t stmt, const uint64_t target) const {
+dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, event_data_lite_t& reply_data, db_cmd_data_t& cmd_data, const size_t stmt, const uint64_t target) {
     //Extract all deleted urls and attempt to delete the original messages
     std::vector<db_delete_url_data_t> urls{};
     mln::database_callbacks_t calls{};
@@ -376,7 +427,7 @@ dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, even
         uint64_t url_guild{}, url_channel{}, url_message{};
         if (!mln::utility::extract_message_url_data(url.url, url_guild, url_channel, url_message) || url_channel == 0 || url_message == 0 || url_guild == 0) {
             ++malformed_urls;
-            bot().log(dpp::loglevel::ll_warning, "Failed to retrieve data from url for delete messages.");
+            cbot().log(dpp::loglevel::ll_warning, "Failed to retrieve data from url for delete messages.");
             continue;
         }
 
@@ -431,7 +482,7 @@ dpp::task<void> mln::db_delete::exec(const dpp::slashcommand_t& event_data, even
 
             if (!mln::perms::check_permissions(bot_perm.value(), dpp::permissions::p_view_channel | dpp::permissions::p_read_message_history)) {
                 ++failed_deletes;
-                bot().log(dpp::loglevel::ll_warning, std::format("The bot doesn't have the permission to delete bulk a message! Guild: [{}], channel: [{}].", url_guild, url_channel));
+                cbot().log(dpp::loglevel::ll_warning, std::format("The bot doesn't have the permission to delete bulk a message! Guild: [{}], channel: [{}].", url_guild, url_channel));
                 continue;
             }
         }

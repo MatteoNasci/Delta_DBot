@@ -23,7 +23,7 @@ mln::mog::mog_team_data_t::mog_team_data_t(const mog_team_data_t& rhs) noexcept 
 {
 }
 
-mln::mog::mog_team_data_t::mog_team_data_t(mog_team_data_t&& rhs) noexcept : name{ std::forward<std::string>(rhs.name) }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ std::forward<std::vector<mln::mog::mog_team_data_t::user_data_t>>(rhs.users_id_cd) }
+mln::mog::mog_team_data_t::mog_team_data_t(mog_team_data_t&& rhs) noexcept : name{ std::move(rhs.name) }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ std::move(rhs.users_id_cd) }
 {
 	rhs.name = {};
 	rhs.users_id_cd = {};
@@ -42,12 +42,12 @@ mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(const mog_team_d
 
 mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(mog_team_data_t&& rhs) noexcept
 {
-	name = std::forward<std::string>(rhs.name);
+	name = std::move(rhs.name);
 	rhs.name = {};
 	guild_id = rhs.guild_id;
 	channel_id = rhs.channel_id;
 	role_id = rhs.role_id;
-	users_id_cd = std::forward<std::vector<user_data_t>>(rhs.users_id_cd);
+	users_id_cd = std::move(rhs.users_id_cd);
 	rhs.users_id_cd = {};
 
 	return *this;

@@ -16,7 +16,9 @@
 
 #include <dpp/cluster.h>
 #include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
 
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -25,6 +27,7 @@
 
 mln::cmd_runner::cmd_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner) : base_event{ cluster, db, j_runner }, event_id{}, initialized{ false }
 {
+    cbot().log(dpp::loglevel::ll_debug, std::format("cmd_runner: [{}].", true));
 }
 
 mln::cmd_runner::~cmd_runner()

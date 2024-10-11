@@ -36,10 +36,10 @@ namespace mln {
             const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>>&> allowed_primary_sub_commands;
         public:
             mog(dpp::cluster& cluster, database_handler& database);
-            dpp::job command(dpp::slashcommand_t event_data) const override final;
+            dpp::job command(dpp::slashcommand_t event_data) override final;
 
-            std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) const override final;
-            bool use_job() const override final;
+            std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) override final;
+            bool use_job() const noexcept override final;
 		};
 	}
 }

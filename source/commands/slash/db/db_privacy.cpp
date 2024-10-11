@@ -4,20 +4,20 @@
 #include "commands/slash/db/db_command_type.h"
 #include "commands/slash/db/db_init_type_flag.h"
 #include "commands/slash/db/db_privacy.h"
+#include "database/db_saved_stmt_state.h"
 #include "utility/response.h"
 
+#include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
+#include <dpp/misc-enum.h>
 
-mln::db_privacy::db_privacy(dpp::cluster& cluster) : base_db_command{ cluster } {
-}
+#include <format>
 
-dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type) const
-{
-    static const dpp::message s_info = dpp::message{ "**Privacy Policy**" }
-        .set_flags(dpp::m_ephemeral)
-        .add_embed(dpp::embed{}.set_description(R"""(**Effective Date:** 05/09/2024 (dd/mm/yyyy)
+const dpp::message mln::db_privacy::s_info = dpp::message{ "**Privacy Policy**" }
+.set_flags(dpp::m_ephemeral)
+.add_embed(dpp::embed{}.set_description(R"""(**Effective Date:** 05/09/2024 (dd/mm/yyyy)
 
 **1. Introduction**
 
@@ -83,15 +83,21 @@ If you have any questions or concerns about this Privacy Policy or our data prac
 
 By using our bot, you consent to the collection, use, and storage of your data as described in this Privacy Policy.)"""));
 
-    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db privacy text!");
+mln::db_privacy::db_privacy(dpp::cluster& cluster) : base_db_command{ cluster } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_privacy: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type)
+{
+    co_await mln::response::co_respond(cmd_data.data, mln::db_privacy::s_info, false, "Failed to reply with the db privacy text!");
     co_return;
 }
 
-mln::db_init_type_flag mln::db_privacy::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_privacy::get_requested_initialization_type(const db_command_type cmd) const noexcept {
 	return db_init_type_flag::none;
 }
 
-bool mln::db_privacy::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_privacy::is_db_initialized() const noexcept
 {
-    return true;
+    return db_saved_stmt_state::initialized;
 }

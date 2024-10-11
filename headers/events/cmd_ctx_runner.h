@@ -24,6 +24,11 @@ namespace mln {
     public:
         cmd_ctx_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner);
         ~cmd_ctx_runner();
+        cmd_ctx_runner(const cmd_ctx_runner&) = delete;
+        cmd_ctx_runner(cmd_ctx_runner&& rhs) = delete;
+        cmd_ctx_runner& operator=(const cmd_ctx_runner&) = delete;
+        cmd_ctx_runner& operator=(cmd_ctx_runner&& rhs) = delete;
+
         void attach_event() override final;
     };
 }

@@ -12,8 +12,6 @@
 
 #include "sqlite3.h"
 
-#include <dpp/coro/task.h>
-
 #include <cstdint>
 #include <functional>
 #include <malloc.h>
@@ -228,10 +226,7 @@ mln::db_result_t mln::database_handler::close_connection(){
 mln::db_result_t mln::database_handler::exec(const std::string& stmt, const database_callbacks_t& callbacks) const {
 	return mln::database_handler::exec(stmt.c_str(), static_cast<int>(stmt.length()), callbacks);
 }
-dpp::task<mln::db_result_t> mln::database_handler::exec_task(const std::string& stmt, const database_callbacks_t& callbacks) const
-{
-	co_return mln::database_handler::exec(stmt, callbacks);
-}
+
 mln::db_result_t mln::database_handler::exec(const char* stmt_text, int length_with_null, const database_callbacks_t& callbacks) const {
 	std::queue<sqlite3_stmt*> stmt_queue{};
 	const char* tail{ stmt_text };
@@ -288,10 +283,7 @@ mln::db_result_t mln::database_handler::exec(const char* stmt_text, int length_w
 	
 	return { db_result::ok, {} };
 }
-dpp::task<mln::db_result_t> mln::database_handler::exec_task(const char* stmt, int length_with_null, const database_callbacks_t& callbacks) const
-{
-	co_return mln::database_handler::exec(stmt, length_with_null, callbacks);
-}
+
 mln::db_result_t mln::database_handler::exec(const size_t saved_statement_id, const database_callbacks_t& callbacks) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -314,10 +306,6 @@ mln::db_result_t mln::database_handler::exec(const size_t saved_statement_id, co
 	return { mln::db_result::ok, {} };
 }
 
-dpp::task<mln::db_result_t> mln::database_handler::exec_task(size_t saved_statement_id, const database_callbacks_t& callbacks) const
-{
-	co_return mln::database_handler::exec(saved_statement_id, callbacks);
-}
 
 mln::db_result_t mln::database_handler::exec(sqlite3_stmt* stmt, const database_callbacks_t& callbacks) const {
 	const bool can_use_callbacks = (callbacks.data_adder_callback && callbacks.type_definer_callback);
@@ -359,10 +347,7 @@ mln::db_result_t mln::database_handler::exec(sqlite3_stmt* stmt, const database_
 mln::db_result_t mln::database_handler::save_statement(const std::string& statement, size_t& out_saved_statement_id) {
 	return mln::database_handler::save_statement(statement.c_str(), static_cast<int>(statement.length()), out_saved_statement_id);
 }
-dpp::task<mln::db_result_t> mln::database_handler::save_statement_task(const std::string& statement, size_t& out_saved_statement_id)
-{
-	co_return mln::database_handler::save_statement(statement, out_saved_statement_id);
-}
+
 mln::db_result_t mln::database_handler::save_statement(const char* statement, int length_with_null, size_t& out_saved_statement_id) {
 	std::vector<sqlite3_stmt*>* list{ nullptr };
 	const char* tail{ statement };
@@ -396,10 +381,7 @@ mln::db_result_t mln::database_handler::save_statement(const char* statement, in
 	
 	return { db_result::ok, {} };
 }
-dpp::task<mln::db_result_t> mln::database_handler::save_statement_task(const char* statement, int length_with_null, size_t& out_saved_statement_id)
-{
-	co_return mln::database_handler::save_statement(statement, length_with_null, out_saved_statement_id);
-}
+
 mln::db_result_t mln::database_handler::delete_statement(const size_t saved_statement_id) {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -416,10 +398,7 @@ mln::db_result_t mln::database_handler::delete_statement(const size_t saved_stat
 
 	return { mln::db_result::ok, {} };
 }
-dpp::task<mln::db_result_t> mln::database_handler::delete_statement_task(size_t saved_statement_id)
-{
-	co_return mln::database_handler::delete_statement(saved_statement_id);
-}
+
 void mln::database_handler::delete_all_statement() {
 	for (const std::pair<size_t, std::vector<sqlite3_stmt*>>& pair : saved_statements) {
 		for (sqlite3_stmt* stmt : pair.second) {
@@ -462,11 +441,6 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 	return { static_cast<mln::db_result>(sqlite3_bind_int(it->second[stmt_index], param_index, value)), get_last_err_msg() };
 }
 
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, int value) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, value);
-}
-
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const int64_t value) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -479,10 +453,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 
 	return { static_cast<mln::db_result>(sqlite3_bind_int64(it->second[stmt_index], param_index, value)), get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, int64_t value) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, value);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const double value) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -495,10 +466,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 
 	return { static_cast<mln::db_result>(sqlite3_bind_double(it->second[stmt_index], param_index, value)), get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, double value) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, value);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -511,10 +479,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 
 	return { static_cast<mln::db_result>(sqlite3_bind_null(it->second[stmt_index], param_index)), get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const char* text, const uint64_t bytes, const db_destructor_behavior mem_management, const db_text_encoding encoding) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -529,10 +494,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 		static_cast<mln::db_result>(sqlite3_bind_text64(it->second[stmt_index], param_index, text, bytes, s_mapped_destructor_behaviors.find(mem_management)->second, static_cast<unsigned char>(encoding))), 
 		get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const char* text, uint64_t bytes, db_destructor_behavior mem_management, db_text_encoding encoding) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, text, bytes, mem_management, encoding);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -547,10 +509,7 @@ mln::db_result_t mln::database_handler::bind_parameter(size_t saved_statement_id
 		static_cast<mln::db_result>(sqlite3_bind_text64(it->second[stmt_index], param_index, text.c_str(), text.length(), s_mapped_destructor_behaviors.find(mln::db_destructor_behavior::transient_b)->second, static_cast<unsigned char>(encoding))), 
 		get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const std::string& text, db_text_encoding encoding) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, text, encoding);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void* blob, const uint64_t bytes, const db_destructor_behavior mem_management) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -565,10 +524,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 		static_cast<mln::db_result>(sqlite3_bind_blob64(it->second[stmt_index], param_index, blob, bytes, s_mapped_destructor_behaviors.find(mem_management)->second)), 
 		get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const void* blob, uint64_t bytes, db_destructor_behavior mem_management) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, blob, bytes, mem_management);
-}
+
 mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statement_id, const size_t stmt_index, const int param_index, const void*, const uint64_t bytes) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -581,10 +537,7 @@ mln::db_result_t mln::database_handler::bind_parameter(const size_t saved_statem
 
 	return { static_cast<mln::db_result>(sqlite3_bind_zeroblob64(it->second[stmt_index], param_index, bytes)), get_last_err_msg() };
 }
-dpp::task<mln::db_result_t> mln::database_handler::bind_parameter_task(size_t saved_statement_id, size_t stmt_index, int param_index, const void* p, uint64_t bytes) const
-{
-	co_return mln::database_handler::bind_parameter(saved_statement_id, stmt_index, param_index, p, bytes);
-}
+
 mln::db_result_t mln::database_handler::get_bind_parameter_index(const size_t saved_statement_id, const size_t stmt_index, const char* param_name, int& out_index) const {
 	const auto& it = saved_statements.find(saved_statement_id);
 	if (it == saved_statements.end()) {
@@ -600,11 +553,6 @@ mln::db_result_t mln::database_handler::get_bind_parameter_index(const size_t sa
 		return { mln::db_result::error, "Statement parameter not found." };
 	}
 	return { db_result::ok, {} };
-}
-
-dpp::task<mln::db_result_t> mln::database_handler::get_bind_parameter_index_task(size_t saved_statement_id, size_t stmt_index, const char* param_name, int& out_index) const
-{
-	co_return mln::database_handler::get_bind_parameter_index(saved_statement_id, stmt_index, param_name, out_index);
 }
 
 std::string mln::database_handler::get_last_err_msg() const{

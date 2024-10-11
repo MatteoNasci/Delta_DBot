@@ -34,9 +34,11 @@ mln::pm::pm(dpp::cluster& cluster) : base_slashcommand{ cluster,
         .add_option(dpp::command_option(dpp::co_user, "user", "The user to message", true))
         .add_option(dpp::command_option(dpp::co_string, "msg", "The message to send", true)
             .set_min_length(dpp::command_option_range(static_cast<int64_t>(mln::constants::get_min_characters_reply_msg())))
-            .set_max_length(dpp::command_option_range(static_cast<int64_t>(s_max_msg_size))))) } {}
+            .set_max_length(dpp::command_option_range(static_cast<int64_t>(s_max_msg_size))))) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("pm: [{}].", true));
+}
 
-dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::pm::command(dpp::slashcommand_t event_data) {
     mln::event_data_lite_t lite_data{ event_data, bot(), false };
 
     if (!mln::response::is_event_data_valid(lite_data)) {
@@ -84,13 +86,13 @@ dpp::job mln::pm::command(dpp::slashcommand_t event_data) const {
     co_await mln::response::co_respond(lite_data, "I've sent the target user a private message.", false, "Failed to reply with the pm text!");
 }
 
-std::optional<std::function<void()>> mln::pm::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::pm::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::pm::use_job() const
+bool mln::pm::use_job() const noexcept
 {
     return false;
 }

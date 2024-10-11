@@ -9,6 +9,8 @@
 #include "commands/slash/mog/mog_init_type_flag.h"
 #include "commands/slash/mog/mog_team.h"
 #include "database/database_handler.h"
+#include "database/db_saved_stmt_state.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/event_data_lite.h"
@@ -22,6 +24,7 @@
 #include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/guild.h>
+#include <dpp/misc-enum.h>
 #include <dpp/permissions.h>
 
 #include <cstdint>
@@ -139,13 +142,16 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
 
     commands[1] = std::make_unique<mln::mog::mog_arma>(bot(), *team);
     commands[2] = std::make_unique<mln::mog::mog_help>(bot());
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("mog: [{}].", true));
 }
 
-dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
+dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data)
 {
     //Return error if event_data or cmd_data are incorrect
     //Data to be given to the selected command function
-    mln::mog::mog_cmd_data_t cmd_data{ event_data_lite_t{ event_data, bot(), true }, nullptr, nullptr, nullptr, nullptr, 0, 0 };
+    mln::mog::mog_cmd_data_t cmd_data{};
+    cmd_data.data = { event_data, bot(), true };
 
     if (!mln::response::is_event_data_valid(cmd_data.data)) {
         mln::utility::create_event_log_error(cmd_data.data, "Failed mog command, the event is incorrect!");
@@ -196,7 +202,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     }
 
     //Return early if the selected mog command is not initialized correctly
-    if (!(commands[std::get<0>(sub_it->second)]->is_db_initialized())) {
+    if (!mln::flags::has(commands[std::get<0>(sub_it->second)]->is_db_initialized(), db_saved_stmt_state::initialized)) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, the database was not initialized correctly!", true,
             std::format("Failed database operation, the database was not initialized correctly! Command: [{}].", cmd_data.data.command_name));
         co_return;
@@ -206,8 +212,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     const mln::mog::mog_init_type_flag init_requested = commands[std::get<0>(sub_it->second)]->get_requested_initialization_type(cmd_type);
 
     //If the command requests thinking, start thinking
-    const bool is_thinking = (init_requested & mln::mog::mog_init_type_flag::thinking) != mln::mog::mog_init_type_flag::none;
-    if (is_thinking) {
+    if (mln::flags::has(init_requested, mln::mog::mog_init_type_flag::thinking)) {
         static const std::string s_err_text = "Failed thinking confirmation, command aborted!";
         const bool is_error = co_await mln::response::co_think(cmd_data.data, true, false, {});
         if (is_error) {
@@ -217,7 +222,7 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     }
 
     //If the command requests cmd_data, retrieve it
-    if ((init_requested & mln::mog::mog_init_type_flag::cmd_data) != mln::mog::mog_init_type_flag::none) {
+    if (mln::flags::has(init_requested, mln::mog::mog_init_type_flag::cmd_data)) {
 
         //Prepare most common data for commands
         //Retrieve guild data
@@ -264,13 +269,13 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data) const
     co_await commands[std::get<0>(sub_it->second)]->command(event_data, cmd_data, cmd_type);
 }
 
-std::optional<std::function<void()>> mln::mog::mog::job(dpp::slashcommand_t event_data) const
+std::optional<std::function<void()>> mln::mog::mog::job(dpp::slashcommand_t event_data)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::mog::mog::use_job() const
+bool mln::mog::mog::use_job() const noexcept
 {
     return false;
 }

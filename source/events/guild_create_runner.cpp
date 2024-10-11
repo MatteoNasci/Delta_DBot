@@ -7,10 +7,13 @@
 #include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
 
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 void mln::guild_create_runner::attach_event() {
@@ -46,8 +49,13 @@ void mln::guild_create_runner::attach_event() {
 
 mln::guild_create_runner::guild_create_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner) : base_event{ cluster, db, j_runner }, event_id{}, initialized{ false }
 {
+    cbot().log(dpp::loglevel::ll_debug, std::format("guild_create_runner: [{}].", true));
 }
 
 mln::guild_create_runner::~guild_create_runner()
 {
+    if (initialized) {
+        bot().on_guild_create.detach(event_id);
+        initialized = false;
+    }
 }

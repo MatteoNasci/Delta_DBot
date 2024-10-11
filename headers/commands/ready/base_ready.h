@@ -17,18 +17,10 @@ namespace dpp {
 namespace mln {
 	class base_ready : public base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::ready_t&> {
 	protected:
-		base_ready(dpp::cluster& cluster);
+		base_ready(dpp::cluster& cluster) noexcept;
 	public:
 
 		base_ready() = delete;
-
-		base_ready(const base_ready&) = default;
-
-		base_ready(base_ready&&) = default;
-
-		base_ready& operator=(const base_ready&) = default;
-
-		base_ready& operator=(base_ready&&) = default;
 	};
 }
 

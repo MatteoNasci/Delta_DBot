@@ -26,7 +26,9 @@ namespace mln {
 		 */
 		base_event(const base_event&) = delete;
 
-		base_event(base_event&& rhs) : actions(std::forward<base_event>(rhs.actions)) {}
+		base_event(base_event&& rhs) : actions{ std::move(rhs.actions) }, cluster{ rhs.cluster }, db{ rhs.db }, j_runner{ rhs.j_runner } {
+			rhs.actions = {};
+		}
 
 		/**
 		 * @brief base_event is non-copyable
@@ -34,7 +36,9 @@ namespace mln {
 		base_event& operator=(const base_event&) = delete;
 
 		base_event& operator=(base_event&& rhs) {
-			this->actions = std::forward<base_event>(rhs.actions);
+			actions = std::move(rhs.actions);
+			rhs.actions = {};
+
 			return *this;
 		}
 
@@ -42,6 +46,7 @@ namespace mln {
 
 		const T_container& get_actions() const { return actions; }
 		dpp::cluster& bot() { return cluster; }
+		const dpp::cluster& cbot() const { return cluster; }
 		database_handler& database() { return db; }
 		jobs_runner& jobs_handler() { return j_runner; }
 	};

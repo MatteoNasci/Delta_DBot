@@ -6,6 +6,8 @@
 #include "database/database_callbacks.h"
 #include "database/database_handler.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/event_data_lite.h"
 #include "utility/perms.h"
@@ -26,10 +28,9 @@
 #include <optional>
 #include <string>
 #include <variant>
+#include <type_traits>
 
-mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
-info{ 
-    dpp::message{"Information regarding the `/db config` commands..."}
+const dpp::message mln::db_config::s_info = dpp::message{"Information regarding the `/db config` commands..."}
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
 
@@ -41,33 +42,59 @@ This set of commands is generally reserved for users with specific permissions.
   *Parameters:* channel[text_channel, optional].  
   This command asks for a valid text channel to be used for storage purposes. If not provided, the current dump channel will be unset, and the database will use the channel where the database commands are used as the dump channel.  
   To avoid clutter, it is recommended to set a specific dump channel. The other database commands will use this channel to store data and records.  
-  Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)""")) },
-data { .valid_stmt = true }, 
-db{ in_db } {
+  Ideally, this channel should be reserved for the bot’s use, and the messages created by the bot should not be edited or deleted, as this may cause the database to have broken records linking to content that has been modified or removed.)"""));
 
+mln::db_config::db_config(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
+data { .state = db_saved_stmt_state::none }, 
+db{ in_db } {
     const mln::db_result_t res1 = db.save_statement("UPDATE OR ABORT guild_profile SET dedicated_channel_id = :CCC WHERE guild_id = :GGG RETURNING dedicated_channel_id;", data.saved_stmt);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save update_dump_channel stmt! Error: [{}], details: [{}].", 
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update_dump_channel stmt! Error: [{}], details: [{}].", 
             mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
     } else {
+        data.state = mln::flags::add(data.state, db_saved_stmt_state::stmt_initialized);
+
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt, 0, ":CCC", data.saved_param_channel);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save update_dump_channel stmt param indexes! guild_param: [{}, {}], channel_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update_dump_channel stmt param indexes! guild_param: [{}, {}], channel_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            data.valid_stmt = false;
+        }
+        else {
+            data.state = mln::flags::add(data.state, db_saved_stmt_state::params_initialized);
         }
     }
 
-    bot().log(dpp::loglevel::ll_debug, std::format("db_config: [{}].", is_db_initialized()));
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_config: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
 }
 
-mln::db_init_type_flag mln::db_config::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_config::~db_config()
+{
+    if (mln::flags::has(is_db_initialized(), db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt);
+    }
+}
+
+mln::db_config::db_config(db_config&& rhs) noexcept : base_db_command{ std::forward<db_config>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.state = db_saved_stmt_state::none;
+}
+
+mln::db_config& mln::db_config::operator=(db_config&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_config>(rhs));
+    data = rhs.data;
+
+    rhs.data.state = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+mln::db_init_type_flag mln::db_config::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::update_dump_channel:
-        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::thinking);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
@@ -75,9 +102,9 @@ mln::db_init_type_flag mln::db_config::get_requested_initialization_type(const d
     }
 }
 
-bool mln::db_config::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_config::is_db_initialized() const noexcept
 {
-    return data.valid_stmt;
+    return data.state;
 }
 
 dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
@@ -133,11 +160,11 @@ dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_dat
 
 dpp::task<void> mln::db_config::help(db_cmd_data_t& cmd_data) const {
 
-    co_await mln::response::co_respond(cmd_data.data, info, false, "Failed to reply with the db setup help text!");
+    co_await mln::response::co_respond(cmd_data.data, mln::db_config::s_info, false, "Failed to reply with the db setup help text!");
     co_return;
 }
 
-dpp::task<void> mln::db_config::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+dpp::task<void> mln::db_config::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
 
     if (cmd_data.cmd_usr && !mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, admin permission is required to access this group command!", false, {});

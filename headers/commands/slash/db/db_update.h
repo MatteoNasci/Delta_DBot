@@ -5,6 +5,7 @@
 #include "commands/slash/db/base_db_command.h"
 #include "commands/slash/db/db_command_type.h"
 #include "commands/slash/db/db_init_type_flag.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/task.h>
 
@@ -22,16 +23,22 @@ namespace mln {
 		struct data_t {
 			size_t saved_stmt;
 			int saved_param_guild, saved_param_name, saved_param_user, saved_param_to_update;
-			bool valid_stmt;
+			db_saved_stmt_state state;
 		};
 		data_t data;
 		data_t data_nsfw;
 		database_handler& db;
 	public:
 		db_update(dpp::cluster& cluster, database_handler& db);
-		dpp::task<void> command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const override final;
-		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const override final;
-		bool is_db_initialized() const override final;
+		~db_update();
+		db_update(const db_update&) = delete;
+		db_update(db_update&& rhs) noexcept;
+		db_update& operator=(const db_update&) = delete;
+		db_update& operator=(db_update&& rhs) noexcept;
+
+		dpp::task<void> command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) override final;
+		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const noexcept override final;
+		db_saved_stmt_state is_db_initialized() const noexcept override final;
 	private:
 
 		dpp::task<void> description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;

@@ -7,13 +7,17 @@
 #include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
+#include <dpp/misc-enum.h>
 
+#include <format>
 #include <functional>
 #include <optional>
 #include <string>
+#include <type_traits>
 
 mln::cmd_ctx_runner::cmd_ctx_runner(dpp::cluster& cluster, database_handler& db, jobs_runner& j_runner) : base_event{ cluster, db, j_runner }, event_id{}, initialized{ false }
 {
+    cbot().log(dpp::loglevel::ll_debug, std::format("cmd_ctx_runner: [{}].", true));
 }
 
 mln::cmd_ctx_runner::~cmd_ctx_runner()

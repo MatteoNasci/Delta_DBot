@@ -18,10 +18,10 @@ namespace mln {
     class pm final : public base_slashcommand {
     public:
         pm(dpp::cluster& cluster);
-        dpp::job command(dpp::slashcommand_t event_data) const override final;
+        dpp::job command(dpp::slashcommand_t event_data) override final;
 
-        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) const override final;
-        bool use_job() const override final;
+        std::optional<std::function<void()>> job(dpp::slashcommand_t event_data) override final;
+        bool use_job() const noexcept override final;
     };
 }
 

@@ -7,11 +7,14 @@
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
 #include "database/db_result.h"
+#include "database/db_saved_stmt_state.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/event_data_lite.h"
 #include "utility/response.h"
 #include "utility/utility.h"
 
+#include <dpp/appcommand.h>
 #include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
@@ -30,41 +33,69 @@
 #include <variant>
 #include <vector>
 
-namespace mln {
-    static constexpr const char* to_string(const bool condition) {
-        return condition ? "True" : "False";
-    }
-}
-
 static constexpr uint64_t s_paginated_embed_time_limit{300};
 static constexpr uint64_t s_paginated_embed_text_limit{2000};
 
-mln::db_show::db_show(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, data{ .valid_stmt = true }, db{ in_db } {
+mln::db_show::db_show(dpp::cluster& cluster, database_handler& in_db) : base_db_command{ cluster }, 
+data{ .valid_all = db_saved_stmt_state::none, .valid_user = db_saved_stmt_state::none }, db{ in_db } {
     const mln::db_result_t res1 = db.save_statement("SELECT name, nsfw, desc, user_id FROM storage WHERE guild_id = ?1 ORDER BY user_id ASC, creation_time ASC;", data.saved_stmt_all);
     if (res1.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save show all stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save show all stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res1.type), res1.err_text));
-        data.valid_stmt = false;
+    }
+    else {
+        data.valid_all = mln::flags::add(data.valid_all, db_saved_stmt_state::initialized);
     }
 
     const mln::db_result_t res2 = db.save_statement("SELECT name, nsfw, desc FROM storage WHERE guild_id = :GGG AND user_id = :UUU ORDER BY creation_time ASC;", data.saved_stmt_user);
     if (res2.type != mln::db_result::ok) {
-        bot().log(dpp::loglevel::ll_error, std::format("Failed to save show user stmt! Error: [{}], details: [{}].",
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save show user stmt! Error: [{}], details: [{}].",
             mln::database_handler::get_name_from_result(res2.type), res2.err_text));
-        data.valid_stmt = false;
     } else {
+        data.valid_user = mln::flags::add(data.valid_user, db_saved_stmt_state::stmt_initialized);
         const mln::db_result_t res11 = db.get_bind_parameter_index(data.saved_stmt_user, 0, ":GGG", data.saved_param_guild);
         const mln::db_result_t res12 = db.get_bind_parameter_index(data.saved_stmt_user, 0, ":UUU", data.saved_param_user);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
-            bot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt param indexes! guild_param: [{}, {}], user_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save select stmt param indexes! guild_param: [{}, {}], user_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text));
-            data.valid_stmt = false;
         }
+        else {
+            data.valid_user = mln::flags::add(data.valid_user, db_saved_stmt_state::params_initialized);
+        }
+    }
+
+    cbot().log(dpp::loglevel::ll_debug, std::format("db_show: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::db_show::~db_show()
+{
+    if (mln::flags::has(data.valid_all, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt_all);
+    }
+    if (mln::flags::has(data.valid_user, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data.saved_stmt_user);
     }
 }
 
-dpp::task<void> mln::db_show::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) const {
+mln::db_show::db_show(db_show&& rhs) noexcept : base_db_command{ std::forward<db_show>(rhs) }, data{ rhs.data }, db{ rhs.db }
+{
+    rhs.data.valid_all = db_saved_stmt_state::none;
+    rhs.data.valid_user = db_saved_stmt_state::none;
+}
+
+mln::db_show& mln::db_show::operator=(db_show&& rhs) noexcept
+{
+    base_db_command::operator=(std::forward<db_show>(rhs));
+
+    data = rhs.data;
+    rhs.data.valid_all = db_saved_stmt_state::none;
+    rhs.data.valid_user = db_saved_stmt_state::none;
+
+    return *this;
+}
+
+dpp::task<void> mln::db_show::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) {
 
     switch (type) {
     case mln::db_command_type::all:
@@ -83,20 +114,20 @@ dpp::task<void> mln::db_show::command(const dpp::slashcommand_t& event_data, db_
     }
 }
 
-mln::db_init_type_flag mln::db_show::get_requested_initialization_type(const db_command_type cmd) const {
+mln::db_init_type_flag mln::db_show::get_requested_initialization_type(const db_command_type cmd) const noexcept  {
     switch (cmd) {
     case mln::db_command_type::all:
     case mln::db_command_type::user:
-        return db_init_type_flag::cmd_data | db_init_type_flag::thinking;
+        return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::thinking);
     case mln::db_command_type::help:
         return db_init_type_flag::none;
     default:
         return db_init_type_flag::all;
     }
 }
-bool mln::db_show::is_db_initialized() const
+mln::db_saved_stmt_state mln::db_show::is_db_initialized() const noexcept
 {
-    return data.valid_stmt;
+    return mln::flags::com(data.valid_all, data.valid_user);
 }
 dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const exec_show_t& stmt_data, const std::optional<std::shared_ptr<const std::vector<std::string>>>& cached_show) const {
     const bool use_cache = cached_show.has_value() && cached_show.value();
@@ -115,8 +146,8 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
         mln::database_callbacks_t calls{};
         const bool all_stmt = stmt_data.stmt == data.saved_stmt_all;
         if (all_stmt) {
-            calls.type_definer_callback = [](void*, int c) {return c != 3;};
-            calls.data_adder_callback = [&temp_records, &temp_name, &temp_users, &temp_nsfw](void*, int c, mln::db_column_data_t&& d) {
+            calls.type_definer_callback = [](void*, int c) constexpr {return c != 3;};
+            calls.data_adder_callback = [&temp_records, &temp_name, &temp_users, &temp_nsfw](void*, int c, mln::db_column_data_t&& d) constexpr {
                 switch (c) {
                 case 0:
                     temp_name = std::string(reinterpret_cast<const char*>((std::get<const unsigned char*>(d.data))));
@@ -126,11 +157,13 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("name: [" + temp_name + "], nsfw: [" + (temp_nsfw ? "true" : "false") + "] }");
                     }
                     else {
-                        temp_records.emplace_back("name: [" + temp_name + "], description: [" +
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("name: [" + 
+                            temp_name + "], description: [" + 
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + 
+                            (temp_nsfw ? "true" : "false") + "] }");
                     }
                     break;
                 case 3:
@@ -139,8 +172,8 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                 }                
             };
         } else {
-            calls.type_definer_callback = [](void*, int) {return true;};
-            calls.data_adder_callback = [&temp_records, &temp_name, &temp_nsfw](void*, int c, mln::db_column_data_t&& d) {
+            calls.type_definer_callback = [](void*, int) constexpr {return true;};
+            calls.data_adder_callback = [&temp_records, &temp_name, &temp_nsfw](void*, int c, mln::db_column_data_t&& d) constexpr {
                 switch (c) {
                 case 0:
                     temp_name = std::string(reinterpret_cast<const char*>((std::get<const unsigned char*>(d.data))));
@@ -150,11 +183,13 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     break;
                 case 2:
                     if (std::holds_alternative<const short*>(d.data)) {
-                        temp_records.emplace_back("{ name: ["+ temp_name +"], nsfw: [" + mln::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("{ name: [" + temp_name + "], nsfw: [" + (temp_nsfw ? "true" : "false") + "] }");
                     }
                     else {
-                        temp_records.emplace_back("{ name: [" + temp_name + "], description: [" + 
-                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "] , nsfw : [" + mln::to_string(temp_nsfw) + "] }");
+                        temp_records.emplace_back("{ name: [" + 
+                            temp_name + "], description: [" + 
+                            std::string{ reinterpret_cast<const char*>(std::get<const unsigned char*>(d.data)) } + "], nsfw: [" + 
+                            (temp_nsfw ? "true" : "false") + "] }");
                     }
                     break;
                 }
@@ -190,7 +225,7 @@ dpp::task<void> mln::db_show::execute_show(const dpp::slashcommand_t& event_data
                     co_return;
                 }
 
-                temp_records[i] = "{ owner: ["+ (user.value()->global_name.empty() ? std::to_string(user.value()->id) : user.value()->global_name) +"], " + temp_records[i];
+                temp_records[i] = "{ owner: [" + (user.value()->global_name.empty() ? std::to_string(user.value()->id) : user.value()->global_name) + "], " + temp_records[i];
             }
 
             records = mln::caches::show_all_cache.add_element(cmd_data.data.guild_id, std::move(temp_records));

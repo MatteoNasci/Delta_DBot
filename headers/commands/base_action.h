@@ -12,24 +12,26 @@ namespace mln {
 	private:
 		dpp::cluster& bot_cluster;
 	protected:
-		base_action(dpp::cluster& cluster) : bot_cluster{ cluster } {}
+		base_action(dpp::cluster& cluster) noexcept : bot_cluster{ cluster } {}
 
-		dpp::cluster& bot() const { return bot_cluster; }
+		dpp::cluster& bot() noexcept { return bot_cluster; }
 	public:
 
 		base_action() = delete;
+		base_action(const base_action& rhs) noexcept : bot_cluster{ rhs.bot_cluster } {};
+		base_action(base_action&& rhs) noexcept : bot_cluster{ rhs.bot_cluster } {};
+		base_action& operator=(const base_action& rhs) noexcept {
+			return *this;
+		};
+		base_action& operator=(base_action&& rhs) noexcept {
+			return *this;
+		};
 
-		base_action(const base_action&) = default;
+		const dpp::cluster& cbot() const noexcept { return bot_cluster; };
 
-		base_action(base_action&& rhs) = default;
-
-		base_action& operator=(const base_action&) = default;
-
-		base_action& operator=(base_action&& rhs) = default;
-
-		virtual T_cmd_return command(T_args... args) const = 0;
-		virtual T_job_return job(T_args... args) const = 0;
-		virtual bool use_job() const = 0;
+		virtual T_cmd_return command(T_args... args) = 0;
+		virtual T_job_return job(T_args... args) = 0;
+		virtual bool use_job() const noexcept = 0;
 	};
 }
 

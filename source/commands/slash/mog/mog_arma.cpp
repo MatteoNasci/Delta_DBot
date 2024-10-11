@@ -6,14 +6,18 @@
 #include "commands/slash/mog/mog_init_type_flag.h"
 #include "commands/slash/mog/mog_team.h"
 #include "commands/slash/mog/mog_team_data.h"
+#include "database/db_saved_stmt_state.h"
+#include "enum/flags.h"
 #include "utility/constants.h"
 #include "utility/response.h"
 #include "utility/utility.h"
 
 #include <dpp/appcommand.h>
+#include <dpp/cluster.h>
 #include <dpp/coro/task.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
+#include <dpp/misc-enum.h>
 #include <dpp/snowflake.h>
 
 #include <cstdint>
@@ -30,9 +34,10 @@ static constexpr size_t s_pagination_max_text_size = 2000;
 
 mln::mog::mog_arma::mog_arma(dpp::cluster& cluster, mln::mog::mog_team& teams_handler) : base_mog_command{ cluster }, teams_handler{ teams_handler }
 {
+	cbot().log(dpp::loglevel::ll_debug, std::format("mog_arma: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
 }
 
-dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type) const
+dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type)
 {
 	switch (type) {
 	case mln::mog::mog_command_type::cooldown:
@@ -51,12 +56,12 @@ dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_dat
 	}
 }
 
-mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_type(const mln::mog::mog_command_type cmd) const
+mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_type(const mln::mog::mog_command_type cmd) const noexcept
 {
 	switch (cmd) {
 	case mln::mog::mog_command_type::cooldown:
 	case mln::mog::mog_command_type::show_cooldowns:
-		return mln::mog::mog_init_type_flag::cmd_data | mln::mog::mog_init_type_flag::thinking;
+		return mln::flags::add(mln::mog::mog_init_type_flag::cmd_data, mln::mog::mog_init_type_flag::thinking);
 	case mln::mog::mog_command_type::help:
 		return mln::mog::mog_init_type_flag::none;
 	default:
@@ -64,9 +69,9 @@ mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_ty
 	}
 }
 
-bool mln::mog::mog_arma::is_db_initialized() const
+mln::db_saved_stmt_state mln::mog::mog_arma::is_db_initialized() const noexcept
 {
-	return true;
+	return db_saved_stmt_state::initialized;
 }
 
 dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const

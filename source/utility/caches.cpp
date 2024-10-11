@@ -1,4 +1,3 @@
-#include "commands/slash/mog/mog_team_data.h"
 #include "database/database_callbacks.h"
 #include "database/database_handler.h"
 #include "database/db_column_data.h"
@@ -9,7 +8,6 @@
 #include "utility/json_err.h"
 #include "utility/perms.h"
 #include "utility/response.h"
-#include "utility/utility.h"
 
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
@@ -28,13 +26,11 @@
 #include <cstdint>
 #include <exception>
 #include <format>
-#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>

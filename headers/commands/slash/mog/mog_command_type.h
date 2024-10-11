@@ -21,7 +21,7 @@ namespace mln {
 			enum_count
 		};
 
-		extern const char* get_cmd_type_text(const mln::mog::mog_command_type type);
+		extern const char* get_cmd_type_text(const mln::mog::mog_command_type type) noexcept;
     }
 }
 

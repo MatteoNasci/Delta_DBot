@@ -221,8 +221,8 @@ namespace mln {
 		non_poll_message_cannot_expire = 520006,//	Cannot expire a non - poll message
 	};
 
-	extern const char* get_json_err_text(const std::underlying_type<json_err>::type error);
-	extern constexpr bool is_json_rate_limited(const std::underlying_type<json_err>::type error);
+	extern const char* get_json_err_text(const std::underlying_type<json_err>::type error) noexcept;
+	extern constexpr bool is_json_rate_limited(const std::underlying_type<json_err>::type error) noexcept;
 }
 
 #endif //H_MLN_DB_JSON_ERR_H

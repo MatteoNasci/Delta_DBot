@@ -5,6 +5,7 @@
 #include "commands/base_action.h"
 #include "commands/slash/mog/mog_command_type.h"
 #include "commands/slash/mog/mog_init_type_flag.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/task.h>
 
@@ -23,18 +24,10 @@ namespace mln {
 		public:
 			base_mog_command() = delete;
 
-			base_mog_command(const base_mog_command&) = default;
-
-			base_mog_command(base_mog_command&& rhs) = default;
-
-			base_mog_command& operator=(const base_mog_command&) = default;
-
-			base_mog_command& operator=(base_mog_command&& rhs) = default;
-
-			virtual mln::mog::mog_init_type_flag get_requested_initialization_type(const mln::mog::mog_command_type cmd) const = 0;
-			virtual bool is_db_initialized() const = 0;
-			bool use_job() const override final;
-			void job(const dpp::slashcommand_t&, mln::mog::mog_cmd_data_t&, const mln::mog::mog_command_type) const override final;
+			virtual mln::mog::mog_init_type_flag get_requested_initialization_type(const mln::mog::mog_command_type cmd) const noexcept = 0;
+			virtual db_saved_stmt_state is_db_initialized() const noexcept = 0;
+			bool use_job() const noexcept override final;
+			void job(const dpp::slashcommand_t&, mln::mog::mog_cmd_data_t&, const mln::mog::mog_command_type) override final;
 		};
 	}
 }

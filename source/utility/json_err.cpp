@@ -3,7 +3,7 @@
 #include <type_traits>
 #include <unordered_map>
 
-const char* mln::get_json_err_text(const std::underlying_type<json_err>::type error)
+const char* mln::get_json_err_text(const std::underlying_type<json_err>::type error) noexcept
 {
     static const char* s_invalid_error_text = "Unknown json error";
     static const std::unordered_map<std::underlying_type<json_err>::type, const char*> s_error_to_text_map{
@@ -228,7 +228,7 @@ const char* mln::get_json_err_text(const std::underlying_type<json_err>::type er
     return s_invalid_error_text;
 }
 
-constexpr bool mln::is_json_rate_limited(const std::underlying_type<json_err>::type error)
+constexpr bool mln::is_json_rate_limited(const std::underlying_type<json_err>::type error) noexcept
 {
     return error == static_cast<std::underlying_type<json_err>::type>(json_err::service_resource_rate_limited) || 
         error == static_cast<std::underlying_type<json_err>::type>(json_err::channel_write_rate_limit_hit) ||

@@ -29,9 +29,11 @@ static const uint64_t s_max_string_size{ 3000 };
 
 mln::changelog::changelog(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("changelog"), "Display information about this bot's changes.", cluster.me.id)
-        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
+        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("changelog: [{}].", true));
+}
 
-dpp::job mln::changelog::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::changelog::command(dpp::slashcommand_t event_data) {
     mln::event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
         mln::utility::create_event_log_error(lite_data, "Failed changelog, the event is incorrect!");
@@ -47,13 +49,13 @@ dpp::job mln::changelog::command(dpp::slashcommand_t event_data) const {
     co_return;
 }
 
-std::optional<std::function<void()>> mln::changelog::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::changelog::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::changelog::use_job() const
+bool mln::changelog::use_job() const noexcept
 {
     return false;
 }

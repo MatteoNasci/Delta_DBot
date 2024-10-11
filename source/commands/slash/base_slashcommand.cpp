@@ -12,5 +12,5 @@ mln::base_slashcommand::base_slashcommand(dpp::cluster& cluster, dpp::slashcomma
 
 void mln::base_slashcommand::log_incorrect_command() const
 {
-	bot().log(dpp::loglevel::ll_critical, std::format("Failed [{}] command! Incorrect task/job usage.", get_cmd().name));
+	cbot().log(dpp::loglevel::ll_critical, std::format("Failed [{}] command! Incorrect task/job usage.", get_cmd().name));
 }

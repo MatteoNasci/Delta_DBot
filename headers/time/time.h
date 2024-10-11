@@ -2,11 +2,11 @@
 #ifndef H_MLN_DB_TIME_H
 #define H_MLN_DB_TIME_H
 
-#include <string>
+#include <chrono>
+#include <corecrt.h>
 #include <cstdint>
 #include <optional>
-#include <corecrt.h>
-#include <chrono>
+#include <string>
 
 namespace mln {
 	class time {

@@ -21,9 +21,11 @@
 
 mln::bot_info::bot_info(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("info"), "Send an embed with the bot info!", cluster.me.id)
-        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
+        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("bot_info: [{}].", true));
+}
 
-dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) {
     static const dpp::embed s_embed = dpp::embed{}
         .set_color(dpp::colors::sti_blue)
         .set_title("Delta")
@@ -46,13 +48,13 @@ dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) const {
     co_return;
 }
 
-std::optional<std::function<void()>> mln::bot_info::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::bot_info::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::bot_info::use_job() const
+bool mln::bot_info::use_job() const noexcept
 {
     return false;
 }

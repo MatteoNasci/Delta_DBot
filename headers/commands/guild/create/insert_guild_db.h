@@ -3,6 +3,7 @@
 #define H_MLN_DB_INSERT_GUILD_DB_H
 
 #include "commands/guild/create/base_guild_create.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/task.h>
 
@@ -21,22 +22,22 @@ namespace mln {
     private:
         size_t saved_insert_guild_query;
         database_handler& db;
-        bool valid_saved_insert;
+        db_saved_stmt_state db_state;
     public:
         insert_guild_db(dpp::cluster& cluster, database_handler& in_db);
         ~insert_guild_db();
 
-        insert_guild_db(const insert_guild_db&) = default;
+        insert_guild_db(const insert_guild_db&) = delete;
 
-        insert_guild_db(insert_guild_db&&) = default;
+        insert_guild_db(insert_guild_db&& rhs) noexcept;
 
-        insert_guild_db& operator=(const insert_guild_db&) = default;
+        insert_guild_db& operator=(const insert_guild_db&) = delete;
 
-        insert_guild_db& operator=(insert_guild_db&&) = default;
+        insert_guild_db& operator=(insert_guild_db&& rhs) noexcept;
 
-        dpp::task<void> command(const dpp::guild_create_t& event_data) const override final;
-        std::optional<std::function<void()>> job(const dpp::guild_create_t& event_data) const override final;
-        bool use_job() const override final;
+        dpp::task<void> command(const dpp::guild_create_t& event_data) override final;
+        std::optional<std::function<void()>> job(const dpp::guild_create_t& event_data) override final;
+        bool use_job() const noexcept override final;
     };
 }
 

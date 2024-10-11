@@ -5,6 +5,7 @@
 #include "commands/slash/mog/base_mog_command.h"
 #include "commands/slash/mog/mog_command_type.h"
 #include "commands/slash/mog/mog_init_type_flag.h"
+#include "database/db_saved_stmt_state.h"
 
 #include <dpp/coro/task.h>
 
@@ -23,9 +24,10 @@ namespace mln {
 			mln::mog::mog_team& teams_handler;
 		public:
 			mog_arma(dpp::cluster& cluster, mln::mog::mog_team& teams_handler);
-			dpp::task<void> command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type) const override final;
-			mln::mog::mog_init_type_flag get_requested_initialization_type(const mln::mog::mog_command_type cmd) const override final;
-			bool is_db_initialized() const override final;
+
+			dpp::task<void> command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type) override final;
+			mln::mog::mog_init_type_flag get_requested_initialization_type(const mln::mog::mog_command_type cmd) const noexcept override final;
+			db_saved_stmt_state is_db_initialized() const noexcept override final;
 
 		private:
 			dpp::task<void> cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;

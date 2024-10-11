@@ -17,9 +17,11 @@
 
 mln::ping::ping(dpp::cluster& cluster) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("ping"), "Ping pong!", cluster.me.id)
-        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {}
+        .set_default_permissions(dpp::permissions::p_use_application_commands)) } {
+    cbot().log(dpp::loglevel::ll_debug, std::format("ping: [{}].", true));
+}
 
-dpp::job mln::ping::command(dpp::slashcommand_t event_data) const {
+dpp::job mln::ping::command(dpp::slashcommand_t event_data) {
     
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
@@ -32,13 +34,13 @@ dpp::job mln::ping::command(dpp::slashcommand_t event_data) const {
     co_await mln::response::co_respond(lite_data, std::format("Websocket ping = {} seconds.\nRest ping = {} seconds.", websocket_ping, bot().rest_ping), false, "Failed to reply with the ping text!");
 }
 
-std::optional<std::function<void()>> mln::ping::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::ping::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::ping::use_job() const
+bool mln::ping::use_job() const noexcept
 {
     return false;
 }

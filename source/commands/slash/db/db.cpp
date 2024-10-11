@@ -13,6 +13,8 @@
 #include "commands/slash/db/db_show.h"
 #include "commands/slash/db/db_update.h"
 #include "database/database_handler.h"
+#include "database/db_saved_stmt_state.h"
+#include "enum/flags.h"
 #include "utility/caches.h"
 #include "utility/constants.h"
 #include "utility/perms.h"
@@ -37,6 +39,45 @@
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
+
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_insert_sub_commands{
+        {"url", {0, mln::db_command_type::url}},
+        {"file", {0, mln::db_command_type::file}},
+        {"text", {0, mln::db_command_type::text}},
+        {"help", {0, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_update_sub_commands{
+        {"description", {5, mln::db_command_type::description}},
+        {"nsfw", {5, mln::db_command_type::nsfw}},
+        {"help", {5, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_delete_sub_commands{
+        {"single", {4, mln::db_command_type::single}},
+        {"user", {4, mln::db_command_type::user}},
+        {"self", {4, mln::db_command_type::self}},
+        {"guild", {4, mln::db_command_type::guild}},
+        {"help", {4, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_config_sub_commands{
+        {"update_dump_channel", {1, mln::db_command_type::update_dump_channel}},
+        {"help", {1, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_select_sub_commands{
+        {"single", {2, mln::db_command_type::single}},
+        {"help", {2, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_show_sub_commands{
+        {"all", {3, mln::db_command_type::all}},
+        {"user", {3, mln::db_command_type::user}},
+        {"help", {3, mln::db_command_type::help}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_help_sub_commands{
+        {"generic", {6, mln::db_command_type::generic}}, };
+const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_privacy_sub_commands{
+        {"policy", {7, mln::db_command_type::policy}}, };
+const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>>&> mln::db::s_allowed_primary_sub_commands{
+        {"insert", mln::db::s_allowed_insert_sub_commands},
+        {"config", mln::db::s_allowed_config_sub_commands},
+        {"select", mln::db::s_allowed_select_sub_commands},
+        {"show", mln::db::s_allowed_show_sub_commands},
+        {"delete", mln::db::s_allowed_delete_sub_commands},
+        {"update", mln::db::s_allowed_update_sub_commands},
+        {"help", mln::db::s_allowed_help_sub_commands},
+        {"privacy", mln::db::s_allowed_privacy_sub_commands}, };
 
 mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("db"), "Manage the database.", cluster.me.id)
@@ -157,45 +198,8 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
         .add_option(dpp::command_option(dpp::co_sub_command_group, "privacy", "Gives information about the db group command privacy policy", false)
             .add_option(dpp::command_option(dpp::co_sub_command, "policy", "Gives information about the db group command privacy policy", false)))
     ) }, 
-    database{ in_database }, commands{}, 
-    allowed_insert_sub_commands{ 
-        {"url", {0, mln::db_command_type::url}},
-        {"file", {0, mln::db_command_type::file}},
-        {"text", {0, mln::db_command_type::text}},
-        {"help", {0, mln::db_command_type::help}}, }, 
-    allowed_update_sub_commands{ 
-        {"description", {5, mln::db_command_type::description}},
-        {"nsfw", {5, mln::db_command_type::nsfw}},
-        {"help", {5, mln::db_command_type::help}}, },
-    allowed_delete_sub_commands{ 
-        {"single", {4, mln::db_command_type::single}},
-        {"user", {4, mln::db_command_type::user}},
-        {"self", {4, mln::db_command_type::self}},
-        {"guild", {4, mln::db_command_type::guild}},
-        {"help", {4, mln::db_command_type::help}}, },
-    allowed_config_sub_commands{ 
-        {"update_dump_channel", {1, mln::db_command_type::update_dump_channel}},
-        {"help", {1, mln::db_command_type::help}}, },
-    allowed_select_sub_commands{ 
-        {"single", {2, mln::db_command_type::single}},
-        {"help", {2, mln::db_command_type::help}}, },
-    allowed_show_sub_commands{ 
-        {"all", {3, mln::db_command_type::all}},
-        {"user", {3, mln::db_command_type::user}},
-        {"help", {3, mln::db_command_type::help}}, },
-    allowed_help_sub_commands{ 
-        {"generic", {6, mln::db_command_type::generic}}, },
-    allowed_privacy_sub_commands{ 
-        {"policy", {7, mln::db_command_type::policy}}, },
-    allowed_primary_sub_commands{ 
-        {"insert", allowed_insert_sub_commands},
-        {"config", allowed_config_sub_commands},
-        {"select", allowed_select_sub_commands},
-        {"show", allowed_show_sub_commands},
-        {"delete", allowed_delete_sub_commands},
-        {"update", allowed_update_sub_commands},
-        {"help", allowed_help_sub_commands},
-        {"privacy", allowed_privacy_sub_commands}, }
+    database{ in_database }, 
+    commands{}
     {
         commands[0] = std::make_unique<mln::db_insert>(bot(), database);
         commands[1] = std::make_unique<mln::db_config>(bot(), database);
@@ -207,10 +211,11 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
         commands[7] = std::make_unique<mln::db_privacy>(bot());
     }
 
-dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
+dpp::job mln::db::command(dpp::slashcommand_t event_data) {
     //Return error if event_data or cmd_data are incorrect
     //Data to be given to the selected command function
-    db_cmd_data_t cmd_data{ { event_data, bot(), true }, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0 };
+    db_cmd_data_t cmd_data{};
+    cmd_data.data = { event_data, bot(), true };
 
     if (!mln::response::is_event_data_valid(cmd_data.data)) {
         mln::utility::create_event_log_error(cmd_data.data, "Failed db command, the event is incorrect!");
@@ -232,8 +237,8 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     //Get the mapper for the primary cmds, return error if not found
     const dpp::command_data_option primary_cmd = cmd_interaction.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, primary_cmd.name);
-    const auto& it = allowed_primary_sub_commands.find(primary_cmd.name);
-    if (it == allowed_primary_sub_commands.end()) {
+    const auto& it = mln::db::s_allowed_primary_sub_commands.find(primary_cmd.name);
+    if (it == mln::db::s_allowed_primary_sub_commands.end()) {
         const std::string err_text = std::format("Couldn't find primary sub command [{}].", primary_cmd.name);
         co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
 
@@ -261,7 +266,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     }
 
     //Return early if the selected db command is not initialized correctly
-    if (!(commands[std::get<0>(sub_it->second)]->is_db_initialized())) {
+    if (!mln::flags::has(commands[std::get<0>(sub_it->second)]->is_db_initialized(), db_saved_stmt_state::initialized)) {
         co_await mln::response::co_respond(cmd_data.data, "Failed database operation, the database was not initialized correctly!", true,
             std::format("Failed database operation, the database was not initialized correctly! Command: [{}].", cmd_data.data.command_name));
         co_return;
@@ -271,8 +276,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     const db_init_type_flag init_requested = commands[std::get<0>(sub_it->second)]->get_requested_initialization_type(cmd_type);
 
     //If the command requests thinking, start thinking
-    const bool is_thinking = (init_requested & db_init_type_flag::thinking) != db_init_type_flag::none;
-    if (is_thinking) {
+    if (mln::flags::has(init_requested, db_init_type_flag::thinking)) {
         static const std::string s_err_text = "Failed thinking confirmation, command aborted!";
         const bool is_error = co_await mln::response::co_think(cmd_data.data, true, false, {});
         if (is_error) {
@@ -282,7 +286,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     }
 
     //If the command requests cmd_data, retrieve it
-    if ((init_requested & db_init_type_flag::cmd_data) != db_init_type_flag::none) {
+    if (mln::flags::has(init_requested, db_init_type_flag::cmd_data)) {
 
         //Prepare most common data for commands
         //Retrieve guild data
@@ -327,7 +331,7 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     }
 
     //If requested, determine the dump channel
-    if ((init_requested & mln::db_init_type_flag::dump_channel) != db_init_type_flag::none) {
+    if (mln::flags::has(init_requested, mln::db_init_type_flag::dump_channel)) {
 
         //Recover dump channel id from cache if possible. Default value for dump channel is the channel the command was invoked in
         uint64_t dump_channel_id{cmd_data.data.channel_id};
@@ -368,13 +372,13 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) const{
     co_await commands[std::get<0>(sub_it->second)]->command(event_data, cmd_data, cmd_type);
 }
 
-std::optional<std::function<void()>> mln::db::job(dpp::slashcommand_t) const
+std::optional<std::function<void()>> mln::db::job(dpp::slashcommand_t)
 {
     log_incorrect_command();
     return std::nullopt;
 }
 
-bool mln::db::use_job() const
+bool mln::db::use_job() const noexcept
 {
     return false;
 }
