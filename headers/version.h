@@ -17,23 +17,23 @@
     MLN_DB_EXPAND_AND_STRINGIFY(MLN_DB_VERSION_TWEAK)
 
 namespace mln {
-	static consteval unsigned long long int get_version_major() {
+	static constexpr unsigned long long int get_version_major() {
 		return MLN_DB_VERSION_MAJOR;
 	}
 
-	static consteval unsigned long long int get_version_minor() {
+	static constexpr unsigned long long int get_version_minor() {
 		return MLN_DB_VERSION_MINOR;
 	}
 
-	static consteval unsigned long long int get_version_patch() {
+	static constexpr unsigned long long int get_version_patch() {
 		return MLN_DB_VERSION_PATCH;
 	}
 
-	static consteval unsigned long long int get_version_tweak() {
+	static constexpr unsigned long long int get_version_tweak() {
 		return MLN_DB_VERSION_TWEAK;
 	}
 
-	static consteval const char* get_version() {
+	static constexpr const char* get_version() {
 		return MLN_DB_VERSION;
 	}
 }
