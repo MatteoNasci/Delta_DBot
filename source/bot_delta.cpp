@@ -224,7 +224,7 @@ mln::bot_delta::bot_delta() :
 }
 
 mln::bot_delta::~bot_delta() {
-    j_runner.stop(false);
+    j_runner.stop(true);
 
     database.close_connection();
 }
