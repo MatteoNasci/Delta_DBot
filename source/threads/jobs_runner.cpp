@@ -7,7 +7,7 @@
 #include <thread>
 #include <type_traits>
 
-mln::jobs_runner::jobs_runner() : thread{}, cv{}, queue_lock{}, state_lock{}, stop_thread{ false }, is_running{ false }, jobs_completed{ 0 }, jobs_added{ 0 }, jobs{}
+mln::jobs_runner::jobs_runner() : thread{}, cv{}, queue_lock{}, state_lock{}, stop_thread{ false }, immediate_stop_thread{ false }, is_running { false }, jobs_completed{ 0 }, jobs_added{ 0 }, jobs{}
 {
 	
 }
@@ -165,8 +165,7 @@ bool mln::jobs_runner::end_jobs_loop() const
 
 void mln::jobs_runner::run_jobs(jobs_runner& runner)
 {
-	//take job from queue and execute it, if no jobs present then terminate thread
-	for (; runner.end_jobs_loop();) {
+	for (; !runner.end_jobs_loop();) {
 		std::function<void()> job;
 		{
 			std::unique_lock<std::mutex> lock{ runner.queue_lock };
