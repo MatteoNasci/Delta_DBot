@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <mutex>
+#include <queue>
 #include <shared_mutex>
 #include <thread>
 #include <type_traits>
@@ -12,7 +13,7 @@ mln::jobs_runner::jobs_runner() : thread{}, cv{}, queue_lock{}, state_lock{}, st
 }
 
 mln::jobs_runner::~jobs_runner() {
-	stop();
+	stop(false);
 }
 
 bool mln::jobs_runner::start()
@@ -21,19 +22,19 @@ bool mln::jobs_runner::start()
 		return false;
 	}
 
-	set_running_and_stop_thread(true, false);
+	set_running_and_stop_thread(true, false, false);
 	thread = std::thread{ mln::jobs_runner::run_jobs, std::ref(*this)};
 	
 	return true;
 }
 
-bool mln::jobs_runner::stop()
+bool mln::jobs_runner::stop(const bool complete_all_remaining_jobs)
 {
 	if (!is_thread_running()) {
 		return false;
 	}
 
-	set_stop_thread(true);
+	set_running_and_stop_thread(true, true, !complete_all_remaining_jobs);
 	cv.notify_all();
 	thread.join();
 	set_is_running(false);
@@ -51,6 +52,12 @@ bool mln::jobs_runner::is_thread_stop_requested() const
 {
 	std::shared_lock<std::shared_mutex> shared_lock{ state_lock };
 	return stop_thread;
+}
+
+bool mln::jobs_runner::is_thread_immediate_stop_requested() const
+{
+	std::shared_lock<std::shared_mutex> shared_lock{ state_lock };
+	return immediate_stop_thread;
 }
 
 bool mln::jobs_runner::is_thread_stopping() const
@@ -76,24 +83,36 @@ unsigned long long mln::jobs_runner::get_jobs_in_queue() const
 	return total - completed;
 }
 
-void mln::jobs_runner::add_job(const std::function<void(void)>& job)
+bool mln::jobs_runner::add_job(const std::function<void(void)>& job)
 {	
+	if (is_thread_stop_requested()) {
+		return false;
+	}
+
 	{
 		std::unique_lock<std::mutex> lock{ queue_lock };
 		jobs.push(job);
 	}
 	cv.notify_one();
 	jobs_added.fetch_add(1, std::memory_order_relaxed);
+
+	return true;
 }
 
-void mln::jobs_runner::add_job(std::function<void(void)>&& job)
+bool mln::jobs_runner::add_job(std::function<void(void)>&& job)
 {
+	if (is_thread_stop_requested()) {
+		return false;
+	}
+
 	{
 		std::unique_lock<std::mutex> lock{ queue_lock };
-		jobs.push(std::forward<std::function<void(void)>>(job));
+		jobs.emplace(std::forward<std::function<void(void)>>(job));
 	}
 	cv.notify_one();
 	jobs_added.fetch_add(1, std::memory_order_relaxed);
+
+	return true;
 }
 
 void mln::jobs_runner::set_is_running(const bool value)
@@ -112,26 +131,42 @@ void mln::jobs_runner::set_stop_thread(const bool value)
 	}
 }
 
-void mln::jobs_runner::set_running_and_stop_thread(const bool running, const bool stop)
+void mln::jobs_runner::set_immediate_stop_thread(const bool value)
 {
-	bool current_running, current_stop;
+	if (value != is_thread_immediate_stop_requested()) {
+		std::unique_lock<std::shared_mutex> unique_lock{ state_lock };
+		immediate_stop_thread = value;
+	}
+}
+
+void mln::jobs_runner::set_running_and_stop_thread(const bool running, const bool stop, const bool immediate_stop)
+{
+	bool current_running, current_stop, current_immediate_stop;
 	{
 		std::shared_lock<std::shared_mutex> shared_lock{ state_lock };
-		current_running = is_running;
-		current_stop = stop_thread;
+		current_running = this->is_running;
+		current_stop = this->stop_thread;
+		current_immediate_stop = this->immediate_stop_thread;
 	}
 
-	if (stop != current_stop || running != current_running) {
+	if (stop != current_stop || running != current_running || immediate_stop != current_immediate_stop) {
 		std::unique_lock<std::shared_mutex> unique_lock{ state_lock };
-		stop_thread = stop;
-		is_running = running;
+		this->stop_thread = stop;
+		this->is_running = running;
+		this->immediate_stop_thread = immediate_stop;
 	}
+}
+
+bool mln::jobs_runner::end_jobs_loop() const
+{
+	std::shared_lock<std::shared_mutex> shared_lock{ state_lock };
+	return this->immediate_stop_thread || (this->stop_thread && get_jobs_in_queue() == 0);
 }
 
 void mln::jobs_runner::run_jobs(jobs_runner& runner)
 {
 	//take job from queue and execute it, if no jobs present then terminate thread
-	for (; !runner.is_thread_stop_requested();) {
+	for (; runner.end_jobs_loop();) {
 		std::function<void()> job;
 		{
 			std::unique_lock<std::mutex> lock{ runner.queue_lock };
@@ -139,7 +174,7 @@ void mln::jobs_runner::run_jobs(jobs_runner& runner)
 				return !runner.jobs.empty() || runner.is_thread_stop_requested();
 				});
 
-			if (runner.is_thread_stop_requested()) {
+			if (runner.end_jobs_loop()) {
 				break;
 			}
 			job = runner.jobs.front();

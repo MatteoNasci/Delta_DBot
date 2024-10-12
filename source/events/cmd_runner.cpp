@@ -90,8 +90,8 @@ void mln::cmd_runner::attach_event(){
         if (const auto& function_it = actions.find(key); function_it != actions.end()) {
             if (function_it->second->use_job()) {
                 const std::optional<std::function<void()>> command_job = function_it->second->job(event_data);
-                if (command_job.has_value()) {
-                    jobs_handler().add_job(command_job.value());
+                if (!jobs_handler().add_job(command_job.value())) {
+                    bot().log(dpp::loglevel::ll_error, std::format("Failed to add job to jobs runner! cmd_runner, [{}].", key));
                 }
             }
             else {

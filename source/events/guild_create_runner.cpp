@@ -34,8 +34,8 @@ void mln::guild_create_runner::attach_event() {
         for (const std::unique_ptr<mln::base_guild_create>& action : this->actions) {
             if (action->use_job()) {
                 const std::optional<std::function<void()>> command_job = action->job(event_data);
-                if (command_job.has_value()) {
-                    jobs_handler().add_job(command_job.value());
+                if (!jobs_handler().add_job(command_job.value())) {
+                    bot().log(dpp::loglevel::ll_error, "Failed to add job to jobs runner! guild_create_runner.");
                 }
             }
             else {

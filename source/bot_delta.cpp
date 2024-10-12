@@ -224,7 +224,7 @@ mln::bot_delta::bot_delta() :
 }
 
 mln::bot_delta::~bot_delta() {
-    j_runner.stop();
+    j_runner.stop(false);
 
     database.close_connection();
 }
@@ -242,7 +242,7 @@ std::string mln::bot_delta::start() {
     return "Bot is already running!";
 }
 bool mln::bot_delta::close() {
-    j_runner.stop();
+    j_runner.stop(true);
 
     if (is_bot_running()) {
         bot.stop_timer(db_optimize_timer);

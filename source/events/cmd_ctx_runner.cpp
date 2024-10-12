@@ -48,7 +48,9 @@ void mln::cmd_ctx_runner::attach_event(){
             if (function_it->second->use_job()) {
                 const std::optional<std::function<void()>> func = function_it->second->job(event_data);
                 if (func.has_value()) {
-                    jobs_handler().add_job(func.value());
+                    if (!jobs_handler().add_job(func.value())) {
+                        bot().log(dpp::loglevel::ll_error, std::format("Failed to add job to jobs runner! cmd_ctx_runner, [{}].", key));
+                    }
                 }
             }
             else {
