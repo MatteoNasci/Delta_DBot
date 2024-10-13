@@ -67,7 +67,7 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
                 .add_option(dpp::command_option(dpp::co_user, "user", "User to add to the team. If not set the command user will be added to the team.", false)))
             //team leave command
             .add_option(dpp::command_option(dpp::co_sub_command, "leave", "Remove user from a team", false)
-                .add_option(dpp::command_option(dpp::co_string, "name", "The name of the arma team to leave", true)
+                .add_option(dpp::command_option(dpp::co_string, "name", "The name of the arma team to leave", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_team_name_length()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_team_name_length())))
                 .add_option(dpp::command_option(dpp::co_user, "user", "User to remove from the team. If not set the command user will be removed from the team.", false)))

@@ -488,23 +488,48 @@ dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_t
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
         co_return std::nullopt;
     }
-    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, false,
+    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, true,
         mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
         co_return std::nullopt;
     }
 
-    if (!is_team_present(cmd_data.data.guild_id, name)) {
-        co_await mln::response::co_respond(cmd_data.data, "Error, the given name is not associated with a team!", false, {});
-        co_return std::nullopt;
-    }
+    std::string team_name = name;
+    if (!team_name.empty()) {
+        if (!is_team_present(cmd_data.data.guild_id, team_name)) {
+            co_await mln::response::co_respond(cmd_data.data, "Error, the given name is not associated with a team!", false, {});
+            co_return std::nullopt;
+        }
 
-    if (!is_user_in_team(cmd_data.data.guild_id, target, name)) {
-        co_await mln::response::co_respond(cmd_data.data, "Error, the user is not part of the given team!", false, {});
-        co_return std::nullopt;
+        if (!is_user_in_team(cmd_data.data.guild_id, target, team_name)) {
+            co_await mln::response::co_respond(cmd_data.data, "Error, the user is not part of the given team!", false, {});
+            co_return std::nullopt;
+        }
+    }
+    else {
+        const size_t total_teams_with_user = teams_with_user(cmd_data.data.guild_id, target);
+        std::optional<mln::mog::mog_team_data_t> team_opt{ std::nullopt };
+        switch (total_teams_with_user) {
+        case 1:
+            team_opt = get_team(cmd_data.data.guild_id, target);
+            if (team_opt.has_value()) {
+                team_name = team_opt.value().name;
+                if (!team_name.empty()) {
+                    break;
+                }
+            }
+            co_await mln::response::co_respond(cmd_data.data, "Error, the name for the team to leave was not provided and the user is not part of any team!", false, {});
+            co_return std::nullopt;
+        case 0:
+            co_await mln::response::co_respond(cmd_data.data, "Error, the name for the team to leave was not provided and the user is not part of any team!", false, {});
+            co_return std::nullopt;
+        default:
+            co_await mln::response::co_respond(cmd_data.data, "Error, the name for the team to leave was not provided and the user is part of more than 1 team! Specify the name of the team to leave!", false, {});
+            co_return std::nullopt;
+        }
     }
 
     const mln::db_result_t res1 = db.bind_parameter(del_member_data.saved_stmt, 0, del_member_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
-    const mln::db_result_t res2 = db.bind_parameter(del_member_data.saved_stmt, 0, del_member_data.saved_param_name, name, mln::db_text_encoding::utf8);
+    const mln::db_result_t res2 = db.bind_parameter(del_member_data.saved_stmt, 0, del_member_data.saved_param_name, team_name, mln::db_text_encoding::utf8);
     const mln::db_result_t res3 = db.bind_parameter(del_member_data.saved_stmt, 0, del_member_data.saved_param_user, static_cast<int64_t>(target));
 
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
@@ -533,7 +558,7 @@ dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_t
         co_return std::nullopt;
     }
 
-    std::optional<mln::mog::mog_team_data_t::user_data_t> u_data = remove_user_from_team(cmd_data.data.guild_id, target, name);
+    std::optional<mln::mog::mog_team_data_t::user_data_t> u_data = remove_user_from_team(cmd_data.data.guild_id, target, team_name);
     if (!u_data.has_value()) {
         cbot().log(dpp::loglevel::ll_error, "Partial fail! Failed to remove user from team after succesfull db update! The db might be desynced from the local cache! Creating default user data to return...");
         u_data = { target, 0, 0 };
@@ -661,8 +686,9 @@ dpp::task<void> mln::mog::mog_team::help(mog_cmd_data_t& cmd_data) const
   Only admins can make other users join a team, making them the only ones who can effectively use the `user` optional parameter.
 
 - **/mog team leave**  
-  *Parameters:* name[text, required], user[user ID, optional].
-  This command allows a user to leave the team associated with the given `name`. A user can be part of one or more teams simultaneously but cannot be part of the same team multiple times.
+  *Parameters:* name[text, optional], user[user ID, optional].
+  This command allows a user to leave the team associated with the given team `name`. A user can be part of one or more teams simultaneously but cannot be part of the same team multiple times.
+  The optional team `name` parameter is used to identify which team to leave. This parameter can be ignored if the user belongs to 0 or 1 teams. However, if the user belongs to 2 or more teams, it MUST be set to a valid team that the user is part of.
   The optional `user` parameter is used when an admin wants to make a specific user leave a team. If not set, the `user` is the command user by default.
   Only admins can make other users leave a team, making them the only ones who can effectively use the `user` optional parameter.
 
