@@ -34,7 +34,7 @@ std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data)
 	//<t:time:R> for relative time display. https://discordtimestamp.com/
 	//<t:time:T> for long time display
 	for (const mln::mog::mog_team_data_t::user_data_t& u_data : data.users_id_cd) {
-		result = std::format("{}[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n", result, dpp::user::get_mention(u_data.id), u_data.cd, u_data.cd, u_data.last_update);
+		result = std::format("{}\t[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n", result, dpp::user::get_mention(u_data.id), u_data.cd, u_data.cd, u_data.last_update);
 	}
 
 	return result;
@@ -51,7 +51,7 @@ std::string mln::mog::mog_team_data_t::to_string_no_cd(const mog_team_data_t& da
 	std::string result = mln::mog::mog_team_data_t::to_string_partial(data);
 	
 	for (const mln::mog::mog_team_data_t::user_data_t& u_data : data.users_id_cd) {
-		result = std::format("{}[{}]\n", result, dpp::user::get_mention(u_data.id));
+		result = std::format("{}\t[{}]\n", result, dpp::user::get_mention(u_data.id));
 	}
 
 	return result;
