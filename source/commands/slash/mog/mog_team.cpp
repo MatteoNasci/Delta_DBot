@@ -401,12 +401,13 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
         }
     }
 
-    co_await mln::mog::mog_team::join(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
+    mln::mog::mog_team_data_t::user_data_t u_data{ user, 0, 0 };
+    co_await mln::mog::mog_team::join(event_data, cmd_data, u_data, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
 }
 
-dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
+dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& name) const
 {
-    if (target == 0) {
+    if (user_data.id == 0) {
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
         co_return;
     }
@@ -420,14 +421,14 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
         co_return;
     }
 
-    if (is_user_in_team(cmd_data.data.guild_id, target, name)) {
+    if (is_user_in_team(cmd_data.data.guild_id, user_data.id, name)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, the user is already part of the given team!", false, {});
         co_return;
     }
 
     const mln::db_result_t res1 = db.bind_parameter(member_data.saved_stmt, 0, member_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
     const mln::db_result_t res2 = db.bind_parameter(member_data.saved_stmt, 0, member_data.saved_param_name, name, mln::db_text_encoding::utf8);
-    const mln::db_result_t res3 = db.bind_parameter(member_data.saved_stmt, 0, member_data.saved_param_user, static_cast<int64_t>(target));
+    const mln::db_result_t res3 = db.bind_parameter(member_data.saved_stmt, 0, member_data.saved_param_user, static_cast<int64_t>(user_data.id));
 
     if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok || res3.type != mln::db_result::ok) {
         co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal database error!", true,
@@ -455,12 +456,16 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
         co_return;
     }
 
-    add_user_to_team(cmd_data.data.guild_id, target, name);
-
-    co_await mln::response::co_respond(cmd_data.data, "User added to team!", false, {});
+    const bool user_added = add_user_to_team(cmd_data.data.guild_id, user_data, name);
+    if (user_added) {
+        co_await mln::response::co_respond(cmd_data.data, "User added to team!", false, {});
+    }
+    else {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to add user to team! Internal error!", true, "Failed to add user to team after db update! Internal error, the database is now desynced from local cache!");
+    }
 }
 
-dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
+dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
     const dpp::command_value& name_param = event_data.get_parameter("name");
     const dpp::command_value& user_param = event_data.get_parameter("user");
@@ -470,32 +475,32 @@ dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data,
     if (user != cmd_data.data.usr_id) {
         if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
             co_await mln::response::co_respond(cmd_data.data, "Error, forcing other members to leave a team requires admin perms!", false, {});
-            co_return false;
+            co_return std::nullopt;
         }
     }
 
     co_return co_await mln::mog::mog_team::leave(event_data, cmd_data, user, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
 }
 
-dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
+dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const
 {
     if (target == 0) {
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
-        co_return false;
+        co_return std::nullopt;
     }
     if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, false,
         mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
-        co_return false;
+        co_return std::nullopt;
     }
 
     if (!is_team_present(cmd_data.data.guild_id, name)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, the given name is not associated with a team!", false, {});
-        co_return false;
+        co_return std::nullopt;
     }
 
     if (!is_user_in_team(cmd_data.data.guild_id, target, name)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, the user is not part of the given team!", false, {});
-        co_return false;
+        co_return std::nullopt;
     }
 
     const mln::db_result_t res1 = db.bind_parameter(del_member_data.saved_stmt, 0, del_member_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
@@ -508,7 +513,7 @@ dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data,
                 mln::database_handler::get_name_from_result(res1.type), res1.err_text,
                 mln::database_handler::get_name_from_result(res2.type), res2.err_text,
                 mln::database_handler::get_name_from_result(res3.type), res3.err_text));
-        co_return false;
+        co_return std::nullopt;
     }
 
     bool result = false;
@@ -525,13 +530,17 @@ dpp::task<bool> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data,
             err_text,
             mln::database_handler::get_name_from_result(res.type), res.err_text));
 
-        co_return false;
+        co_return std::nullopt;
     }
 
-    remove_user_from_team(cmd_data.data.guild_id, target, name);
+    std::optional<mln::mog::mog_team_data_t::user_data_t> u_data = remove_user_from_team(cmd_data.data.guild_id, target, name);
+    if (!u_data.has_value()) {
+        cbot().log(dpp::loglevel::ll_error, "Partial fail! Failed to remove user from team after succesfull db update! The db might be desynced from the local cache! Creating default user data to return...");
+        u_data = { target, 0, 0 };
+    }
 
     co_await mln::response::co_respond(cmd_data.data, "User removed from team!", false, {});
-    co_return true;
+    co_return u_data;
 }
 
 dpp::task<void> mln::mog::mog_team::leave_and_join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
@@ -553,7 +562,8 @@ dpp::task<void> mln::mog::mog_team::leave_and_join(const dpp::slashcommand_t& ev
     }
 
     if (!is_user_in_any_team(cmd_data.data.guild_id, target)) {
-        co_await mln::mog::mog_team::join(event_data, cmd_data, target, team_to_join);
+        mln::mog::mog_team_data_t::user_data_t u_data{ target, 0, 0 };
+        co_await mln::mog::mog_team::join(event_data, cmd_data, u_data, team_to_join);
         co_return;
     }
 
@@ -562,9 +572,9 @@ dpp::task<void> mln::mog::mog_team::leave_and_join(const dpp::slashcommand_t& ev
         co_return;
     }
 
-    const bool left = co_await mln::mog::mog_team::leave(event_data, cmd_data, target, team_to_leave);
-    if (left) {
-        co_await mln::mog::mog_team::join(event_data, cmd_data, target, team_to_join);
+    const std::optional<mln::mog::mog_team_data_t::user_data_t> previous_u_data = co_await mln::mog::mog_team::leave(event_data, cmd_data, target, team_to_leave);
+    if (previous_u_data.has_value()) {
+        co_await mln::mog::mog_team::join(event_data, cmd_data, previous_u_data.value(), team_to_join);
     }
 }
 
@@ -1014,7 +1024,7 @@ void mln::mog::mog_team::delete_teams(const uint64_t guild_id) const
         teams_data_cache.erase(it_map);
     }
 }
-bool mln::mog::mog_team::add_user_to_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
+bool mln::mog::mog_team::add_user_to_team(const uint64_t guild_id, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& team_name) const
 {
     std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
@@ -1029,37 +1039,38 @@ bool mln::mog::mog_team::add_user_to_team(const uint64_t guild_id, const uint64_
     }
 
     for (const mln::mog::mog_team_data_t::user_data_t& u_data : it->second.users_id_cd) {
-        if (u_data.id == user_id) {
+        if (u_data.id == user_data.id) {
             return false;
         }
     }
 
-    it->second.users_id_cd.emplace_back(user_id, 0, 0);
+    it->second.users_id_cd.push_back(user_data);
     return true;
 }
 
-bool mln::mog::mog_team::remove_user_from_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
+std::optional<mln::mog::mog_team_data_t::user_data_t> mln::mog::mog_team::remove_user_from_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const
 {
     std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
     const std::unordered_map<uint64_t, std::unordered_map<std::string, mln::mog::mog_team_data_t>>::iterator it_map = teams_data_cache.find(guild_id);
     if (it_map == teams_data_cache.end()) {
-        return false;
+        return std::nullopt;
     }
 
     const std::unordered_map<std::string, mln::mog::mog_team_data_t>::iterator it = it_map->second.find(team_name);
     if (it == it_map->second.end()) {
-        return false;
+        return std::nullopt;
     }
 
     for (std::vector<mln::mog::mog_team_data_t::user_data_t>::iterator it_to_delete = it->second.users_id_cd.begin(); it_to_delete != it->second.users_id_cd.end(); ++it_to_delete) {
         if (it_to_delete->id == user_id) {
+            mln::mog::mog_team_data_t::user_data_t to_return = *it_to_delete;
             it->second.users_id_cd.erase(it_to_delete);
-            return true;
+            return to_return;
         }
     }
 
-    return false;
+    return std::nullopt;
 }
 
 bool mln::mog::mog_team::set_team(const mln::mog::mog_team_data_t& team) const
