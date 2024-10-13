@@ -42,7 +42,7 @@ std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data)
 
 std::string mln::mog::mog_team_data_t::to_string_partial(const mog_team_data_t& data)
 {
-	return std::format("\nTeam name: [{}]. Dedicated channel: [{}], dedicated role: [{}]. Number of team members: [{}].\n",
+	return std::format("\nTeam: [{}]. Channel: [{}], Role: [{}]. Team members count: [{}].\n",
 		data.name, data.channel_id != 0 ? dpp::channel::get_mention(data.channel_id) : "None", data.role_id != 0 ? dpp::role::get_mention(data.role_id) : "None", data.users_id_cd.size());
 }
 
