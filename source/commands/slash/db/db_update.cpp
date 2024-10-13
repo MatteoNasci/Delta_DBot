@@ -156,8 +156,15 @@ dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_dat
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
-        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, false,
-            mln::constants::get_min_characters_description(), mln::constants::get_max_characters_description(), "description"))) {
+        const mln::utility::text_validity_t validity_data{
+        .can_be_null = true,
+        .log_if_null = false,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_description(),
+        .max_size = mln::constants::get_max_characters_description() };
+        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, validity_data, "description"))) {
             co_return;
         }
 
@@ -213,8 +220,15 @@ dpp::task<void> mln::db_update::common(const dpp::slashcommand_t& event_data, db
     //Retrieve remaining data required for the database query
     const dpp::command_value& name_param = event_data.get_parameter("name");
 
-    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false,
-        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_text_id(),
+        .max_size = mln::constants::get_max_characters_text_id() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, validity_data, "record name");
 
     if (!name.has_value()) {
         co_return;

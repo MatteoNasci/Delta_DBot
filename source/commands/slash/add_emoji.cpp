@@ -70,8 +70,15 @@ dpp::job mln::add_emoji::command(dpp::slashcommand_t event_data) {
     }
 
     const dpp::command_value& emoji_param = event_data.get_parameter("name");
-    const std::optional<std::string> emoji_name = co_await mln::utility::check_text_validity(emoji_param, lite_data, false, 
-        mln::constants::get_min_characters_emoji(), mln::constants::get_max_characters_emoji(), "emoji name");
+    const mln::utility::text_validity_t validity_data{ 
+        .can_be_null = false, 
+        .log_if_null = true, 
+        .can_be_empty = false, 
+        .log_if_empty = true, 
+        .log_if_out_of_bounds = true, 
+        .min_size = mln::constants::get_min_characters_emoji(), 
+        .max_size = mln::constants::get_max_characters_emoji() };
+    const std::optional<std::string> emoji_name = co_await mln::utility::check_text_validity(emoji_param, lite_data, validity_data, "emoji name");
 
     if (!emoji_name.has_value()) {
         co_return;

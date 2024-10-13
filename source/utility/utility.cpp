@@ -371,36 +371,40 @@ dpp::job mln::utility::manage_paginated_embed(paginated_data_t data, const std::
     co_return;
 }
 
-dpp::task<std::optional<std::string>> mln::utility::check_text_validity(const dpp::command_value& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text)
+dpp::task<std::optional<std::string>> mln::utility::check_text_validity(const dpp::command_value& text, event_data_lite_t& lite_data, const text_validity_t& validity_data, const std::string& err_text)
 {
     if (!std::holds_alternative<std::string>(text)) {
-        const std::string err = std::format("Failed validity check for [{}], the parameter doesn't holld the correct type value!", err_text);
+        if (validity_data.can_be_null) {
+            co_return {};
+        }
 
-        co_await mln::response::co_respond(lite_data, err, true, err);
+        const std::string err = std::format("Failed validity check for [{}], the parameter doesn't hold the correct type value!", err_text);
+
+        co_await mln::response::co_respond(lite_data, err, validity_data.log_if_null, err);
         co_return std::nullopt;
     }
 
     const std::optional<std::string> result = std::get<std::string>(text);
 
-    if (!(co_await mln::utility::check_text_validity(result.value(), lite_data, can_be_empty, min_size, max_size, err_text))) {
+    if (!(co_await mln::utility::check_text_validity(result.value(), lite_data, validity_data, err_text))) {
         co_return std::nullopt;
     }
 
     co_return result;
 }
-dpp::task<bool> mln::utility::check_text_validity(const std::string& text, event_data_lite_t& lite_data, const bool can_be_empty, const size_t min_size, const size_t max_size, const std::string& err_text)
+dpp::task<bool> mln::utility::check_text_validity(const std::string& text, event_data_lite_t& lite_data, const text_validity_t& validity_data, const std::string& err_text)
 {
-    if (!can_be_empty && text.empty()) {
+    if (!validity_data.can_be_empty && text.empty()) {
         const std::string err = std::format("Failed validity check for [{}], empty text is not allowed!", err_text);
 
-        co_await mln::response::co_respond(lite_data, err, true, err);
+        co_await mln::response::co_respond(lite_data, err, validity_data.log_if_empty, err);
         co_return false;
     }
 
-    if (!text.empty() && (text.size() < min_size || text.size() > max_size)) {
-        const std::string err = std::format("Failed validity check for [{}], text size [{}] is not within the allowed size limits: [{}/{}]!", err_text, text.size(), min_size, max_size);
+    if (!text.empty() && (text.size() < validity_data.min_size || text.size() > validity_data.max_size)) {
+        const std::string err = std::format("Failed validity check for [{}], text size [{}] is not within the allowed size limits: [{}/{}]!", err_text, text.size(), validity_data.min_size, validity_data.max_size);
 
-        co_await mln::response::co_respond(lite_data, err, true, err);
+        co_await mln::response::co_respond(lite_data, err, validity_data.log_if_out_of_bounds, err);
         co_return false;
     }
 

@@ -56,8 +56,16 @@ dpp::job mln::pm::command(dpp::slashcommand_t event_data) {
     const dpp::command_value& user_param = event_data.get_parameter("user");
     const dpp::command_value& msg_param = event_data.get_parameter("msg");
     const dpp::snowflake user = std::holds_alternative<dpp::snowflake>(user_param) ? std::get<dpp::snowflake>(user_param) : dpp::snowflake{ 0 };
-    const std::optional<std::string> msg = co_await mln::utility::check_text_validity(msg_param, lite_data, false,
-        mln::constants::get_min_characters_reply_msg(), s_max_msg_size, "pm message");
+
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_reply_msg(),
+        .max_size = s_max_msg_size };
+    const std::optional<std::string> msg = co_await mln::utility::check_text_validity(msg_param, lite_data, validity_data, "pm message");
 
     if (!msg.has_value()) {
         co_return;

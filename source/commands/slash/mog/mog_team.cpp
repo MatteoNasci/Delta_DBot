@@ -287,8 +287,15 @@ dpp::task<void> mln::mog::mog_team::create(const dpp::slashcommand_t& event_data
     const dpp::command_value& channel_param = event_data.get_parameter("channel");
     const dpp::command_value& role_param = event_data.get_parameter("role");
 
-    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false, 
-        mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_team_name_length(),
+        .max_size = mln::constants::get_max_team_name_length() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, validity_data, "team name");
     if (!name.has_value()) {
         co_return;
     }
@@ -348,8 +355,15 @@ dpp::task<void> mln::mog::mog_team::del(const dpp::slashcommand_t& event_data, m
 
     const dpp::command_value& name_param = event_data.get_parameter("name");
 
-    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false,
-        mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_team_name_length(),
+        .max_size = mln::constants::get_max_team_name_length() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, validity_data, "team name");
     if (!name.has_value()) {
         co_return;
     }
@@ -411,8 +425,16 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
         co_return;
     }
-    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, false,
-        mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
+
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_team_name_length(),
+        .max_size = mln::constants::get_max_team_name_length() };
+    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
         co_return;
     }
 
@@ -488,8 +510,16 @@ dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_t
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
         co_return std::nullopt;
     }
-    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, true,
-        mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
+
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = true,
+        .log_if_null = false,
+        .can_be_empty = true,
+        .log_if_empty = false,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_team_name_length(),
+        .max_size = mln::constants::get_max_team_name_length() };
+    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
         co_return std::nullopt;
     }
 
@@ -608,8 +638,15 @@ dpp::task<void> mln::mog::mog_team::show(const dpp::slashcommand_t& event_data, 
     const dpp::command_value& name_param = event_data.get_parameter("name");
 
     const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
-    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, true,
-        mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = true,
+        .log_if_null = false,
+        .can_be_empty = true,
+        .log_if_empty = false,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_team_name_length(),
+        .max_size = mln::constants::get_max_team_name_length() };
+    if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
 
         co_return;
     }

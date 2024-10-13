@@ -296,8 +296,15 @@ dpp::task<void> mln::db_delete::single(const dpp::slashcommand_t& event_data, ev
     }
 
     const dpp::command_value& name_param = event_data.get_parameter("name");
-    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, reply_data, false, 
-        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_text_id(),
+        .max_size = mln::constants::get_max_characters_text_id() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, reply_data, validity_data, "record name");
 
     if (!name.has_value()) {
         co_return;

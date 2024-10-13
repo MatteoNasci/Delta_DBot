@@ -91,8 +91,15 @@ dpp::job mln::report::command(dpp::slashcommand_t event_data) {
 	}
 
 	const dpp::command_value& report_text_param = event_data.get_parameter("description");
-	const std::optional<std::string> text = co_await mln::utility::check_text_validity(report_text_param, lite_data, false,
-		mln::constants::get_min_characters_reply_msg(), mln::constants::get_max_characters_reply_msg(), "report text");
+	const mln::utility::text_validity_t validity_data{
+		.can_be_null = false,
+		.log_if_null = true,
+		.can_be_empty = false,
+		.log_if_empty = true,
+		.log_if_out_of_bounds = true,
+		.min_size = mln::constants::get_min_characters_reply_msg(),
+		.max_size = mln::constants::get_max_characters_reply_msg() };
+	const std::optional<std::string> text = co_await mln::utility::check_text_validity(report_text_param, lite_data, validity_data, "report text");
 
 	if (!text.has_value()) {
 		co_return;

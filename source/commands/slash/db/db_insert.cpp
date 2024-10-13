@@ -152,8 +152,15 @@ mln::db_saved_stmt_state mln::db_insert::is_db_initialized() const noexcept
 dpp::task<void> mln::db_insert::command_url(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, bool nsfw) {
     //Verify if given url is a valid discord message url
     const dpp::command_value& input_param = event_data.get_parameter("url");
-    const std::optional<std::string> input_url = co_await mln::utility::check_text_validity(input_param, cmd_data.data, false,
-        mln::constants::get_min_characters_url(), mln::constants::get_max_characters_url(), "url");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_url(),
+        .max_size = mln::constants::get_max_characters_url() };
+    const std::optional<std::string> input_url = co_await mln::utility::check_text_validity(input_param, cmd_data.data, validity_data, "url");
 
     if (!input_url.has_value()) {
         co_return;
@@ -744,8 +751,15 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     if (valid_description) {
         description = std::get<std::string>(desc_param);
 
-        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, false,
-            mln::constants::get_min_characters_description(), mln::constants::get_max_characters_description(), "description"))) {
+        const mln::utility::text_validity_t validity_data{
+        .can_be_null = true,
+        .log_if_null = false,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_description(),
+        .max_size = mln::constants::get_max_characters_description() };
+        if (!(co_await mln::utility::check_text_validity(description, cmd_data.data, validity_data, "description"))) {
             co_return false;
         }
 
@@ -756,8 +770,15 @@ dpp::task<bool> mln::db_insert::execute_query(const dpp::slashcommand_t& event_d
     }
 
     const dpp::command_value& name_param = event_data.get_parameter("name");
-    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, false,
-        mln::constants::get_min_characters_text_id(), mln::constants::get_max_characters_text_id(), "record name");
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_text_id(),
+        .max_size = mln::constants::get_max_characters_text_id() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, validity_data, "record name");
 
     if (!name.has_value()) {
         co_return false;

@@ -112,8 +112,15 @@ dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_da
 	const dpp::command_value& name_param = event_data.get_parameter("name");
 
 	const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
-	if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, true,
-		mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
+	const mln::utility::text_validity_t validity_data{
+		.can_be_null = true,
+		.log_if_null = false,
+		.can_be_empty = true,
+		.log_if_empty = false,
+		.log_if_out_of_bounds = true,
+		.min_size = mln::constants::get_min_team_name_length(),
+		.max_size = mln::constants::get_max_team_name_length() };
+	if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
 
 		co_return;
 	}
@@ -169,8 +176,15 @@ dpp::task<void> mln::mog::mog_arma::show_cooldowns(const dpp::slashcommand_t& ev
 	const dpp::command_value& name_param = event_data.get_parameter("name");
 
 	const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
-	if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, true,
-		mln::constants::get_min_team_name_length(), mln::constants::get_max_team_name_length(), "team name"))) {
+	const mln::utility::text_validity_t validity_data{
+		.can_be_null = true,
+		.log_if_null = false,
+		.can_be_empty = true,
+		.log_if_empty = false,
+		.log_if_out_of_bounds = true,
+		.min_size = mln::constants::get_min_team_name_length(),
+		.max_size = mln::constants::get_max_team_name_length() };
+	if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
 
 		co_return;
 	}
