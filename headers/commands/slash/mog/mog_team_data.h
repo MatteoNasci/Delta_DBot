@@ -29,9 +29,9 @@ namespace mln {
 
 			mog_team_data_t() noexcept;
 			mog_team_data_t(std::string name, const uint64_t guild_id, const uint64_t channel_id, const uint64_t role_id) noexcept;
-			mog_team_data_t(const mog_team_data_t& rhs) noexcept;
+			mog_team_data_t(const mog_team_data_t& rhs);
 			mog_team_data_t(mog_team_data_t&& rhs) noexcept;
-			mog_team_data_t& operator=(const mog_team_data_t& rhs) noexcept;
+			mog_team_data_t& operator=(const mog_team_data_t& rhs);
 			mog_team_data_t& operator=(mog_team_data_t&& rhs) noexcept;
 
 			static std::string to_string(const mog_team_data_t& data);

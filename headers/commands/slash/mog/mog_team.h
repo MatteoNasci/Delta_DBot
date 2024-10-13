@@ -110,7 +110,7 @@ namespace mln {
 
 			bool add_user_to_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const;
 			bool remove_user_from_team(const uint64_t guild_id, const uint64_t user_id, const std::string& team_name) const;
-			bool set_team(mln::mog::mog_team_data_t team) const;
+			bool set_team(const mln::mog::mog_team_data_t& team) const;
 
 			void clear_teams() const;
 		};

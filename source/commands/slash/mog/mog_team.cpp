@@ -328,7 +328,13 @@ dpp::task<void> mln::mog::mog_team::create(const dpp::slashcommand_t& event_data
         co_return;
     }
 
-    set_team(mln::mog::mog_team_data_t{ name.value(), cmd_data.data.guild_id, channel, role });
+    mln::mog::mog_team_data_t team_data{};
+    team_data.guild_id = cmd_data.data.guild_id;
+    team_data.name = name.value();
+    team_data.channel_id = channel;
+    team_data.role_id = role;
+    team_data.users_id_cd = std::vector<mln::mog::mog_team_data_t::user_data_t>{};
+    set_team(team_data);
 
     co_await mln::response::co_respond(cmd_data.data, "Team created!", false, {});
 }
@@ -743,7 +749,7 @@ void mln::mog::mog_team::load_teams() const
     //NOTE: Slow but who cares
     size_t i = 0;
     for (const std::tuple<uint64_t, std::string, uint64_t, uint64_t>& raw_team_data : mog_teams) {
-        mln::mog::mog_team_data_t team_data;
+        mln::mog::mog_team_data_t team_data{};
         team_data.guild_id = std::get<0>(raw_team_data);
         team_data.name = std::get<1>(raw_team_data);
         team_data.channel_id = std::get<2>(raw_team_data);
@@ -1056,7 +1062,7 @@ bool mln::mog::mog_team::remove_user_from_team(const uint64_t guild_id, const ui
     return false;
 }
 
-bool mln::mog::mog_team::set_team(mln::mog::mog_team_data_t team) const
+bool mln::mog::mog_team::set_team(const mln::mog::mog_team_data_t& team) const
 {
     if (!mln::mog::mog_team::is_team_valid(team)) {
         return false;
@@ -1065,7 +1071,7 @@ bool mln::mog::mog_team::set_team(mln::mog::mog_team_data_t team) const
     {
         std::unique_lock<std::shared_mutex> lock{ teams_mutex };
 
-        teams_data_cache[team.guild_id][team.name] = std::move(team);
+        teams_data_cache[team.guild_id][team.name] = team;
     }
 
     return true;

@@ -19,7 +19,7 @@ mln::mog::mog_team_data_t::mog_team_data_t(std::string name, const uint64_t guil
 {
 }
 
-mln::mog::mog_team_data_t::mog_team_data_t(const mog_team_data_t& rhs) noexcept : name{ rhs.name }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ rhs.users_id_cd }
+mln::mog::mog_team_data_t::mog_team_data_t(const mog_team_data_t& rhs) : name{ rhs.name }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ rhs.users_id_cd }
 {
 }
 
@@ -29,7 +29,7 @@ mln::mog::mog_team_data_t::mog_team_data_t(mog_team_data_t&& rhs) noexcept : nam
 	rhs.users_id_cd = {};
 }
 
-mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(const mog_team_data_t& rhs) noexcept
+mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(const mog_team_data_t& rhs)
 {
 	name = rhs.name;
 	guild_id = rhs.guild_id;
@@ -95,7 +95,7 @@ std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data)
 	//<t:time:R> for relative time display. https://discordtimestamp.com/
 	//<t:time:T> for long time display
 	for (const mln::mog::mog_team_data_t::user_data_t& u_data : data.users_id_cd) {
-		result = std::format("{}User: [{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n", result, dpp::user::get_mention(u_data.id), u_data.cd, u_data.cd, u_data.last_update);
+		result = std::format("{}[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n", result, dpp::user::get_mention(u_data.id), u_data.cd, u_data.cd, u_data.last_update);
 	}
 
 	return result;
