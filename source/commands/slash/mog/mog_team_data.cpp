@@ -10,47 +10,13 @@
 #include <type_traits>
 #include <vector>
 
-mln::mog::mog_team_data_t::mog_team_data_t() noexcept : name{}, guild_id{ 0 }, channel_id{ 0 }, role_id{ 0 }, users_id_cd{}
+mln::mog::mog_team_data_t::mog_team_data_t() : name{}, guild_id{ 0 }, channel_id{ 0 }, role_id{ 0 }, users_id_cd{}
 {
 }
 
-mln::mog::mog_team_data_t::mog_team_data_t(std::string name, const uint64_t guild_id, const uint64_t channel_id, const uint64_t role_id) noexcept :
+mln::mog::mog_team_data_t::mog_team_data_t(std::string name, const uint64_t guild_id, const uint64_t channel_id, const uint64_t role_id) :
 	name{ std::move(name) }, guild_id{ guild_id }, channel_id{ channel_id }, role_id{ role_id }, users_id_cd{}
 {
-}
-
-mln::mog::mog_team_data_t::mog_team_data_t(const mog_team_data_t& rhs) : name{ rhs.name }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ rhs.users_id_cd }
-{
-}
-
-mln::mog::mog_team_data_t::mog_team_data_t(mog_team_data_t&& rhs) noexcept : name{ std::move(rhs.name) }, guild_id{ rhs.guild_id }, channel_id{ rhs.channel_id }, role_id{ rhs.role_id }, users_id_cd{ std::move(rhs.users_id_cd) }
-{
-	rhs.name = {};
-	rhs.users_id_cd = {};
-}
-
-mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(const mog_team_data_t& rhs)
-{
-	name = rhs.name;
-	guild_id = rhs.guild_id;
-	channel_id = rhs.channel_id;
-	role_id = rhs.role_id;
-	users_id_cd = rhs.users_id_cd;
-
-	return *this;
-}
-
-mln::mog::mog_team_data_t& mln::mog::mog_team_data_t::operator=(mog_team_data_t&& rhs) noexcept
-{
-	name = std::move(rhs.name);
-	rhs.name = {};
-	guild_id = rhs.guild_id;
-	channel_id = rhs.channel_id;
-	role_id = rhs.role_id;
-	users_id_cd = std::move(rhs.users_id_cd);
-	rhs.users_id_cd = {};
-
-	return *this;
 }
 
 mln::mog::mog_team_data_t::user_data_t::user_data_t() noexcept : id{ 0 }, cd{ 0 }, last_update{ 0 }
@@ -60,33 +26,6 @@ mln::mog::mog_team_data_t::user_data_t::user_data_t() noexcept : id{ 0 }, cd{ 0 
 mln::mog::mog_team_data_t::user_data_t::user_data_t(const uint64_t id, const uint64_t cd, const uint64_t last_update) noexcept : id{ id }, cd{ cd }, last_update{ last_update }
 {
 }
-
-mln::mog::mog_team_data_t::user_data_t::user_data_t(const user_data_t& rhs) noexcept : id{ rhs.id }, cd{ rhs.cd }, last_update{ rhs.last_update }
-{
-}
-
-mln::mog::mog_team_data_t::user_data_t::user_data_t(user_data_t&& rhs) noexcept : id{ rhs.id }, cd{ rhs.cd }, last_update{ rhs.last_update }
-{
-}
-
-mln::mog::mog_team_data_t::user_data_t& mln::mog::mog_team_data_t::user_data_t::operator=(const user_data_t& rhs) noexcept
-{
-	id = rhs.id;
-	cd = rhs.cd;
-	last_update = rhs.last_update;
-
-	return *this;
-}
-
-mln::mog::mog_team_data_t::user_data_t& mln::mog::mog_team_data_t::user_data_t::operator=(user_data_t&& rhs) noexcept
-{
-	id = rhs.id;
-	cd = rhs.cd;
-	last_update = rhs.last_update;
-
-	return *this;
-}
-
 
 std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data)
 {
