@@ -11,6 +11,7 @@
 #include <dpp/coro/job.h>
 #include <dpp/dispatcher.h>
 #include <dpp/message.h>
+#include <dpp/misc-enum.h>
 #include <dpp/permissions.h>
 
 #include <ctime>
@@ -31,8 +32,7 @@ dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) {
         .set_title("Delta")
         .set_author("Erk_Krea", "https://github.com/MatteoNasci/Delta_DBot", "https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
         .set_thumbnail("https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        .set_image("https://avatars.githubusercontent.com/u/28777038?s=40&v=64")
-        .set_timestamp(time(0));
+        .set_image("https://avatars.githubusercontent.com/u/28777038?s=40&v=64");
 
     event_data_lite_t lite_data{ event_data, bot(), true };
     if (!mln::response::is_event_data_valid(lite_data)) {
@@ -42,7 +42,7 @@ dpp::job mln::bot_info::command(dpp::slashcommand_t event_data) {
 
     co_await mln::response::co_respond(lite_data, dpp::message{
             lite_data.channel_id,
-            dpp::embed{s_embed}.set_description(std::format("Bot version: [{}], uptime: [{}]", mln::get_version(), bot().uptime().to_string())) }
+            dpp::embed{s_embed}.set_timestamp(time(0)).set_description(std::format("Bot version: [{}], uptime: [{}]", mln::get_version(), bot().uptime().to_string())) }
     .set_flags(dpp::m_ephemeral), false, "Failed to reply with the info text!");
 
     co_return;
