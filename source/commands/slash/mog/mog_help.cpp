@@ -15,7 +15,7 @@
 
 #include <format>
 
-const dpp::message mln::mog::mog_help::s_info = dpp::message{ "Information regarding the `/mog` commands..." }
+static const dpp::message s_info = dpp::message{ "Information regarding the `/mog` commands..." }
 .set_flags(dpp::m_ephemeral)
 .add_embed(dpp::embed{}.set_description(R"""(The `/mog` commands are utility tools for the game *Eminence in Shadow : Master of Garden*. The bot's database is used to store MOG teams.
 
@@ -32,7 +32,7 @@ mln::mog::mog_help::mog_help(dpp::cluster& cluster) : base_mog_command{ cluster 
 
 dpp::task<void> mln::mog::mog_help::command(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mog_command_type)
 {
-    co_await mln::response::co_respond(cmd_data.data, mln::mog::mog_help::s_info, false, "Failed to reply with the mog help text!");
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the mog help text!");
     co_return;
 }
 

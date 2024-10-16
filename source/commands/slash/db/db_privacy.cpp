@@ -15,7 +15,7 @@
 
 #include <format>
 
-const dpp::message mln::db_privacy::s_info = dpp::message{ "**Privacy Policy**" }
+static const dpp::message s_info = dpp::message{ "**Privacy Policy**" }
 .set_flags(dpp::m_ephemeral)
 .add_embed(dpp::embed{}.set_description(R"""(**Effective Date:** 05/09/2024 (dd/mm/yyyy)
 
@@ -89,7 +89,7 @@ mln::db_privacy::db_privacy(dpp::cluster& cluster) : base_db_command{ cluster } 
 
 dpp::task<void> mln::db_privacy::command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type)
 {
-    co_await mln::response::co_respond(cmd_data.data, mln::db_privacy::s_info, false, "Failed to reply with the db privacy text!");
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db privacy text!");
     co_return;
 }
 

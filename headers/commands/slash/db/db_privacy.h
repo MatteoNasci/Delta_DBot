@@ -12,14 +12,12 @@
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
-	struct message;
 }
 
 namespace mln {
 	struct db_cmd_data_t;
+
 	class db_privacy : public base_db_command {
-	private:
-		static const dpp::message s_info;
 	public:
 		db_privacy(dpp::cluster& cluster);
 

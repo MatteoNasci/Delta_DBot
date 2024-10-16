@@ -12,7 +12,6 @@
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
-	struct message;
 }
 
 namespace mln {
@@ -27,7 +26,6 @@ namespace mln {
 			int saved_param_guild, saved_param_channel;
 			db_saved_stmt_state state;
 		};
-		static const dpp::message s_info;
 		data_t data;
 		database_handler& db;
 	public:

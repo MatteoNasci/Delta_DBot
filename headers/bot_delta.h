@@ -90,8 +90,12 @@ namespace mln {
 		static void initialize_environment();
 		static void shutdown_environment();
 
-		static size_t max_text_id_size();
-		static size_t min_text_id_size();
+		[[nodiscard]] inline static constexpr size_t max_text_id_size() noexcept {
+			return 50;
+		}
+		[[nodiscard]] inline static constexpr size_t min_text_id_size() noexcept {
+			return 1;
+		}
 	};
 }
 

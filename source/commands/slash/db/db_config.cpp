@@ -27,10 +27,10 @@
 #include <format>
 #include <optional>
 #include <string>
-#include <variant>
 #include <type_traits>
+#include <variant>
 
-const dpp::message mln::db_config::s_info = dpp::message{"Information regarding the `/db config` commands..."}
+static const dpp::message s_info = dpp::message{"Information regarding the `/db config` commands..."}
         .set_flags(dpp::m_ephemeral)
         .add_embed(dpp::embed{}.set_description(R"""(The `/db config` set of commands is used to configure the database environment, potentially altering the behavior of all other commands.
 
@@ -160,7 +160,7 @@ dpp::task<void> mln::db_config::update_dump(const dpp::slashcommand_t& event_dat
 
 dpp::task<void> mln::db_config::help(db_cmd_data_t& cmd_data) const {
 
-    co_await mln::response::co_respond(cmd_data.data, mln::db_config::s_info, false, "Failed to reply with the db setup help text!");
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db setup help text!");
     co_return;
 }
 

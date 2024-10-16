@@ -12,21 +12,17 @@
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
-	struct message;
 }
 
 namespace mln {
 	struct db_cmd_data_t;
 
 	class db_help : public base_db_command {
-	private:
-		static const dpp::message s_info;
 	public:
 		db_help(dpp::cluster& cluster);
 		dpp::task<void> command(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const db_command_type type) override final;
 		db_init_type_flag get_requested_initialization_type(const db_command_type cmd) const noexcept override final;
 		db_saved_stmt_state is_db_initialized() const noexcept override final;
-	private:
 	};
 }
 

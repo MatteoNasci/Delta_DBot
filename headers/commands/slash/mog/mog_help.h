@@ -12,7 +12,6 @@
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
-	struct message;
 }
 
 namespace mln {
@@ -20,8 +19,6 @@ namespace mln {
 		struct mog_cmd_data_t;
 
 		class mog_help : public base_mog_command {
-		private:
-			static const dpp::message s_info;
 		public:
 			mog_help(dpp::cluster& cluster);
 

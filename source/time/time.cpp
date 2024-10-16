@@ -1,28 +1,15 @@
 #include "time/time.h"
 #include "utility/utility.h"
 
-#include <corecrt.h>
-#include <time.h>
-#include <ctime>
-#include <mutex>
-#include <string>
-#include <cstdint>
-#include <format>
-#include <exception>
-#include <optional>
 #include <chrono>
-
-constexpr uint64_t mln::time::get_date_to_seconds_size()
-{
-    //Format: [dd/MM hh:mm:ss]. Example: 21/05 01:12:33
-    return 14;
-}
-
-constexpr uint64_t mln::time::get_cd_to_seconds_size()
-{
-    //Format: [m:ss]. Example: 3:11
-    return 4;
-}
+#include <corecrt.h>
+#include <cstdint>
+#include <exception>
+#include <format>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <time.h>
 
 std::string mln::time::get_current_date_time()
 {

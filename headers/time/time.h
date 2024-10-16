@@ -3,7 +3,6 @@
 #define H_MLN_DB_TIME_H
 
 #include <chrono>
-#include <corecrt.h>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -11,8 +10,16 @@
 namespace mln {
 	class time {
 	public:
-		static constexpr uint64_t get_date_to_seconds_size();
-		static constexpr uint64_t get_cd_to_seconds_size();
+		[[nodiscard]] inline static constexpr uint64_t get_date_to_seconds_size() noexcept
+		{
+			//Format: [dd/MM hh:mm:ss]. Example: 21/05 01:12:33
+			return 14;
+		}
+		[[nodiscard]] inline static constexpr uint64_t get_cd_to_seconds_size() noexcept
+		{
+			//Format: [m:ss]. Example: 3:11
+			return 4;
+		}
 
 		static std::string get_current_date_time();
 		static std::optional<uint64_t> convert_date_to_seconds_left(const std::string& date);

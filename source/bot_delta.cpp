@@ -27,13 +27,6 @@
 #include <string>
 #include <variant>
 
-size_t mln::bot_delta::max_text_id_size() {
-    return 50;
-}
-size_t mln::bot_delta::min_text_id_size() {
-    return 1;
-}
-
 void mln::bot_delta::setup_db() {
     std::filesystem::create_directory(std::filesystem::current_path().concat("/dbs"));
 

@@ -15,7 +15,7 @@
 
 #include <format>
 
-const dpp::message mln::db_help::s_info = dpp::message{ "Information regarding the `/db` commands..." }
+static const dpp::message s_info = dpp::message{ "Information regarding the `/db` commands..." }
 .set_flags(dpp::m_ephemeral)
 .add_embed(dpp::embed{}.set_description(R"""(The `/db` commands are designed to interact with the bot's database. The primary function of the database is to store Discord messages and display their contents when requested.
 Most of the database commands are related to the local Discord server from which the command is invoked, allowing interaction only with records created on that server. The only exception is the `/db delete self` command.
@@ -38,7 +38,7 @@ mln::db_help::db_help(dpp::cluster& cluster) : base_db_command{ cluster } {
 }
 
 dpp::task<void> mln::db_help::command(const dpp::slashcommand_t&, db_cmd_data_t& cmd_data, const db_command_type) {
-    co_await mln::response::co_respond(cmd_data.data, mln::db_help::s_info, false, "Failed to reply with the db help text!");
+    co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the db help text!");
     co_return;
 }
 
