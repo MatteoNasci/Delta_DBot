@@ -40,44 +40,44 @@
 #include <unordered_map>
 #include <variant>
 
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_insert_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_insert_sub_commands{
         {"url", {0, mln::db_command_type::url}},
         {"file", {0, mln::db_command_type::file}},
         {"text", {0, mln::db_command_type::text}},
         {"help", {0, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_update_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_update_sub_commands{
         {"description", {5, mln::db_command_type::description}},
         {"nsfw", {5, mln::db_command_type::nsfw}},
         {"help", {5, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_delete_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_delete_sub_commands{
         {"single", {4, mln::db_command_type::single}},
         {"user", {4, mln::db_command_type::user}},
         {"self", {4, mln::db_command_type::self}},
         {"guild", {4, mln::db_command_type::guild}},
         {"help", {4, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_config_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_config_sub_commands{
         {"update_dump_channel", {1, mln::db_command_type::update_dump_channel}},
         {"help", {1, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_select_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_select_sub_commands{
         {"single", {2, mln::db_command_type::single}},
         {"help", {2, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_show_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_show_sub_commands{
         {"all", {3, mln::db_command_type::all}},
         {"user", {3, mln::db_command_type::user}},
         {"help", {3, mln::db_command_type::help}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_help_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_help_sub_commands{
         {"generic", {6, mln::db_command_type::generic}}, };
-const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> mln::db::s_allowed_privacy_sub_commands{
+static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_privacy_sub_commands{
         {"policy", {7, mln::db_command_type::policy}}, };
-const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>>&> mln::db::s_allowed_primary_sub_commands{
-        {"insert", mln::db::s_allowed_insert_sub_commands},
-        {"config", mln::db::s_allowed_config_sub_commands},
-        {"select", mln::db::s_allowed_select_sub_commands},
-        {"show", mln::db::s_allowed_show_sub_commands},
-        {"delete", mln::db::s_allowed_delete_sub_commands},
-        {"update", mln::db::s_allowed_update_sub_commands},
-        {"help", mln::db::s_allowed_help_sub_commands},
-        {"privacy", mln::db::s_allowed_privacy_sub_commands}, };
+static const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>>&> s_allowed_primary_sub_commands{
+        {"insert", s_allowed_insert_sub_commands},
+        {"config", s_allowed_config_sub_commands},
+        {"select", s_allowed_select_sub_commands},
+        {"show", s_allowed_show_sub_commands},
+        {"delete", s_allowed_delete_sub_commands},
+        {"update", s_allowed_update_sub_commands},
+        {"help", s_allowed_help_sub_commands},
+        {"privacy", s_allowed_privacy_sub_commands}, };
 
 mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("db"), "Manage the database.", cluster.me.id)
@@ -237,8 +237,8 @@ dpp::job mln::db::command(dpp::slashcommand_t event_data) {
     //Get the mapper for the primary cmds, return error if not found
     const dpp::command_data_option primary_cmd = cmd_interaction.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, primary_cmd.name);
-    const auto& it = mln::db::s_allowed_primary_sub_commands.find(primary_cmd.name);
-    if (it == mln::db::s_allowed_primary_sub_commands.end()) {
+    const auto& it = s_allowed_primary_sub_commands.find(primary_cmd.name);
+    if (it == s_allowed_primary_sub_commands.end()) {
         const std::string err_text = std::format("Couldn't find primary sub command [{}].", primary_cmd.name);
         co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
 
