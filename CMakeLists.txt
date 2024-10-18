@@ -91,7 +91,7 @@ else()
   message(FATAL_ERROR "Could not find ${DPP_NAME}")
 endif()
 
-set(DPP_DLLS_NAMES dpp.dll opus.dll zlib1.dll libsodium.dll libssl-1_1-x64.dll libcrypto-1_1-x64.dll)
+set(DPP_DLLS_NAMES dpp.dll opus.dll zlib1.dll libssl-1_1-x64.dll libcrypto-1_1-x64.dll)
 find_path(DPP_DLLS_PATH
   NAMES ${DPP_DLLS_NAMES}
   PATHS "${dpp_dlls_path}/"
