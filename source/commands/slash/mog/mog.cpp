@@ -40,6 +40,27 @@
 #include <utility>
 #include <variant>
 
+static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>> s_allowed_team_sub_commands{
+        {"create", {0, mln::mog::mog_command_type::create}},
+        {"delete", {0, mln::mog::mog_command_type::del}},
+        {"join", {0, mln::mog::mog_command_type::join}},
+        {"leave", {0, mln::mog::mog_command_type::leave}},
+        {"leave_and_join", {0, mln::mog::mog_command_type::leave_and_join}},
+        {"show", {0, mln::mog::mog_command_type::show}},
+        {"help", {0, mln::mog::mog_command_type::help}}, };
+static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>> s_allowed_arma_sub_commands{
+        {"raw_cooldown", {1, mln::mog::mog_command_type::raw_cooldown}},
+        {"cooldown", {1, mln::mog::mog_command_type::cooldown}},
+        {"show_cooldowns", {1, mln::mog::mog_command_type::show_cooldowns}},
+        {"help", {1, mln::mog::mog_command_type::help}}, };
+static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>> s_allowed_help_sub_commands{
+            {"generic", {2, mln::mog::mog_command_type::generic}}, };
+static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>> s_allowed_privacy_sub_commands{};
+static const std::unordered_map<std::string, const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>>&> s_allowed_primary_sub_commands{
+            {"team", s_allowed_team_sub_commands},
+            {"arma", s_allowed_arma_sub_commands},
+            {"help", s_allowed_help_sub_commands}, };
+
 mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_slashcommand{ cluster,
     std::move(dpp::slashcommand(mln::utility::prefix_dev("mog"), "Commands related to the game MoG.", cluster.me.id)
         //Minimum permission required for using the commands
@@ -87,16 +108,21 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_team_name_length()))))
             //team help command
             .add_option(dpp::command_option(dpp::co_sub_command, "help", "Gives detailed information about the team group command", false)))
-        //arma commmand group
+        //arma command group
         .add_option(dpp::command_option(dpp::co_sub_command_group, "arma", "Collection of commands related to arma", false)
-            //arma cooldown command
-            .add_option(dpp::command_option(dpp::co_sub_command, "cooldown", "Allows a team member to update his arma cooldown", false)
+            //arma raw_cooldown command
+            .add_option(dpp::command_option(dpp::co_sub_command, "raw_cooldown", "Allows a team member to update his arma cooldown", false)
                 .add_option(dpp::command_option(dpp::co_integer, "minutes", "The user arma minutes cooldown.", true)
                     .set_min_value(static_cast<int64_t>(mln::constants::get_min_arma_cd_minutes()))
                     .set_max_value(static_cast<int64_t>(mln::constants::get_max_arma_cd_minutes())))
                 .add_option(dpp::command_option(dpp::co_integer, "seconds", "The user arma seconds cooldown.", true)
                     .set_min_value(static_cast<int64_t>(mln::constants::get_min_arma_cd_seconds()))
                     .set_max_value(static_cast<int64_t>(mln::constants::get_max_arma_cd_seconds())))
+                .add_option(dpp::command_option(dpp::co_string, "name", "The name of the arma team to update", false)
+                    .set_min_length(static_cast<int64_t>(mln::constants::get_min_team_name_length()))
+                    .set_max_length(static_cast<int64_t>(mln::constants::get_max_team_name_length()))))
+            //arma cooldown command
+            .add_option(dpp::command_option(dpp::co_sub_command, "cooldown", "Allows a team member to set his arma cooldown to 5 minutes", false)
                 .add_option(dpp::command_option(dpp::co_string, "name", "The name of the arma team to update", false)
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_team_name_length()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_team_name_length()))))
@@ -112,26 +138,7 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
             .add_option(dpp::command_option(dpp::co_sub_command, "generic", "Gives generic information about the mog group command", false)))
     ) }, 
     database{ in_database }, 
-    commands{},
-    allowed_team_sub_commands{
-        {"create", {0, mln::mog::mog_command_type::create}},
-        {"delete", {0, mln::mog::mog_command_type::del}},
-        {"join", {0, mln::mog::mog_command_type::join}},
-        {"leave", {0, mln::mog::mog_command_type::leave}},
-        {"leave_and_join", {0, mln::mog::mog_command_type::leave_and_join}},
-        {"show", {0, mln::mog::mog_command_type::show}},
-        {"help", {0, mln::mog::mog_command_type::help}}, },
-        allowed_arma_sub_commands{
-        {"cooldown", {1, mln::mog::mog_command_type::cooldown}},
-        {"show_cooldowns", {1, mln::mog::mog_command_type::show_cooldowns}},
-        {"help", {1, mln::mog::mog_command_type::help}}, },
-        allowed_help_sub_commands{ 
-            {"generic", {2, mln::mog::mog_command_type::generic}}, },
-        allowed_privacy_sub_commands{}, 
-        allowed_primary_sub_commands{ 
-            {"team", allowed_team_sub_commands}, 
-            {"arma", allowed_arma_sub_commands},
-            {"help", allowed_help_sub_commands}, }
+    commands{}
 {
     commands[0] = std::make_unique<mln::mog::mog_team>(bot(), database);
 
@@ -173,8 +180,8 @@ dpp::job mln::mog::mog::command(dpp::slashcommand_t event_data)
     //Get the mapper for the primary cmds, return error if not found
     const dpp::command_data_option primary_cmd = cmd_interaction.options[0];
     cmd_data.data.command_name = std::format("{} {}", cmd_data.data.command_name, primary_cmd.name);
-    const auto& it = allowed_primary_sub_commands.find(primary_cmd.name);
-    if (it == allowed_primary_sub_commands.end()) {
+    const auto& it = s_allowed_primary_sub_commands.find(primary_cmd.name);
+    if (it == s_allowed_primary_sub_commands.end()) {
         const std::string err_text = std::format("Couldn't find primary sub command [{}].", primary_cmd.name);
         co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
 

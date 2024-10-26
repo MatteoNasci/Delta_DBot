@@ -48,6 +48,7 @@ static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_
 static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_update_sub_commands{
         {"description", {5, mln::db_command_type::description}},
         {"nsfw", {5, mln::db_command_type::nsfw}},
+        {"name", {5, mln::db_command_type::name}},
         {"help", {5, mln::db_command_type::help}}, };
 static const std::unordered_map<std::string, std::tuple<size_t, mln::db_command_type>> s_allowed_delete_sub_commands{
         {"single", {4, mln::db_command_type::single}},
@@ -152,6 +153,15 @@ mln::db::db(dpp::cluster& cluster, database_handler& in_database) : base_slashco
                     .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
                     .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
                 .add_option(dpp::command_option(dpp::co_boolean, "nsfw", "Set this to True if the content updated is nsfw", true))
+                .add_option(dpp::command_option(dpp::co_user, "owner", "Fill this parameter in case you want to update a record owned by someone else", false)))
+            //Update name command
+            .add_option(dpp::command_option(dpp::co_sub_command, "name", "Updates a database record's name", false)
+                .add_option(dpp::command_option(dpp::co_string, "name", "Identifying name for the record", true)
+                    .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
+                    .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
+                .add_option(dpp::command_option(dpp::co_string, "new_name", "New identifying name for the record", true)
+                    .set_min_length(static_cast<int64_t>(mln::constants::get_min_characters_text_id()))
+                    .set_max_length(static_cast<int64_t>(mln::constants::get_max_characters_text_id())))
                 .add_option(dpp::command_option(dpp::co_user, "owner", "Fill this parameter in case you want to update a record owned by someone else", false)))
             //Update help command
             .add_option(dpp::command_option(dpp::co_sub_command, "help", "Gives detailed information about the update group command", false)))

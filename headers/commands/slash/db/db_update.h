@@ -27,6 +27,7 @@ namespace mln {
 		};
 		data_t data;
 		data_t data_nsfw;
+		data_t data_name;
 		database_handler& db;
 	public:
 		db_update(dpp::cluster& cluster, database_handler& db);
@@ -42,6 +43,7 @@ namespace mln {
 	private:
 
 		dpp::task<void> description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;
+		dpp::task<void> name(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;
 		dpp::task<void> nsfw(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const;
 		dpp::task<void> common(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data, const data_t& stmt_data) const;
 

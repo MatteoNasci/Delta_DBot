@@ -3,7 +3,7 @@
 
 const char* mln::get_cmd_type_text(const db_command_type type) noexcept {
     static const char* s_invalid_error_text = "Unknown db command type";
-    static constexpr size_t s_type_to_text_map_size = 17;
+    static constexpr size_t s_type_to_text_map_size = 18;
     static constexpr const char* s_type_to_text_map[s_type_to_text_map_size]{
         "none",
         "file",
@@ -21,6 +21,7 @@ const char* mln::get_cmd_type_text(const db_command_type type) noexcept {
         "guild",
         "policy",
         "nsfw",
+        "name",
         "enum_count",
     };
 

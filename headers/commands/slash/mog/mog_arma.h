@@ -9,6 +9,8 @@
 
 #include <dpp/coro/task.h>
 
+#include <cstdint>
+
 namespace dpp {
 	class cluster;
 	struct slashcommand_t;
@@ -30,7 +32,9 @@ namespace mln {
 			db_saved_stmt_state is_db_initialized() const noexcept override final;
 
 		private:
+			dpp::task<void> raw_cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<void> cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
+			dpp::task<void> common_cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t cd_delay) const;
 			dpp::task<void> show_cooldowns(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<void> help(mog_cmd_data_t& cmd_data) const;
 		};

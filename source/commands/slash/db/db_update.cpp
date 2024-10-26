@@ -82,6 +82,29 @@ data{ .state = db_saved_stmt_state::none }, data_nsfw{ .state = db_saved_stmt_st
         }
     }
 
+    const mln::db_result_t res3 = db.save_statement("UPDATE OR ABORT storage SET name = :NNN WHERE guild_id = :GGG AND name = :OOO AND user_id = :UUU RETURNING user_id;", data_name.saved_stmt);
+    if (res3.type != mln::db_result::ok) {
+        cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update name stmt! Error: [{}], details: [{}].",
+            mln::database_handler::get_name_from_result(res3.type), res3.err_text));
+    }
+    else {
+        data_name.state = mln::flags::add(data_name.state, db_saved_stmt_state::stmt_initialized);
+        const mln::db_result_t res11 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":GGG", data_name.saved_param_guild);
+        const mln::db_result_t res12 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":OOO", data_name.saved_param_name);
+        const mln::db_result_t res13 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":UUU", data_name.saved_param_user);
+        const mln::db_result_t res14 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":NNN", data_name.saved_param_to_update);
+        if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update name stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
+                mln::database_handler::get_name_from_result(res11.type), res11.err_text,
+                mln::database_handler::get_name_from_result(res12.type), res12.err_text,
+                mln::database_handler::get_name_from_result(res13.type), res13.err_text,
+                mln::database_handler::get_name_from_result(res14.type), res14.err_text));
+        }
+        else {
+            data_name.state = mln::flags::add(data_name.state, db_saved_stmt_state::params_initialized);
+        }
+    }
+
     cbot().log(dpp::loglevel::ll_debug, std::format("db_update: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
 }
 
@@ -93,21 +116,30 @@ mln::db_update::~db_update()
     if (mln::flags::has(data_nsfw.state, db_saved_stmt_state::stmt_initialized)) {
         db.delete_statement(data_nsfw.saved_stmt);
     }
+    if (mln::flags::has(data_name.state, db_saved_stmt_state::stmt_initialized)) {
+        db.delete_statement(data_name.saved_stmt);
+    }
 }
 
-mln::db_update::db_update(db_update&& rhs) noexcept : base_db_command{ std::forward<db_update>(rhs) }, data{ rhs.data }, db{ rhs.db }
+mln::db_update::db_update(db_update&& rhs) noexcept : base_db_command{ std::forward<db_update>(rhs) }, data{ rhs.data }, data_nsfw{ rhs.data_nsfw }, data_name{ rhs.data_name }, db { rhs.db }
 {
     rhs.data.state = db_saved_stmt_state::none;
     rhs.data_nsfw.state = db_saved_stmt_state::none;
+    rhs.data_name.state = db_saved_stmt_state::none;
 }
 
 mln::db_update& mln::db_update::operator=(db_update&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_update>(rhs));
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_update>(rhs));
 
-    data = rhs.data;
-    rhs.data.state = db_saved_stmt_state::none;
-    rhs.data_nsfw.state = db_saved_stmt_state::none;
+        data = rhs.data;
+        data_nsfw = rhs.data_nsfw;
+        data_name = rhs.data_name;
+        rhs.data.state = db_saved_stmt_state::none;
+        rhs.data_nsfw.state = db_saved_stmt_state::none;
+        rhs.data_name.state = db_saved_stmt_state::none;
+    }
 
     return *this;
 }
@@ -120,6 +152,9 @@ dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, d
         break;
     case mln::db_command_type::nsfw:
         co_await mln::db_update::nsfw(event_data, cmd_data);
+        break;
+    case mln::db_command_type::name:
+        co_await mln::db_update::name(event_data, cmd_data);
         break;
     case mln::db_command_type::help:
         co_await mln::db_update::help(cmd_data);
@@ -134,6 +169,7 @@ dpp::task<void> mln::db_update::command(const dpp::slashcommand_t& event_data, d
 mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const db_command_type cmd) const noexcept {
     switch (cmd) {
     case mln::db_command_type::description:
+    case mln::db_command_type::name:
     case mln::db_command_type::nsfw:
         return mln::flags::add(db_init_type_flag::cmd_data, db_init_type_flag::thinking);
     case mln::db_command_type::help:
@@ -145,7 +181,7 @@ mln::db_init_type_flag mln::db_update::get_requested_initialization_type(const d
 
 mln::db_saved_stmt_state mln::db_update::is_db_initialized() const noexcept
 {
-    return mln::flags::com(data.state, data_nsfw.state);
+    return mln::flags::com(data.state, data_nsfw.state, data_name.state);
 }
 
 dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const {
@@ -191,6 +227,43 @@ dpp::task<void> mln::db_update::description(const dpp::slashcommand_t& event_dat
     }
 
     co_await common(event_data, cmd_data, data);
+}
+
+dpp::task<void> mln::db_update::name(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const
+{
+    //Retrieve remaining data required for the database query
+    const dpp::command_value& name_param = event_data.get_parameter("new_name");
+
+    const mln::utility::text_validity_t validity_data{
+        .can_be_null = false,
+        .log_if_null = true,
+        .can_be_empty = false,
+        .log_if_empty = true,
+        .log_if_out_of_bounds = true,
+        .min_size = mln::constants::get_min_characters_text_id(),
+        .max_size = mln::constants::get_max_characters_text_id() };
+    const std::optional<std::string> name = co_await mln::utility::check_text_validity(name_param, cmd_data.data, validity_data, "record new name");
+
+    if (!name.has_value()) {
+        co_return;
+    }
+
+    if (!mln::utility::is_ascii_printable(name.value())) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, given new_name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]", true,
+            "Failed to bind query parameters, given new_name is composed of invalid characters! Only ASCII printable characters are accepted [32,126]");
+        co_return;
+    }
+
+    const mln::db_result_t res = db.bind_parameter(data_name.saved_stmt, 0, data_name.saved_param_to_update, name.value(), mln::db_text_encoding::utf8);
+
+    //Check if any error occurred in the binding process, in case return an error
+    if (res.type != mln::db_result::ok) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
+            std::format("Failed to bind query parameters, internal error! new_name_param: [{}, {}].", mln::database_handler::get_name_from_result(res.type), res.err_text));
+        co_return;
+    }
+
+    co_await common(event_data, cmd_data, data_name);
 }
 
 dpp::task<void> mln::db_update::nsfw(const dpp::slashcommand_t& event_data, db_cmd_data_t& cmd_data) const
@@ -305,6 +378,11 @@ The optional owner parameter can be used by admins to update records owned by ot
 - **/db update description**  
   *Parameters:* name[text, required], owner[user ID, optional], description[text, optional].  
   This command searches for a record in the database identified by the given name and owned by the command user. If the record exists, its description will be updated to the provided description text. If no description is provided, the record's description will be left blank.
+  The owner parameter allows the user to update a record owned by the given owner. Only admins can use this feature.
+
+- **/db update name**  
+  *Parameters:* name[text, required], new_name[text, required], owner[user ID, optional].  
+  This command searches for a record in the database identified by the given name and owned by the command user. If the record exists, its name will be updated to the provided new_name.
   The owner parameter allows the user to update a record owned by the given owner. Only admins can use this feature.
 
 - **/db update nsfw**  

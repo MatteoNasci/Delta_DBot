@@ -43,6 +43,9 @@ dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_dat
 	case mln::mog::mog_command_type::cooldown:
 		co_await mln::mog::mog_arma::cooldown(event_data, cmd_data);
 		break;
+	case mln::mog::mog_command_type::raw_cooldown:
+		co_await mln::mog::mog_arma::raw_cooldown(event_data, cmd_data);
+		break;
 	case mln::mog::mog_command_type::show_cooldowns:
 		co_await mln::mog::mog_arma::show_cooldowns(event_data, cmd_data);
 		break;
@@ -60,6 +63,7 @@ mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_ty
 {
 	switch (cmd) {
 	case mln::mog::mog_command_type::cooldown:
+	case mln::mog::mog_command_type::raw_cooldown:
 	case mln::mog::mog_command_type::show_cooldowns:
 		return mln::flags::add(mln::mog::mog_init_type_flag::cmd_data, mln::mog::mog_init_type_flag::thinking);
 	case mln::mog::mog_command_type::help:
@@ -75,6 +79,13 @@ mln::db_saved_stmt_state mln::mog::mog_arma::is_db_initialized() const noexcept
 }
 
 dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
+{
+	static constexpr uint64_t s_total_cd_delay = static_cast<uint64_t>(5 * 60);
+
+	co_await mln::mog::mog_arma::common_cooldown(event_data, cmd_data, s_total_cd_delay);
+}
+
+dpp::task<void> mln::mog::mog_arma::raw_cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
 {
 	const dpp::command_value& min_param = event_data.get_parameter("minutes");
 	const dpp::command_value& sec_param = event_data.get_parameter("seconds");
@@ -109,6 +120,11 @@ dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_da
 
 	const uint64_t total_cd_delay = static_cast<uint64_t>(secs + (mins * 60));
 
+	co_await mln::mog::mog_arma::common_cooldown(event_data, cmd_data, total_cd_delay);
+}
+
+dpp::task<void> mln::mog::mog_arma::common_cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t cd_delay) const
+{
 	const dpp::command_value& name_param = event_data.get_parameter("name");
 
 	const std::string name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
@@ -126,7 +142,7 @@ dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_da
 	}
 
 	const size_t teams_with_user = teams_handler.teams_with_user(cmd_data.data.guild_id, cmd_data.data.usr_id);
-	
+
 	switch (teams_with_user) {
 	case 0:
 		co_await mln::response::co_respond(cmd_data.data, "Failed to update cooldown! The command user is not part of any team!", false, {});
@@ -155,9 +171,9 @@ dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_da
 
 			mln::mog::mog_team_data_t::user_data_t to_set;
 			to_set.id = cmd_data.data.usr_id;
-			to_set.cd = creation_time + total_cd_delay;
+			to_set.cd = creation_time + cd_delay;
 			to_set.last_update = creation_time;
-			
+
 			if (!teams_handler.set_user_cooldown(cmd_data.data.guild_id, team_data.value().name, to_set)) {
 				co_await mln::response::co_respond(cmd_data.data, "Failed to update cooldown! The command user is not part of the given team!", true, "Failed to update cooldown! The command user is not part of the given team! (cooldown)");
 				co_return;
@@ -242,10 +258,16 @@ dpp::task<void> mln::mog::mog_arma::help(mog_cmd_data_t& cmd_data) const
 
 **Types of commands:**
 
-- **/mog arma cooldown**  
+- **/mog arma raw_cooldown**  
   *Parameters:* minutes[integer, required], seconds[integer, required], name[text, optional].  
   This command requires specifying the `minutes` (between 0 and 5) and `seconds` (between 0 and 59), along with an optional `name` parameter.
   A new cooldown for the command user will be set (on the specified team) based on the given minutes and seconds. This cooldown can be viewed using the `/mog arma show_cooldowns` command.
+  If the user is part of only one MOG team, the optional parameter `name` can be ignored. Otherwise, it MUST be set to a valid team name that includes the user.
+
+- **/mog arma cooldown**  
+  *Parameters:* name[text, optional].  
+  This command works the same as `/mog arma raw_cooldown`, but it sets the cooldown to a fixed 5 minutes.
+  The new cooldown for the command user will be set (on the specified team). This cooldown can be viewed using the `/mog arma show_cooldowns` command.
   If the user is part of only one MOG team, the optional parameter `name` can be ignored. Otherwise, it MUST be set to a valid team name that includes the user.
 
 - **/mog arma show_cooldowns**  

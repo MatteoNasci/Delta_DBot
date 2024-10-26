@@ -20,6 +20,7 @@ namespace mln {
 		guild = 13,
 		policy = 14,
 		nsfw = 15,
+		name,
 		enum_count
 	};
 
