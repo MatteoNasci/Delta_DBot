@@ -71,7 +71,7 @@ data{ .state = db_saved_stmt_state::none }, data_nsfw{ .state = db_saved_stmt_st
         const mln::db_result_t res13 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":UUU", data_nsfw.saved_param_user);
         const mln::db_result_t res14 = db.get_bind_parameter_index(data_nsfw.saved_stmt, 0, ":WWW", data_nsfw.saved_param_to_update);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
-            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update nsfw stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], nsfw_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
@@ -94,7 +94,7 @@ data{ .state = db_saved_stmt_state::none }, data_nsfw{ .state = db_saved_stmt_st
         const mln::db_result_t res13 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":UUU", data_name.saved_param_user);
         const mln::db_result_t res14 = db.get_bind_parameter_index(data_name.saved_stmt, 0, ":NNN", data_name.saved_param_to_update);
         if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok || res13.type != mln::db_result::ok || res14.type != mln::db_result::ok) {
-            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update name stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], desc_param: [{}, {}].",
+            cbot().log(dpp::loglevel::ll_error, std::format("Failed to save update name stmt param indexes! guild_param: [{}, {}], name_param: [{}, {}], user_param: [{}, {}], new_name_param: [{}, {}].",
                 mln::database_handler::get_name_from_result(res11.type), res11.err_text,
                 mln::database_handler::get_name_from_result(res12.type), res12.err_text,
                 mln::database_handler::get_name_from_result(res13.type), res13.err_text,
