@@ -30,15 +30,19 @@ namespace mln {
 			rhs.cmd = {}; 
 		}
 		base_command& operator=(const base_command& rhs) noexcept {
-			base_action<dpp::job, std::optional<std::function<void()>>, T_interaction_create_t>::operator=(rhs);
-			cmd = rhs.cmd;
+			if (this != &rhs) {
+				base_action<dpp::job, std::optional<std::function<void()>>, T_interaction_create_t>::operator=(rhs);
+				cmd = rhs.cmd;
+			}
 
 			return *this;
 		}
 		base_command& operator=(base_command&& rhs) noexcept {
-			base_action<dpp::job, std::optional<std::function<void()>>, T_interaction_create_t>::operator=(std::forward<base_command>(rhs));
-			cmd = std::move(rhs.cmd);
-			rhs.cmd = {};
+			if (this != &rhs) {
+				base_action<dpp::job, std::optional<std::function<void()>>, T_interaction_create_t>::operator=(std::forward<base_command>(rhs));
+				cmd = std::move(rhs.cmd);
+				rhs.cmd = {};
+			}
 
 			return *this;
 		}

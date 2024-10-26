@@ -91,10 +91,12 @@ mln::db_insert::db_insert(db_insert&& rhs) noexcept : base_db_command{ std::forw
 
 mln::db_insert& mln::db_insert::operator=(db_insert&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_insert>(rhs));
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_insert>(rhs));
 
-    data = rhs.data;
-    rhs.data.state = db_saved_stmt_state::none;
+        data = rhs.data;
+        rhs.data.state = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

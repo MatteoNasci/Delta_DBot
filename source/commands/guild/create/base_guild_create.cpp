@@ -15,14 +15,18 @@ mln::base_guild_create::base_guild_create(base_guild_create&& rhs) noexcept : ba
 
 mln::base_guild_create& mln::base_guild_create::operator=(const base_guild_create& rhs) noexcept
 {
-	mln::base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::guild_create_t&>::operator=(rhs);
+	if (this != &rhs) {
+		mln::base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::guild_create_t&>::operator=(rhs);
+	}
 
 	return *this;
 }
 
 mln::base_guild_create& mln::base_guild_create::operator=(base_guild_create&& rhs) noexcept
 {
-	mln::base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::guild_create_t&>::operator=(rhs);
+	if (this != &rhs) {
+		mln::base_action<dpp::task<void>, std::optional<std::function<void()>>, const dpp::guild_create_t&>::operator=(rhs);
+	}
 
 	return *this;
 }

@@ -184,16 +184,18 @@ show_all_data{ rhs.show_all_data }, db{ rhs.db }
 
 mln::mog::mog_team& mln::mog::mog_team::operator=(mog_team&& rhs) noexcept
 {
-    base_mog_command::operator=(std::forward<mog_team>(rhs));
-    teams_data_cache = std::move(rhs.teams_data_cache);
-    rhs.teams_data_cache = {};
-    data = rhs.data;
-    del_data = rhs.del_data;
-    member_data = rhs.member_data;
-    del_member_data = rhs.del_member_data;
-    show_data = rhs.show_data;
-    show_team_data = rhs.show_team_data;
-    show_all_data = rhs.show_all_data;
+    if (this != &rhs) {
+        base_mog_command::operator=(std::forward<mog_team>(rhs));
+        teams_data_cache = std::move(rhs.teams_data_cache);
+        rhs.teams_data_cache = {};
+        data = rhs.data;
+        del_data = rhs.del_data;
+        member_data = rhs.member_data;
+        del_member_data = rhs.del_member_data;
+        show_data = rhs.show_data;
+        show_team_data = rhs.show_team_data;
+        show_all_data = rhs.show_all_data;
+    }
 
     return *this;
 }

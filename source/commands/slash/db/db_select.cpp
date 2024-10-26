@@ -78,10 +78,12 @@ mln::db_select::db_select(db_select&& rhs) noexcept : base_db_command{ std::forw
 
 mln::db_select& mln::db_select::operator=(db_select&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_select>(rhs));
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_select>(rhs));
 
-    data = rhs.data;
-    rhs.data.state = db_saved_stmt_state::none;
+        data = rhs.data;
+        rhs.data.state = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

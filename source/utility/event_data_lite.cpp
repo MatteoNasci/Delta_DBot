@@ -24,31 +24,37 @@ mln::event_data_lite_t::event_data_lite_t(const event_data_lite_t& rhs) noexcept
 
 mln::event_data_lite_t& mln::event_data_lite_t::operator=(const event_data_lite_t& rhs) noexcept
 {
-	command_id = rhs.command_id;
-	guild_id = rhs.guild_id;
-	channel_id = rhs.channel_id;
-	usr_id = rhs.usr_id;
-	app_id = rhs.app_id;
-	command_name = rhs.command_name;
-	token = rhs.token;
-	creator = rhs.creator;
-	is_first_reply = rhs.is_first_reply;
+	if (this != &rhs) {
+		command_id = rhs.command_id;
+		guild_id = rhs.guild_id;
+		channel_id = rhs.channel_id;
+		usr_id = rhs.usr_id;
+		app_id = rhs.app_id;
+		command_name = rhs.command_name;
+		token = rhs.token;
+		creator = rhs.creator;
+		is_first_reply = rhs.is_first_reply;
+	}
+
 	return *this;
 }
 
 mln::event_data_lite_t& mln::event_data_lite_t::operator=(event_data_lite_t&& rhs) noexcept
 {
-	command_id = rhs.command_id;
-	guild_id = rhs.guild_id;
-	channel_id = rhs.channel_id;
-	usr_id = rhs.usr_id;
-	app_id = rhs.app_id;
-	command_name = std::move(rhs.command_name);
-	rhs.command_name = {};
-	token = std::move(rhs.token);
-	rhs.token = {};
-	creator = rhs.creator;
-	is_first_reply = rhs.is_first_reply;
+	if (this != &rhs) {
+		command_id = rhs.command_id;
+		guild_id = rhs.guild_id;
+		channel_id = rhs.channel_id;
+		usr_id = rhs.usr_id;
+		app_id = rhs.app_id;
+		command_name = std::move(rhs.command_name);
+		rhs.command_name = {};
+		token = std::move(rhs.token);
+		rhs.token = {};
+		creator = rhs.creator;
+		is_first_reply = rhs.is_first_reply;
+	}
+
 	return *this;
 }
 

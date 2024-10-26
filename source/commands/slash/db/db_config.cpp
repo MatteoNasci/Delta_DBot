@@ -83,10 +83,12 @@ mln::db_config::db_config(db_config&& rhs) noexcept : base_db_command{ std::forw
 
 mln::db_config& mln::db_config::operator=(db_config&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_config>(rhs));
-    data = rhs.data;
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_config>(rhs));
+        data = rhs.data;
 
-    rhs.data.state = db_saved_stmt_state::none;
+        rhs.data.state = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

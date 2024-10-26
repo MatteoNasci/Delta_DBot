@@ -36,8 +36,10 @@ namespace mln {
 		base_event& operator=(const base_event&) = delete;
 
 		base_event& operator=(base_event&& rhs) {
-			actions = std::move(rhs.actions);
-			rhs.actions = {};
+			if (this != &rhs) {
+				actions = std::move(rhs.actions);
+				rhs.actions = {};
+			}
 
 			return *this;
 		}

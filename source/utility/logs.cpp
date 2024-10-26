@@ -26,8 +26,10 @@ mln::logs::logs(logs&& rhs) noexcept : log_file{ std::move(rhs.log_file) } {
 
 mln::logs& mln::logs::operator=(logs&& rhs) noexcept
 {
-	log_file = std::move(rhs.log_file);
-	rhs.log_file = {};
+	if (this != &rhs) {
+		log_file = std::move(rhs.log_file);
+		rhs.log_file = {};
+	}
 
     return *this;
 }

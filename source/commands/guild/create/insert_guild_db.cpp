@@ -45,12 +45,14 @@ mln::insert_guild_db::insert_guild_db(insert_guild_db&& rhs) noexcept :
 
 mln::insert_guild_db& mln::insert_guild_db::operator=(insert_guild_db&& rhs) noexcept
 {
-    base_guild_create::operator=(std::forward<insert_guild_db>(rhs));
+    if (this != &rhs) {
+        base_guild_create::operator=(std::forward<insert_guild_db>(rhs));
 
-    saved_insert_guild_query = rhs.saved_insert_guild_query;
-    db_state = rhs.db_state;
+        saved_insert_guild_query = rhs.saved_insert_guild_query;
+        db_state = rhs.db_state;
 
-    rhs.db_state = db_saved_stmt_state::none;
+        rhs.db_state = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

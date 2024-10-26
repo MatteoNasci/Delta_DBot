@@ -86,11 +86,13 @@ mln::db_show::db_show(db_show&& rhs) noexcept : base_db_command{ std::forward<db
 
 mln::db_show& mln::db_show::operator=(db_show&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_show>(rhs));
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_show>(rhs));
 
-    data = rhs.data;
-    rhs.data.valid_all = db_saved_stmt_state::none;
-    rhs.data.valid_user = db_saved_stmt_state::none;
+        data = rhs.data;
+        rhs.data.valid_all = db_saved_stmt_state::none;
+        rhs.data.valid_user = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

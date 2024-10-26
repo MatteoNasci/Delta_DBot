@@ -136,13 +136,15 @@ mln::db_delete::db_delete(db_delete&& rhs) noexcept : base_db_command{ std::forw
 
 mln::db_delete& mln::db_delete::operator=(db_delete&& rhs) noexcept
 {
-    base_db_command::operator=(std::forward<db_delete>(rhs));
+    if (this != &rhs) {
+        base_db_command::operator=(std::forward<db_delete>(rhs));
 
-    data = rhs.data;
-    rhs.data.valid_guild = db_saved_stmt_state::none;
-    rhs.data.valid_self = db_saved_stmt_state::none;
-    rhs.data.valid_user = db_saved_stmt_state::none;
-    rhs.data.valid_single = db_saved_stmt_state::none;
+        data = rhs.data;
+        rhs.data.valid_guild = db_saved_stmt_state::none;
+        rhs.data.valid_self = db_saved_stmt_state::none;
+        rhs.data.valid_user = db_saved_stmt_state::none;
+        rhs.data.valid_single = db_saved_stmt_state::none;
+    }
 
     return *this;
 }

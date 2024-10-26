@@ -14,14 +14,18 @@ mln::base_ctx_command::base_ctx_command(base_ctx_command&& rhs) : base_command{ 
 
 mln::base_ctx_command& mln::base_ctx_command::operator=(const base_ctx_command& rhs)
 {
-	base_command::operator=(rhs);
+	if (this != &rhs) {
+		base_command::operator=(rhs);
+	}
 
 	return *this;
 }
 
 mln::base_ctx_command& mln::base_ctx_command::operator=(base_ctx_command&& rhs)
 {
-	base_command::operator=(std::forward<base_ctx_command>(rhs));
+	if (this != &rhs) {
+		base_command::operator=(std::forward<base_ctx_command>(rhs));
+	}
 
 	return *this;
 }

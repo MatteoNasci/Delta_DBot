@@ -61,11 +61,13 @@ mln::report::report(report&& rhs) noexcept : base_slashcommand{ std::forward<rep
 
 mln::report& mln::report::operator=(report&& rhs) noexcept
 {
-	base_slashcommand::operator=(std::forward<report>(rhs));
+	if (this != &rhs) {
+		base_slashcommand::operator=(std::forward<report>(rhs));
 
-	saved_insert_rep_query = rhs.saved_insert_rep_query;
-	db_state = rhs.db_state;
-	rhs.db_state = db_saved_stmt_state::none;
+		saved_insert_rep_query = rhs.saved_insert_rep_query;
+		db_state = rhs.db_state;
+		rhs.db_state = db_saved_stmt_state::none;
+	}
 
 	return *this;
 }
