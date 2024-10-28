@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <format>
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -27,17 +28,42 @@ mln::mog::mog_team_data_t::user_data_t::user_data_t(const uint64_t id, const uin
 {
 }
 
-std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data)
+std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data, const uint64_t min_valid_cd)
 {
 	std::string result = mln::mog::mog_team_data_t::to_string_partial(data);
 
 	//<t:time:R> for relative time display. https://discordtimestamp.com/
 	//<t:time:T> for long time display
+
+	uint64_t min_cd = std::numeric_limits<uint64_t>::max(), max_cd = 0;
 	for (const mln::mog::mog_team_data_t::user_data_t& u_data : data.users_id_cd) {
-		result = std::format("{}\t[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n", result, dpp::user::get_mention(u_data.id), u_data.cd, u_data.cd, u_data.last_update);
+		const bool is_cd_valid = mln::mog::mog_team_data_t::is_member_cooldown_valid(u_data, min_valid_cd);
+
+		if (is_cd_valid) [[likely]] {
+			if (min_cd > u_data.cd) {
+				min_cd = u_data.cd;
+			}
+			if (max_cd < u_data.cd) {
+				max_cd = u_data.cd;
+			}
+
+			result = std::format("{}\t[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n",
+				result,
+				dpp::user::get_mention(u_data.id),
+				u_data.cd,
+				u_data.cd,
+				u_data.last_update);
+		}else{
+			result = std::format("{}\t[{}], cooldown: [{}, at {}].\t\tLast updated: [{}].\n",
+				result,
+				(u_data.id != 0 ? dpp::user::get_mention(u_data.id) : "Unknown user"),
+				(u_data.cd != 0 ? std::format("<t:{}:R>", u_data.cd) : "Null"),
+				(u_data.cd != 0 ? std::format("<t:{}:T>", u_data.cd) : "Null"),
+				(u_data.last_update != 0 ? std::format("<t:{}:R>", u_data.last_update) : "Null"));
+		}
 	}
 
-	return result;
+	return std::format("{}\tMax cooldown difference: [{}].\n", result, (max_cd != 0 ? (max_cd - min_cd) : 0));
 }
 
 std::string mln::mog::mog_team_data_t::to_string_partial(const mog_team_data_t& data)
@@ -55,4 +81,9 @@ std::string mln::mog::mog_team_data_t::to_string_no_cd(const mog_team_data_t& da
 	}
 
 	return result;
+}
+
+bool mln::mog::mog_team_data_t::is_member_cooldown_valid(const user_data_t& user, const uint64_t min_valid_cd) noexcept
+{
+	return user.id != 0 && user.cd != 0 && user.cd >= min_valid_cd;
 }

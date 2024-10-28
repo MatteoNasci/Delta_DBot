@@ -45,6 +45,11 @@ bool run_app();
 
 //TODO OOOOOOOOOOOOOOOOOOOOOOOOOO Use the new message forwarding (need to update dpp) for /db commands when selecting stuff. This also requires 2 dump channels: one not nsfw and one nsfw since you cannot forward stuff drom nsfw to non nsfw
 //TODO in db.cpp and mog.cpp move each single command to their respective class, then in db and mog unite all the commands (so that each class defines their own command parameters instead of the db/mog.cpp)
+
+//TODO FOR NEXT ARMA: make it a button for the 5 minute cooldown, also make it easier to show cooldowns. Maybe just use the same msg for everything (not ephemeral)? Also add a seconds difference to see difference between lowest cooldown and highest cooldown. Also change '55 years ago' to 'Not set' or something else.
+//TODO leave_and_join should not make the user leave the original team if the team to join doesn't exist
+//TODO db insert text will log an error (linked to the 2 events used)
+
 /*
 To test: fare qui lista di cose da testare. Ad ogni singolo test associare i relativi comandi discord
 
