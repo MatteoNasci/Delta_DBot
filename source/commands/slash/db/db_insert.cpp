@@ -280,8 +280,6 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
         co_await mln::response::co_respond(cmd_data.data, "An internal error occurred!", true, "The co_dialog confirmation result is false for insert command!");
         co_return;
     }
-    
-    co_await mln::response::co_respond(cmd_data.data, "Dialog menu opened, waiting for the user's input!", false, {});
 
     //Wait for a max amount of time for the dialog submission
     const auto &result = co_await dpp::when_any{
@@ -290,19 +288,19 @@ dpp::task<void> mln::db_insert::command_text(const dpp::slashcommand_t& event_da
 
     //If the timer run out return an error
     if (result.index() == 0) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to insert text data in time, command interrupted!", false, {});
         co_return;
     }
 
     //If an exception occurred return an error
     if (result.is_exception()) {
-        co_await mln::response::co_respond(cmd_data.data, "Failed to insert text data, unknown error occurred!", true, "Failed to insert text data, unknown error occurred!");
+        mln::utility::create_event_log_error(cmd_data.data, "Failed to insert text data, unknown exception occurred when waiting for form submission!");
         co_return;
     }
 
     //It was suggested to copy the event from documentation of ::when
     dpp::form_submit_t form_data = result.get<1>();
     mln::event_data_lite_t form_lite{ form_data, bot(), true };
+
     if (!mln::response::is_event_data_valid(form_lite)) {
         co_await mln::response::co_respond(form_lite, "Failed db command, the form event is incorrect!", true, "Failed db command, the form event is incorrect!");
         co_return;
