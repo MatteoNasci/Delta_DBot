@@ -34,7 +34,7 @@ namespace mln {
 			mog_team_data_t& operator=(const mog_team_data_t& rhs) = default;
 			mog_team_data_t& operator=(mog_team_data_t&& rhs) noexcept = default;
 
-			static std::string to_string(const mog_team_data_t& data, const uint64_t min_valid_cd);
+			static std::string to_string(const mog_team_data_t& data, const uint64_t min_valid_cd, const uint64_t min_cd_clamp);
 			static std::string to_string_partial(const mog_team_data_t& data);
 			static std::string to_string_no_cd(const mog_team_data_t& data);
 			static bool is_member_cooldown_valid(const user_data_t& user, const uint64_t min_valid_cd) noexcept;

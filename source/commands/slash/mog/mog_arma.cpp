@@ -228,8 +228,9 @@ dpp::task<void> mln::mog::mog_arma::show_cooldowns(const dpp::slashcommand_t& ev
 	records.reserve(data_to_display.size());
 	size_t total_size = 0;
 	const uint64_t current_time = static_cast<uint64_t>(event_data.command.id.get_creation_time());
+	const uint64_t min_cd_valid_time = current_time - 40;
 	for (const mln::mog::mog_team_data_t& team : data_to_display) {
-		records.emplace_back(mln::mog::mog_team_data_t::to_string(team, current_time));
+		records.emplace_back(mln::mog::mog_team_data_t::to_string(team, min_cd_valid_time, current_time));
 		total_size += records[records.size() - 1].size();
 	}
 

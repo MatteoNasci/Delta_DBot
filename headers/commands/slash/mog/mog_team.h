@@ -78,7 +78,7 @@ namespace mln {
 			dpp::task<void> create(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<void> del(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<void> join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
-			dpp::task<void> join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& name) const;
+			dpp::task<bool> join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& name) const;
 			dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;
 			dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const uint64_t target, const std::string& name) const;
 			dpp::task<void> leave_and_join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const;

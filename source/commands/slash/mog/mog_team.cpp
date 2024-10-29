@@ -418,14 +418,20 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
     }
 
     mln::mog::mog_team_data_t::user_data_t u_data{ user, 0, 0 };
-    co_await mln::mog::mog_team::join(event_data, cmd_data, u_data, std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{});
+    const std::string team_name = std::holds_alternative<std::string>(name_param) ? std::get<std::string>(name_param) : std::string{};
+
+    const bool joined = co_await mln::mog::mog_team::join(event_data, cmd_data, u_data, team_name);
+
+    if (!joined) {
+        mln::utility::create_event_log_error(cmd_data.data, std::format("Failed join to team: [{}] from user: [{}].", team_name, static_cast<uint64_t>(user)));
+    }
 }
 
-dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& name) const
+dpp::task<bool> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data, const mln::mog::mog_team_data_t::user_data_t& user_data, const std::string& name) const
 {
     if (user_data.id == 0) {
         co_await mln::response::co_respond(cmd_data.data, "Error, invalid target user!", true, "Error, invalid target user!");
-        co_return;
+        co_return false;
     }
 
     const mln::utility::text_validity_t validity_data{
@@ -437,17 +443,17 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
         .min_size = mln::constants::get_min_team_name_length(),
         .max_size = mln::constants::get_max_team_name_length() };
     if (!(co_await mln::utility::check_text_validity(name, cmd_data.data, validity_data, "team name"))) {
-        co_return;
+        co_return false;
     }
 
     if (!is_team_present(cmd_data.data.guild_id, name)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, the given name is not associated with a team!", false, {});
-        co_return;
+        co_return false;
     }
 
     if (is_user_in_team(cmd_data.data.guild_id, user_data.id, name)) {
         co_await mln::response::co_respond(cmd_data.data, "Error, the user is already part of the given team!", false, {});
-        co_return;
+        co_return true;
     }
 
     const mln::db_result_t res1 = db.bind_parameter(member_data.saved_stmt, 0, member_data.saved_param_guild, static_cast<int64_t>(cmd_data.data.guild_id));
@@ -460,7 +466,7 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
                 mln::database_handler::get_name_from_result(res1.type), res1.err_text,
                 mln::database_handler::get_name_from_result(res2.type), res2.err_text,
                 mln::database_handler::get_name_from_result(res3.type), res3.err_text));
-        co_return;
+        co_return false;
     }
 
     bool result = false;
@@ -477,7 +483,7 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
             err_text,
             mln::database_handler::get_name_from_result(res.type), res.err_text));
 
-        co_return;
+        co_return false;
     }
 
     const bool user_added = add_user_to_team(cmd_data.data.guild_id, user_data, name);
@@ -487,6 +493,8 @@ dpp::task<void> mln::mog::mog_team::join(const dpp::slashcommand_t& event_data, 
     else {
         co_await mln::response::co_respond(cmd_data.data, "Failed to add user to team! Internal error!", true, "Failed to add user to team after db update! Internal error, the database is now desynced from local cache!");
     }
+
+    co_return user_added;
 }
 
 dpp::task<std::optional<mln::mog::mog_team_data_t::user_data_t>> mln::mog::mog_team::leave(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
@@ -629,9 +637,20 @@ dpp::task<void> mln::mog::mog_team::leave_and_join(const dpp::slashcommand_t& ev
         co_return;
     }
 
+    if (!is_team_present(cmd_data.data.guild_id, team_to_join)) {
+        const std::string err_text = std::format("Error, this guild doesn't have any mog teams with the given name [{}] to join!", team_to_join);
+        co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
+        co_return;
+    }
+
     const std::optional<mln::mog::mog_team_data_t::user_data_t> previous_u_data = co_await mln::mog::mog_team::leave(event_data, cmd_data, target, team_to_leave);
     if (previous_u_data.has_value()) {
-        co_await mln::mog::mog_team::join(event_data, cmd_data, previous_u_data.value(), team_to_join);
+        const bool joined = co_await mln::mog::mog_team::join(event_data, cmd_data, previous_u_data.value(), team_to_join);
+        if (!joined) {
+            const std::string err_text = std::format("Error, the target has been removed from team [{}] but it was not possible to add the target to team [{}]!", team_to_leave, team_to_join);
+            co_await mln::response::co_respond(cmd_data.data, err_text, true, err_text);
+            co_return;
+        }
     }
 }
 

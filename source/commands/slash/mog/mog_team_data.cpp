@@ -28,7 +28,7 @@ mln::mog::mog_team_data_t::user_data_t::user_data_t(const uint64_t id, const uin
 {
 }
 
-std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data, const uint64_t min_valid_cd)
+std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data, const uint64_t min_valid_cd, const uint64_t min_cd_clamp)
 {
 	std::string result = mln::mog::mog_team_data_t::to_string_partial(data);
 
@@ -40,11 +40,12 @@ std::string mln::mog::mog_team_data_t::to_string(const mog_team_data_t& data, co
 		const bool is_cd_valid = mln::mog::mog_team_data_t::is_member_cooldown_valid(u_data, min_valid_cd);
 
 		if (is_cd_valid) [[likely]] {
-			if (min_cd > u_data.cd) {
-				min_cd = u_data.cd;
+			const uint64_t clamped_cd = u_data.cd < min_cd_clamp ? min_cd_clamp : u_data.cd;
+			if (min_cd > clamped_cd) {
+				min_cd = clamped_cd;
 			}
-			if (max_cd < u_data.cd) {
-				max_cd = u_data.cd;
+			if (max_cd < clamped_cd) {
+				max_cd = clamped_cd;
 			}
 
 			result = std::format("{}\t[{}], cooldown: [<t:{}:R>, at <t:{}:T>].\t\tLast updated: [<t:{}:R>].\n",
