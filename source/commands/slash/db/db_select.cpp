@@ -236,6 +236,39 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db
     if (!url_bot_perm.has_value()) {
         co_return;
     }
+    //Check permission for reading msg
+    const bool read_msg_permission =
+        mln::perms::check_permissions(url_bot_perm.value(), dpp::permissions::p_read_message_history | dpp::permissions::p_view_channel);
+    //Return an error if the bot is not allowed to read messages in the url channel or if it can't access the url message
+    if (!read_msg_permission) {
+        co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot doesn't have the permission to read messages in the dump channel!", false, {});
+
+        co_return;
+    }
+
+    const dpp::command_value& broadcast_param = event_data.get_parameter("broadcast");
+    const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
+    const bool use_forward_message = broadcast && (cmd_data.cmd_channel->is_nsfw() || !url_channel->is_nsfw());
+    //As of now 30/10/2024 ephemeral messages do not support the discord forwarding feature. If the user requested a broadcast use forwarding, otherwise create a copy of the message
+    if (use_forward_message) {
+        dpp::message result{};
+        result.set_guild_id(cmd_data.data.guild_id).set_channel_id(cmd_data.data.channel_id);
+        result.set_reference(url_message_id, url_guild_id, url_channel_id, true, dpp::message_ref_type::mrt_forward);
+
+        const dpp::confirmation_callback_t send_result = co_await bot().co_message_create(result);
+        if (send_result.is_error()) {
+            const dpp::error_info err = send_result.get_error();
+
+            co_await mln::response::co_respond(cmd_data.data, "Failed command, the bot failed to send the message to the user's channel!", true,
+                std::format("Failed command, the bot failed to send the message to the user's channel! Error: [{}], details: [{}]",
+                    mln::get_json_err_text(err.code), err.human_readable));
+
+            co_return;
+        }
+
+        co_await mln::response::co_respond(cmd_data.data, "Message retrieved!", false, {});
+        co_return;
+    }
 
     std::optional<dpp::message> stored_msg = co_await mln::caches::get_message_task(url_message_id, url_channel_id, url_bot_perm.value(), cmd_data.data, &event_data.command.resolved.messages);
     if (!stored_msg.has_value()) {
@@ -293,10 +326,6 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db
         }
     }
     stored_msg.value().set_channel_id(cmd_data.cmd_channel->id).set_guild_id(cmd_data.cmd_guild->id);
-
-    //Send the message to the target channel, depending on how 'broadcast' was set
-    const dpp::command_value& broadcast_param = event_data.get_parameter("broadcast");
-    const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
     
     if (broadcast) {
         const dpp::confirmation_callback_t send_result = co_await bot().co_message_create(stored_msg.value());
@@ -311,8 +340,9 @@ dpp::task<void> mln::db_select::select(const dpp::slashcommand_t& event_data, db
         }
 
         co_await mln::response::co_respond(cmd_data.data, "Message retrieved!", false, {});
-
-    } else {
+        co_return;
+    }
+    else {
         stored_msg.value().set_flags(dpp::m_ephemeral);
 
         const dpp::confirmation_callback_t edit_result = co_await event_data.co_edit_response(stored_msg.value());
