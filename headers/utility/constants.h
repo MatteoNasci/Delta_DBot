@@ -5,6 +5,15 @@
 namespace mln {
 	class constants {
 	public:
+		[[nodiscard]] inline static constexpr size_t get_min_arma_year() noexcept
+		{
+			return 2024;
+		}
+		[[nodiscard]] inline static constexpr size_t get_max_arma_year() noexcept
+		{
+			return 2050;
+		}
+
 		[[nodiscard]] inline static constexpr size_t get_min_characters_reply_msg() noexcept 
 		{
 			return 1;
