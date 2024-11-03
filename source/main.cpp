@@ -43,9 +43,8 @@ bool run_app();
 //TODO remove as much static as possible
 //TODO use chronometer to time stuff
 
-//TODO OOOOOOOOOOOOOOOOOOOOOOOOOO Use the new message forwarding (need to update dpp) for /db commands when selecting stuff. This also requires 2 dump channels: one not nsfw and one nsfw since you cannot forward stuff drom nsfw to non nsfw
 //TODO in db.cpp and mog.cpp move each single command to their respective class, then in db and mog unite all the commands (so that each class defines their own command parameters instead of the db/mog.cpp)
-
+//TODO instead of only using admin-not adminlogic, add roles for permissions customization
 //TODO FOR NEXT ARMA: make it a button for the 5 minute cooldown, also make it easier to show cooldowns. Maybe just use the same msg for everything (not ephemeral)? Maybe one msg per channel associated to the team, with automatic updates to the message and semi-automatic? refresh of the message (in the sense that it is reposted in the channel to remain visible over normal chat messages)
 
 /*
