@@ -11,22 +11,22 @@
 #include <string>
 #include <time.h>
 
+static constinit std::mutex s_time_mutex{};
+
 std::string mln::time::get_current_date_time()
 {
-    static constinit std::mutex s_localtime_mutex{};
-
     const time_t now = std::time(0);
-    struct tm tstruct;
+    std::tm time_info;
     {
-        std::unique_lock lock{ s_localtime_mutex };
-        struct tm* tstruct_ptr = std::localtime(&now);
+        std::unique_lock lock{ s_time_mutex };
+        std::tm* const tstruct_ptr = std::localtime(&now);
         if (!tstruct_ptr) [[unlikely]] {
             return "Unknown time";
         }
-        tstruct = *tstruct_ptr;
+        time_info = *tstruct_ptr;
     }
     char buf[80];
-    std::strftime(buf, sizeof(buf), "%d-%m-%Y %X", &tstruct);
+    std::strftime(buf, sizeof(buf), "%d-%m-%Y %X", &time_info);
     return std::string{ buf };
 }
 
@@ -82,6 +82,51 @@ std::string mln::time::convert_timestamp_to_mmss(const uint64_t timestamp)
     else {
         return are_seconds_zeroed ? std::format("{}:0{}", minutes, seconds) : std::format("{}:{}", minutes, seconds);
     }
+}
+
+mln::time::date mln::time::convert_UNIX_to_date(const uint64_t unix_time)
+{
+    const std::time_t time = static_cast<std::time_t>(unix_time);
+
+    std::tm time_info;
+    {
+        std::unique_lock lock{ s_time_mutex };
+        std::tm* const tstruct_ptr = std::gmtime(&time);
+        if (!tstruct_ptr) [[unlikely]] {
+            return mln::time::date{-1, -1, -1, -1, -1, -1};
+        }
+        time_info = *tstruct_ptr;
+    }
+
+    // Extract individual components
+    mln::time::date result{};
+    result.year = time_info.tm_year + 1900;  // tm_year is years since 1900
+    result.month = time_info.tm_mon + 1;     // tm_mon is months since January (0-11)
+    result.day = time_info.tm_mday;
+    result.hour = time_info.tm_hour;
+    result.minute = time_info.tm_min;
+    result.second = time_info.tm_sec;
+
+    return result;
+}
+
+uint64_t mln::time::get_current_UNIX_time()
+{
+    return mln::time::get_current_time_sec().count();
+}
+
+uint64_t mln::time::convert_date_to_UNIX(const time::date& date)
+{
+    std::tm timeinfo = {};
+    timeinfo.tm_mday = date.day;
+    timeinfo.tm_mon = date.month - 1;  // tm_mon is 0-based
+    timeinfo.tm_year = date.year - 1900;  // tm_year is years since 1900
+    timeinfo.tm_hour = date.hour;
+    timeinfo.tm_min = date.minute;
+    timeinfo.tm_sec = date.second;
+
+    // Convert to Unix timestamp (seconds since 1970-01-01)
+    return std::mktime(&timeinfo);
 }
 
 std::chrono::seconds mln::time::get_current_time_sec() noexcept

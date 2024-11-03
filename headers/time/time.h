@@ -10,6 +10,10 @@
 namespace mln {
 	class time {
 	public:
+		struct date {
+			int day, month, year, hour, minute, second;
+		};
+
 		[[nodiscard]] inline static constexpr uint64_t get_date_to_seconds_size() noexcept
 		{
 			//Format: [dd/MM hh:mm:ss]. Example: 21/05 01:12:33
@@ -25,6 +29,9 @@ namespace mln {
 		static std::optional<uint64_t> convert_date_to_seconds_left(const std::string& date);
 		static std::optional<uint64_t> convert_cd_to_seconds_left(const std::string& cooldown, const uint64_t negative_offset);
 		static std::string convert_timestamp_to_mmss(const uint64_t timestamp);
+		static uint64_t convert_date_to_UNIX(const time::date& date);
+		static time::date convert_UNIX_to_date(const uint64_t unix_time);
+		static uint64_t get_current_UNIX_time();
 
 		static [[nodiscard]] std::chrono::seconds get_current_time_sec() noexcept;
 		static [[nodiscard]] std::chrono::milliseconds get_current_time_milli() noexcept;
