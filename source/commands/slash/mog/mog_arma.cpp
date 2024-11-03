@@ -6,9 +6,15 @@
 #include "commands/slash/mog/mog_init_type_flag.h"
 #include "commands/slash/mog/mog_team.h"
 #include "commands/slash/mog/mog_team_data.h"
+#include "database/database_callbacks.h"
+#include "database/database_handler.h"
+#include "database/db_column_data.h"
+#include "database/db_result.h"
 #include "database/db_saved_stmt_state.h"
 #include "enum/flags.h"
+#include "time/time.h"
 #include "utility/constants.h"
+#include "utility/perms.h"
 #include "utility/response.h"
 #include "utility/utility.h"
 
@@ -19,22 +25,113 @@
 #include <dpp/message.h>
 #include <dpp/misc-enum.h>
 #include <dpp/snowflake.h>
+#include <dpp/timer.h>
 
+#include <array>
 #include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
 static constexpr size_t s_pagination_timeout = 120;
 static constexpr size_t s_pagination_max_text_size = 2000;
 
-mln::mog::mog_arma::mog_arma(dpp::cluster& cluster, mln::mog::mog_team& teams_handler) : base_mog_command{ cluster }, teams_handler{ teams_handler }
+static constexpr uint64_t s_seconds_in_minute = 60;
+static constexpr uint64_t s_seconds_in_hour = s_seconds_in_minute * 60;
+static constexpr uint64_t s_seconds_in_day = s_seconds_in_hour * 24;
+static constexpr uint64_t s_seconds_in_2_day = s_seconds_in_day * 2;
+static constexpr uint64_t s_seconds_in_4_day = s_seconds_in_day * 4;
+static constexpr uint64_t s_seconds_in_28_days = s_seconds_in_day * 28;
+
+mln::mog::mog_arma::mog_arma(dpp::cluster& cluster, mln::mog::mog_team& teams_handler, const std::string& database_file_name) : base_mog_command{ cluster }, 
+teams_handler{ teams_handler }, database{}, db_optimize_timer{}, insert_guild_param{}, insert_time_param{}, saved_optimize_db{}, saved_insert_arma_time{}, saved_select_all{}, saved_select{}, guilds_arma_date{}
 {
+	std::filesystem::create_directory(std::filesystem::current_path().concat("/dbs"));
+
+	mln::db_result_t res = database.open_connection(std::format("dbs/{}.db", database_file_name));
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while connecting to dbs/{}.db database. Error: [{}], details: [{}].", database_file_name, mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	res = database.exec("PRAGMA foreign_keys = ON;PRAGMA optimize=0x10002;", mln::database_callbacks_t());
+	if (mln::database_handler::is_exec_error(res.type)) {
+		const std::string err_msg = std::format("An error occurred while executing pragmas for dbs/{}.db. Error: [{}], details: [{}].", database_file_name, mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	res = database.exec("CREATE TABLE IF NOT EXISTS arma_time( guild_id INTEGER PRIMARY KEY NOT NULL, start_time INTEGER NOT NULL);", mln::database_callbacks_t());
+	if (mln::database_handler::is_exec_error(res.type)) {
+		const std::string err_msg = std::format("An error occurred while creating the arma_time table. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	res = database.save_statement("INSERT OR REPLACE INTO arma_time(guild_id, start_time) VALUES(:GGG, :TTT) RETURNING guild_id;", saved_insert_arma_time);
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while saving the insert arma_time stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+	else {
+		const mln::db_result_t res11 = database.get_bind_parameter_index(saved_insert_arma_time, 0, ":GGG", insert_guild_param);
+		const mln::db_result_t res12 = database.get_bind_parameter_index(saved_insert_arma_time, 0, ":TTT", insert_time_param);
+		if (res11.type != mln::db_result::ok || res12.type != mln::db_result::ok) {
+			const std::string err_msg = std::format("Failed to save the insert arma_time stmt param indexes! guild_param: [{}, {}], time_param: [{}, {}].",
+				mln::database_handler::get_name_from_result(res11.type), res11.err_text,
+				mln::database_handler::get_name_from_result(res12.type), res12.err_text);
+			throw std::exception(err_msg.c_str());
+		}
+	}
+
+	res = database.save_statement("PRAGMA optimize;", saved_optimize_db);
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while saving the optimize db stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	res = database.save_statement("SELECT guild_id, start_time FROM arma_time;", saved_select_all);
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while saving the select all db stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	res = database.save_statement("SELECT start_time FROM arma_time WHERE guild_id = ?;", saved_select);
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while saving the select db stmt. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
+	static constexpr uint64_t s_optimize_timer_seconds{ 60 * 60 * 24 };
+	db_optimize_timer = bot().start_timer([this](dpp::timer timer) {
+		cbot().log(dpp::loglevel::ll_debug, "Optimizing arma database...");
+		const mln::db_result_t res = database.exec(saved_optimize_db, mln::database_callbacks_t());
+		if (mln::database_handler::is_exec_error(res.type)) {
+			cbot().log(dpp::loglevel::ll_error, std::format("An error occurred while optimizing arma database. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text));
+		}
+		else {
+			cbot().log(dpp::loglevel::ll_debug, "Arma database optimized!");
+		}
+		}, s_optimize_timer_seconds);
+
+	res = mln::mog::mog_arma::load_guilds_arma_time();
+	if (res.type != mln::db_result::ok) {
+		const std::string err_msg = std::format("An error occurred while loading the arma times. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+		throw std::exception(err_msg.c_str());
+	}
+
 	cbot().log(dpp::loglevel::ll_debug, std::format("mog_arma: [{}].", mln::get_saved_stmt_state_text(is_db_initialized())));
+}
+
+mln::mog::mog_arma::~mog_arma()
+{
+	database.close_connection();
 }
 
 dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_data, mln::mog::mog_cmd_data_t& cmd_data, const mln::mog::mog_command_type type)
@@ -48,6 +145,12 @@ dpp::task<void> mln::mog::mog_arma::command(const dpp::slashcommand_t& event_dat
 		break;
 	case mln::mog::mog_command_type::show_cooldowns:
 		co_await mln::mog::mog_arma::show_cooldowns(event_data, cmd_data);
+		break;
+	case mln::mog::mog_command_type::start:
+		co_await mln::mog::mog_arma::start(event_data, cmd_data);
+		break;
+	case mln::mog::mog_command_type::scheduled:
+		co_await mln::mog::mog_arma::scheduled(event_data, cmd_data);
 		break;
 	case mln::mog::mog_command_type::help:
 		co_await mln::mog::mog_arma::help(cmd_data);
@@ -65,7 +168,10 @@ mln::mog::mog_init_type_flag mln::mog::mog_arma::get_requested_initialization_ty
 	case mln::mog::mog_command_type::cooldown:
 	case mln::mog::mog_command_type::raw_cooldown:
 	case mln::mog::mog_command_type::show_cooldowns:
+	case mln::mog::mog_command_type::start:
 		return mln::flags::add(mln::mog::mog_init_type_flag::cmd_data, mln::mog::mog_init_type_flag::thinking);
+	case mln::mog::mog_command_type::scheduled:
+		return mln::mog::mog_init_type_flag::cmd_data;
 	case mln::mog::mog_command_type::help:
 		return mln::mog::mog_init_type_flag::none;
 	default:
@@ -83,6 +189,170 @@ dpp::task<void> mln::mog::mog_arma::cooldown(const dpp::slashcommand_t& event_da
 	static constexpr uint64_t s_total_cd_delay = static_cast<uint64_t>(5 * 60);
 
 	co_await mln::mog::mog_arma::common_cooldown(event_data, cmd_data, s_total_cd_delay);
+}
+
+dpp::task<void> mln::mog::mog_arma::start(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data)
+{
+	if (!mln::perms::check_permissions(cmd_data.cmd_usr_perm, dpp::permissions::p_administrator)) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to set arma time! Only admins have access to this command!", false, {});
+		co_return;
+	}
+
+	const dpp::command_value& day_param = event_data.get_parameter("day");
+	const dpp::command_value& month_param = event_data.get_parameter("month");
+	const dpp::command_value& year_param = event_data.get_parameter("year");
+	const dpp::command_value& hour_param = event_data.get_parameter("utc_hour");
+
+	if (!std::holds_alternative<int64_t>(month_param)) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to set arma time! Failed to retrieve the month value!", true, {});
+		co_return;
+	}
+
+	const int64_t month = std::get<int64_t>(month_param);
+	if (month < 1 || month > 12) {
+		co_await mln::response::co_respond(cmd_data.data,
+			std::format("Failed to set arma time! The retrieved month value is outside the valid range of [{}/{}]!",
+				1, 12),
+			false, {});
+		co_return;
+	}
+
+	int64_t max_day_value;
+	switch (month) {
+	case 1:
+	case 3:
+	case 5:
+	case 7:
+	case 8:
+	case 10:
+	case 12:
+		max_day_value = 31;
+		break;
+	case 2:
+		max_day_value = 28;
+		break;
+	default:
+		max_day_value = 30;
+		break;
+	}
+
+
+	if (!std::holds_alternative<int64_t>(day_param)) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to set arma time! Failed to retrieve the day value!", true, {});
+		co_return;
+	}
+
+	const int64_t day = std::get<int64_t>(day_param);
+	if (day < 1 || day > max_day_value) {
+		co_await mln::response::co_respond(cmd_data.data,
+			std::format("Failed to set arma time! The retrieved day value is outside the valid range of [{}/{}]!",
+				1, max_day_value),
+			false, {});
+		co_return;
+	}
+
+
+	if (!std::holds_alternative<int64_t>(year_param)) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to set arma time! Failed to retrieve the year value!", true, {});
+		co_return;
+	}
+
+	const int64_t year = std::get<int64_t>(year_param);
+	if (year < static_cast<int64_t>(mln::constants::get_min_arma_year()) || year > static_cast<int64_t>(mln::constants::get_max_arma_year())) {
+		co_await mln::response::co_respond(cmd_data.data,
+			std::format("Failed to set arma time! The retrieved year value is outside the valid range of [{}/{}]!",
+				mln::constants::get_min_arma_year(), mln::constants::get_max_arma_year()),
+			false, {});
+		co_return;
+	}
+
+
+	if (!std::holds_alternative<int64_t>(hour_param)) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to set arma time! Failed to retrieve the hour value!", true, {});
+		co_return;
+	}
+
+	const int64_t hour = std::get<int64_t>(hour_param);
+	if (hour < 0 || hour > 23) {
+		co_await mln::response::co_respond(cmd_data.data,
+			std::format("Failed to set arma time! The retrieved hour value is outside the valid range of [{}/{}]!",
+				0, 23),
+			false, {});
+		co_return;
+	}
+
+	const uint64_t unix_timestamp = mln::time::convert_date_to_UNIX({ static_cast<int>(day), static_cast<int>(month), static_cast<int>(year), static_cast<int>(hour), 0, 0 });
+
+	//Bind query parameters
+	const mln::db_result_t res1 = database.bind_parameter(saved_insert_arma_time, 0, insert_guild_param, static_cast<int64_t>(cmd_data.data.guild_id));
+	const mln::db_result_t res2 = database.bind_parameter(saved_insert_arma_time, 0, insert_time_param, static_cast<int64_t>(unix_timestamp));
+
+	//Check if any error occurred in the binding process, in case return an error
+	if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to bind query parameters, internal error!", true,
+			std::format("Failed to bind query parameters, internal error! guild_param: [{}, {}], time_param: [{}, {}].",
+				mln::database_handler::get_name_from_result(res1.type), res1.err_text,
+				mln::database_handler::get_name_from_result(res2.type), res2.err_text));
+		co_return;
+	}
+
+	//Prepare callbacks for query execution
+	bool found = false;
+	const mln::database_callbacks_t calls = mln::utility::get_any_results_callback(&found);
+
+	//Execute query and return an error if the query failed or if no element was added
+	const mln::db_result_t res = database.exec(saved_insert_arma_time, calls);
+	if (mln::database_handler::is_exec_error(res.type) || !found) {
+		const std::string err_text = !mln::database_handler::is_exec_error(res.type) && !found ?
+			"Failed while executing database query! Failed to insert/update new arma time!" :
+			"Failed while executing database query! Internal error!";
+
+		co_await mln::response::co_respond(cmd_data.data, err_text, true,
+			std::format("{} Error: [{}], details: [{}].",
+				err_text,
+				mln::database_handler::get_name_from_result(res.type), res.err_text));
+		co_return;
+	}
+
+	guilds_arma_date[cmd_data.data.guild_id] = arma_time_list{ unix_timestamp, unix_timestamp + s_seconds_in_day, unix_timestamp + s_seconds_in_2_day };
+
+	co_await mln::response::co_respond(cmd_data.data, std::format("Updated arma time using <t:{}:R> as starting day!", unix_timestamp), false, {});
+
+	co_return;
+}
+
+dpp::task<void> mln::mog::mog_arma::scheduled(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data)
+{
+	std::unordered_map<uint64_t, arma_time_list>::iterator it = guilds_arma_date.find(cmd_data.data.guild_id);
+	if (it == guilds_arma_date.end()) {
+		co_await mln::response::co_respond(cmd_data.data, "Failed to retrieve next arma date! No data found, use the `/mog arma start` command to set a starting time!", false, {});
+		co_return;
+	}
+	
+	const uint64_t current_unix_timestamp = mln::time::get_current_UNIX_time();
+
+	bool updated;
+	const uint64_t next_arma_unix_timestamp = mln::mog::mog_arma::get_next_arma_time_upd(current_unix_timestamp, it->second, updated);
+
+	const mln::time::date next_arma_date = mln::time::convert_UNIX_to_date(next_arma_unix_timestamp);
+
+	const dpp::command_value& broadcast_param = event_data.get_parameter("broadcast");
+	const bool broadcast = std::holds_alternative<bool>(broadcast_param) ? std::get<bool>(broadcast_param) : false;
+
+	dpp::message result{ std::format("The next scheduled arma event is at {}/{}/{} {}:{}:{} UTC, <t:{}:R> local time!", 
+		next_arma_date.day < 10 ? std::format("0{}", next_arma_date.day) : std::to_string(next_arma_date.day),
+		next_arma_date.month < 10 ? std::format("0{}", next_arma_date.month) : std::to_string(next_arma_date.month),
+		next_arma_date.year, 
+		next_arma_date.hour < 10 ? std::format("0{}", next_arma_date.hour) : std::to_string(next_arma_date.hour),
+		next_arma_date.minute < 10 ? std::format("0{}", next_arma_date.minute) : std::to_string(next_arma_date.minute),
+		next_arma_date.second < 10 ? std::format("0{}", next_arma_date.second) : std::to_string(next_arma_date.second),
+		next_arma_unix_timestamp) };
+	
+	if (!broadcast) {
+		result.set_flags(dpp::m_ephemeral);
+	}
+
+	co_await event_data.co_reply(result);
 }
 
 dpp::task<void> mln::mog::mog_arma::raw_cooldown(const dpp::slashcommand_t& event_data, mog_cmd_data_t& cmd_data) const
@@ -260,6 +530,18 @@ dpp::task<void> mln::mog::mog_arma::help(mog_cmd_data_t& cmd_data) const
 
 **Types of commands:**
 
+- **/mog arma start**  
+  *Parameters:* day[integer, required], month[integer, required], year[integer, required], utc_hour[integer, required].  
+  This command requires the input of the date and time (UTC) for the beginning of the first round of Arma, either in the past or future. 
+  This information will be saved and will allow the bot to track when future Arma events (and individual Arma rounds) will occur. Once set, this information will automatically update without the need for further user input.
+  Use the command `/mog arma scheduled` to find out the date of the next Arma round.
+  This command can only be used by admins.
+
+- **/mog arma scheduled**  
+  *Parameters:* broadcast[boolean, optional].  
+  This command returns the date of the next Arma round. It requires `/mog arma start` to have been set at least once; after that, no further updates are needed by the bot.
+  Setting broadcast = True will display the result to everyone in the channel.
+
 - **/mog arma raw_cooldown**  
   *Parameters:* minutes[integer, required], seconds[integer, required], name[text, optional].  
   This command requires specifying the `minutes` (between 0 and 5) and `seconds` (between 0 and 59), along with an optional `name` parameter.
@@ -280,4 +562,100 @@ dpp::task<void> mln::mog::mog_arma::help(mog_cmd_data_t& cmd_data) const
 
 	co_await mln::response::co_respond(cmd_data.data, s_info, false, "Failed to reply with the mog arma help text!");
 	co_return;
+}
+
+mln::db_result_t mln::mog::mog_arma::load_guilds_arma_time()
+{
+	guilds_arma_date.clear();
+
+	//Prepare callbacks for query execution
+	mln::database_callbacks_t calls{};
+	uint64_t temp{};
+	calls.type_definer_callback = [](void*, int) { return false; };
+	calls.data_adder_callback = [this, &temp](void* ptr, int c, mln::db_column_data_t&& d) {
+		if (c == 0) {
+			temp = static_cast<uint64_t>((std::get<int64_t>(d.data)));
+			return;
+		}
+
+		const uint64_t unix_time = static_cast<uint64_t>((std::get<int64_t>(d.data)));
+		guilds_arma_date[temp] = arma_time_list{ unix_time, unix_time + s_seconds_in_day, unix_time + s_seconds_in_2_day };
+		};
+
+	//Execute query and return an error if the query failed or if no element was added
+	const mln::db_result_t res = database.exec(saved_select_all, calls);
+	if (mln::database_handler::is_exec_error(res.type)) {
+		static const std::string s_err_text = "Failed while executing database query! Internal error!";
+		return { res.type, std::format("{} {}", s_err_text, res.err_text) };
+	}
+
+	//If dates are older than 4 days then update both the map and database
+	const uint64_t current_unix_timestamp = mln::time::get_current_UNIX_time();
+	for (std::pair<const uint64_t, arma_time_list>& pair : guilds_arma_date) {
+		bool updated;
+		const uint64_t next_arma = mln::mog::mog_arma::get_next_arma_time_upd(current_unix_timestamp, pair.second, updated);
+		if (updated) {
+
+			//Bind query parameters
+			const mln::db_result_t res1 = database.bind_parameter(saved_insert_arma_time, 0, insert_guild_param, static_cast<int64_t>(pair.first));
+			const mln::db_result_t res2 = database.bind_parameter(saved_insert_arma_time, 0, insert_time_param, static_cast<int64_t>(pair.second[0]));
+
+			//Check if any error occurred in the binding process, in case return an error
+			if (res1.type != mln::db_result::ok || res2.type != mln::db_result::ok) {
+				return {res.type, std::format("Failed to bind query parameters, internal error! guild_param: [{}, {}], time_param: [{}, {}].",
+						mln::database_handler::get_name_from_result(res1.type), res1.err_text,
+						mln::database_handler::get_name_from_result(res2.type), res2.err_text) };
+			}
+
+			//Prepare callbacks for query execution
+			bool found = false;
+			const mln::database_callbacks_t calls = mln::utility::get_any_results_callback(&found);
+
+			//Execute query and return an error if the query failed or if no element was added
+			const mln::db_result_t res = database.exec(saved_insert_arma_time, calls);
+			if (mln::database_handler::is_exec_error(res.type) || !found) {
+				const std::string err_text = !mln::database_handler::is_exec_error(res.type) && !found ?
+					"Failed while executing database query! Failed to insert/update loaded arma time!" :
+					"Failed while executing database query! Internal error!";
+
+				return { res.type, std::format("{} Error: [{}], details: [{}].",
+						err_text,
+						mln::database_handler::get_name_from_result(res.type), res.err_text) };
+			}
+
+		}
+	}
+
+	return { mln::db_result::ok, {} };
+}
+
+uint64_t mln::mog::mog_arma::get_next_arma_time(const uint64_t current_time, const arma_time_list& times)
+{
+	for (const uint64_t& timestamp : times) {
+		//If the last arma time is aat least within 1 hour of now then I use that as the scheduled arma time
+		if (current_time < (timestamp + s_seconds_in_hour)) {
+			return timestamp;
+		}
+	}
+
+	return 0;
+}
+
+uint64_t mln::mog::mog_arma::get_next_arma_time_upd(const uint64_t current_time, arma_time_list& times, bool& updated)
+{
+	updated = false;
+	const uint64_t result = mln::mog::mog_arma::get_next_arma_time(current_time, times);
+	if (result != 0) {
+		return result;
+	}
+
+	updated = true;
+
+	const uint64_t time_diff = current_time - times[times.size() - 1];
+	const uint64_t cycles_gap = (time_diff / s_seconds_in_28_days) + 1;
+	for (uint64_t& timestamp : times) {
+		timestamp += (s_seconds_in_28_days * cycles_gap);
+	}
+
+	return mln::mog::mog_arma::get_next_arma_time(current_time, times);
 }

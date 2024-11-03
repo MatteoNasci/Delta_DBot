@@ -15,6 +15,7 @@ namespace mln {
 			leave,
 			leave_and_join,
 			start,
+			scheduled,
 			raw_cooldown,
 			cooldown,
 			show_cooldowns,

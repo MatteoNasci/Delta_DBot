@@ -52,6 +52,8 @@ static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_co
         {"raw_cooldown", {1, mln::mog::mog_command_type::raw_cooldown}},
         {"cooldown", {1, mln::mog::mog_command_type::cooldown}},
         {"show_cooldowns", {1, mln::mog::mog_command_type::show_cooldowns}},
+        {"start", {1, mln::mog::mog_command_type::start}},
+        {"scheduled", {1, mln::mog::mog_command_type::scheduled}},
         {"help", {1, mln::mog::mog_command_type::help}}, };
 static const std::unordered_map<std::string, std::tuple<size_t, mln::mog::mog_command_type>> s_allowed_help_sub_commands{
             {"generic", {2, mln::mog::mog_command_type::generic}}, };
@@ -110,6 +112,23 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
             .add_option(dpp::command_option(dpp::co_sub_command, "help", "Gives detailed information about the team group command", false)))
         //arma command group
         .add_option(dpp::command_option(dpp::co_sub_command_group, "arma", "Collection of commands related to arma", false)
+            //arma start command
+            .add_option(dpp::command_option(dpp::co_sub_command, "start", "Prepares a new arma session", false)
+                .add_option(dpp::command_option(dpp::co_integer, "day", "The starting hour for the arma session (UTC).", true)
+                    .set_min_value(1)
+                    .set_max_value(31))
+                .add_option(dpp::command_option(dpp::co_integer, "month", "The starting hour for the arma session (UTC).", true)
+                    .set_min_value(1)
+                    .set_max_value(12))
+                .add_option(dpp::command_option(dpp::co_integer, "year", "The starting hour for the arma session (UTC).", true)
+                    .set_min_value(static_cast<int64_t>(mln::constants::get_min_arma_year()))
+                    .set_max_value(static_cast<int64_t>(mln::constants::get_max_arma_year())))
+                .add_option(dpp::command_option(dpp::co_integer, "utc_hour", "The starting hour for the arma session (UTC).", true)
+                    .set_min_value(0)
+                    .set_max_value(23)))
+            //arma scheduled command
+            .add_option(dpp::command_option(dpp::co_sub_command, "scheduled", "Displays how long before next arma session", false)
+                .add_option(dpp::command_option(dpp::co_boolean, "broadcast", "Determines if the result of the operation will be seen by everyone or only by the user", false)))
             //arma raw_cooldown command
             .add_option(dpp::command_option(dpp::co_sub_command, "raw_cooldown", "Allows a team member to update his arma cooldown", false)
                 .add_option(dpp::command_option(dpp::co_integer, "minutes", "The user arma minutes cooldown.", true)
@@ -147,7 +166,7 @@ mln::mog::mog::mog(dpp::cluster& cluster, database_handler& in_database) : base_
         throw std::exception("Failed to extract team pointer from mog commands!");
     }
 
-    commands[1] = std::make_unique<mln::mog::mog_arma>(bot(), *team);
+    commands[1] = std::make_unique<mln::mog::mog_arma>(bot(), *team, "arma");
     commands[2] = std::make_unique<mln::mog::mog_help>(bot());
 
     cbot().log(dpp::loglevel::ll_debug, std::format("mog: [{}].", true));
