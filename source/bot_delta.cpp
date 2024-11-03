@@ -32,7 +32,7 @@ void mln::bot_delta::setup_db() {
 
     mln::db_result_t res = database.open_connection("dbs/main.db");
     if (res.type != mln::db_result::ok) {
-        const std::string err_msg = std::format("An error occurred while connecting to database. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
+        const std::string err_msg = std::format("An error occurred while connecting to dbs/main.db database. Error: [{}], details: [{}].", mln::database_handler::get_name_from_result(res.type), res.err_text);
         throw std::exception(err_msg.c_str());
     }
 
